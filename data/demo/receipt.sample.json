@@ -1,0 +1,1109 @@
+{
+  "receipt_metadata": {
+    "store_name": "와마트 일산점",
+    "date": "2026-07-14",
+    "transaction_number": "DEMO-130",
+    "currency": "KRW",
+    "receipt_total_krw": 737790,
+    "transcribed_items_total_krw": 737790,
+    "reconciliation_difference_krw": 0,
+    "item_count": 95,
+    "source_images": [],
+    "transcription_status": "final_verified",
+    "notes": [
+      "포트폴리오 공개용으로 매장 식별 정보와 원본 이미지명을 제거한 샘플 데이터.",
+      "상품·가격·수량 구조는 실제 검증 데이터와 동일함.",
+      "품목 합계와 영수증 합계가 일치함."
+    ],
+    "original_item_count": 125,
+    "merged_item_count": 95,
+    "merge_rule": "product_name + store_product_code + unit_price_krw가 모두 동일한 항목 병합",
+    "verification_completed": true,
+    "final_correction": {
+      "purchase_number": 75,
+      "product_name": "(영외)데체코 링귀니 파스타면 500g",
+      "unit_price_krw": 3100,
+      "quantity": 2,
+      "total_price_krw": 6200,
+      "previous_total_price_krw": 5200,
+      "correction_amount_krw": 1000
+    }
+  },
+  "items": [
+    {
+      "purchase_numbers": [
+        1
+      ],
+      "product_name": "(영외)5가지 재료로만 만든 부침",
+      "store_product_code": "240024",
+      "unit_price_krw": 2750,
+      "quantity": 1,
+      "total_price_krw": 2750,
+      "name_confidence": "high"
+    },
+    {
+      "purchase_numbers": [
+        2
+      ],
+      "product_name": "56시간 저온숙성 속 탕종숙식빵",
+      "store_product_code": "230229",
+      "unit_price_krw": 1930,
+      "quantity": 1,
+      "total_price_krw": 1930,
+      "name_confidence": "medium"
+    },
+    {
+      "purchase_numbers": [
+        3
+      ],
+      "product_name": "대일시프쿨파스",
+      "store_product_code": "200301",
+      "unit_price_krw": 2530,
+      "quantity": 10,
+      "total_price_krw": 25300,
+      "name_confidence": "medium"
+    },
+    {
+      "purchase_numbers": [
+        4,
+        11,
+        15
+      ],
+      "product_name": "황금발말포크&스크램블 2인",
+      "store_product_code": "210157",
+      "unit_price_krw": 3440,
+      "quantity": 5,
+      "total_price_krw": 17200,
+      "name_confidence": "medium"
+    },
+    {
+      "purchase_numbers": [
+        5
+      ],
+      "product_name": "씨푸드믹스",
+      "store_product_code": "260519",
+      "unit_price_krw": 12940,
+      "quantity": 1,
+      "total_price_krw": 12940,
+      "name_confidence": "user_verified"
+    },
+    {
+      "purchase_numbers": [
+        6,
+        21
+      ],
+      "product_name": "주부9단 비엔나소시지",
+      "store_product_code": "250311",
+      "unit_price_krw": 2040,
+      "quantity": 3,
+      "total_price_krw": 6120,
+      "name_confidence": "high"
+    },
+    {
+      "purchase_numbers": [
+        7,
+        10
+      ],
+      "product_name": "(영외)호밍스 해물누룽지탕(670)",
+      "store_product_code": "250073",
+      "unit_price_krw": 9060,
+      "quantity": 3,
+      "total_price_krw": 27180,
+      "name_confidence": "high"
+    },
+    {
+      "purchase_numbers": [
+        8
+      ],
+      "product_name": "(260366)RainOK 메탈",
+      "store_product_code": "260621",
+      "unit_price_krw": 9600,
+      "quantity": 1,
+      "total_price_krw": 9600,
+      "name_confidence": "medium"
+    },
+    {
+      "purchase_numbers": [
+        9,
+        12
+      ],
+      "product_name": "오뚜기 순후추 팝콘",
+      "store_product_code": "260249",
+      "unit_price_krw": 810,
+      "quantity": 2,
+      "total_price_krw": 1620,
+      "name_confidence": "high"
+    },
+    {
+      "purchase_numbers": [
+        13,
+        27,
+        37
+      ],
+      "product_name": "새우깡",
+      "store_product_code": "120987",
+      "unit_price_krw": 930,
+      "quantity": 3,
+      "total_price_krw": 2790,
+      "name_confidence": "high"
+    },
+    {
+      "purchase_numbers": [
+        14
+      ],
+      "product_name": "베리베리스트로베리큐브",
+      "store_product_code": "250428",
+      "unit_price_krw": 1080,
+      "quantity": 5,
+      "total_price_krw": 5400,
+      "name_confidence": "medium"
+    },
+    {
+      "purchase_numbers": [
+        16
+      ],
+      "product_name": "오동통 모둠어묵",
+      "store_product_code": "250490",
+      "unit_price_krw": 6020,
+      "quantity": 1,
+      "total_price_krw": 6020,
+      "name_confidence": "high"
+    },
+    {
+      "purchase_numbers": [
+        17
+      ],
+      "product_name": "(영외)용두동 할매 쭈꾸미",
+      "store_product_code": "240451",
+      "unit_price_krw": 7190,
+      "quantity": 2,
+      "total_price_krw": 14380,
+      "name_confidence": "high"
+    },
+    {
+      "purchase_numbers": [
+        18
+      ],
+      "product_name": "멸치맛쌀국수",
+      "store_product_code": "150151",
+      "unit_price_krw": 1070,
+      "quantity": 3,
+      "total_price_krw": 3210,
+      "name_confidence": "high"
+    },
+    {
+      "purchase_numbers": [
+        19,
+        36
+      ],
+      "product_name": "포카칩오리지널",
+      "store_product_code": "121416",
+      "unit_price_krw": 1070,
+      "quantity": 3,
+      "total_price_krw": 3210,
+      "name_confidence": "high"
+    },
+    {
+      "purchase_numbers": [
+        20
+      ],
+      "product_name": "순살바3종 1세트",
+      "store_product_code": "260453",
+      "unit_price_krw": 4700,
+      "quantity": 1,
+      "total_price_krw": 4700,
+      "name_confidence": "medium"
+    },
+    {
+      "purchase_numbers": [
+        22
+      ],
+      "product_name": "떡붕어싸만코",
+      "store_product_code": "250205",
+      "unit_price_krw": 680,
+      "quantity": 3,
+      "total_price_krw": 2040,
+      "name_confidence": "user_verified"
+    },
+    {
+      "purchase_numbers": [
+        23,
+        41
+      ],
+      "product_name": "요맘때 딸기 콘",
+      "store_product_code": "250207",
+      "unit_price_krw": 810,
+      "quantity": 5,
+      "total_price_krw": 4050,
+      "name_confidence": "high"
+    },
+    {
+      "purchase_numbers": [
+        24
+      ],
+      "product_name": "더위사냥 커피",
+      "store_product_code": "250202",
+      "unit_price_krw": 520,
+      "quantity": 3,
+      "total_price_krw": 1560,
+      "name_confidence": "high"
+    },
+    {
+      "purchase_numbers": [
+        25,
+        42,
+        54
+      ],
+      "product_name": "슈팅스타 프리팩",
+      "store_product_code": "260399",
+      "unit_price_krw": 1650,
+      "quantity": 4,
+      "total_price_krw": 6600,
+      "name_confidence": "user_verified"
+    },
+    {
+      "purchase_numbers": [
+        26
+      ],
+      "product_name": "냉동새우살(흰다리새우)",
+      "store_product_code": "260159",
+      "unit_price_krw": 9600,
+      "quantity": 1,
+      "total_price_krw": 9600,
+      "name_confidence": "high"
+    },
+    {
+      "purchase_numbers": [
+        28,
+        71
+      ],
+      "product_name": "(영외)사계절쌈장",
+      "store_product_code": "170162",
+      "unit_price_krw": 2560,
+      "quantity": 2,
+      "total_price_krw": 5120,
+      "name_confidence": "high"
+    },
+    {
+      "purchase_numbers": [
+        29,
+        39
+      ],
+      "product_name": "녹차초코릿바",
+      "store_product_code": "250277",
+      "unit_price_krw": 1540,
+      "quantity": 3,
+      "total_price_krw": 4620,
+      "name_confidence": "high"
+    },
+    {
+      "purchase_numbers": [
+        30
+      ],
+      "product_name": "(영외)국산콩 순두부",
+      "store_product_code": "260018",
+      "unit_price_krw": 1400,
+      "quantity": 2,
+      "total_price_krw": 2800,
+      "name_confidence": "high"
+    },
+    {
+      "purchase_numbers": [
+        31,
+        35
+      ],
+      "product_name": "(영외)다담 우렁 강된장비빔양념",
+      "store_product_code": "250021",
+      "unit_price_krw": 1130,
+      "quantity": 3,
+      "total_price_krw": 3390,
+      "name_confidence": "high"
+    },
+    {
+      "purchase_numbers": [
+        32,
+        34
+      ],
+      "product_name": "코주부 CLASSIC육포mild",
+      "store_product_code": "160066",
+      "unit_price_krw": 8030,
+      "quantity": 3,
+      "total_price_krw": 24090,
+      "name_confidence": "user_verified"
+    },
+    {
+      "purchase_numbers": [
+        33
+      ],
+      "product_name": "일품통심육포",
+      "store_product_code": "260141",
+      "unit_price_krw": 5700,
+      "quantity": 1,
+      "total_price_krw": 5700,
+      "name_confidence": "medium"
+    },
+    {
+      "purchase_numbers": [
+        38
+      ],
+      "product_name": "자연산골뱅이 300g 원터치",
+      "store_product_code": "220265",
+      "unit_price_krw": 4960,
+      "quantity": 1,
+      "total_price_krw": 4960,
+      "name_confidence": "high"
+    },
+    {
+      "purchase_numbers": [
+        40,
+        51
+      ],
+      "product_name": "(영외)풀무원국산콩두부단단한부침용",
+      "store_product_code": "250436",
+      "unit_price_krw": 2800,
+      "quantity": 2,
+      "total_price_krw": 5600,
+      "name_confidence": "high"
+    },
+    {
+      "purchase_numbers": [
+        43,
+        55
+      ],
+      "product_name": "레인보우샤베트 프리팩",
+      "store_product_code": "260400",
+      "unit_price_krw": 1650,
+      "quantity": 3,
+      "total_price_krw": 4950,
+      "name_confidence": "high"
+    },
+    {
+      "purchase_numbers": [
+        44,
+        59
+      ],
+      "product_name": "하겐다즈 미니컵 스트로베리",
+      "store_product_code": "210059",
+      "unit_price_krw": 2030,
+      "quantity": 2,
+      "total_price_krw": 4060,
+      "name_confidence": "high"
+    },
+    {
+      "purchase_numbers": [
+        45,
+        58
+      ],
+      "product_name": "엄마는외계인 프리팩",
+      "store_product_code": "260401",
+      "unit_price_krw": 1650,
+      "quantity": 2,
+      "total_price_krw": 3300,
+      "name_confidence": "high"
+    },
+    {
+      "purchase_numbers": [
+        46,
+        48
+      ],
+      "product_name": "체리쥬빌레 PREPACK",
+      "store_product_code": "230377",
+      "unit_price_krw": 1540,
+      "quantity": 2,
+      "total_price_krw": 3080,
+      "name_confidence": "high"
+    },
+    {
+      "purchase_numbers": [
+        47,
+        56
+      ],
+      "product_name": "아몬드 봉봉 PREPACK",
+      "store_product_code": "230378",
+      "unit_price_krw": 1540,
+      "quantity": 2,
+      "total_price_krw": 3080,
+      "name_confidence": "high"
+    },
+    {
+      "purchase_numbers": [
+        49
+      ],
+      "product_name": "박카스에프액 120ml",
+      "store_product_code": "170088",
+      "unit_price_krw": 570,
+      "quantity": 10,
+      "total_price_krw": 5700,
+      "name_confidence": "high"
+    },
+    {
+      "purchase_numbers": [
+        50
+      ],
+      "product_name": "주부9단 프랑크소시지",
+      "store_product_code": "230292",
+      "unit_price_krw": 2120,
+      "quantity": 3,
+      "total_price_krw": 6360,
+      "name_confidence": "high"
+    },
+    {
+      "purchase_numbers": [
+        52
+      ],
+      "product_name": "헬리코박터 프로젝트 윌 오리지널",
+      "store_product_code": "250096",
+      "unit_price_krw": 2490,
+      "quantity": 1,
+      "total_price_krw": 2490,
+      "name_confidence": "high"
+    },
+    {
+      "purchase_numbers": [
+        53,
+        60
+      ],
+      "product_name": "하겐다즈 미니컵 벨지안초코릿",
+      "store_product_code": "200183",
+      "unit_price_krw": 2130,
+      "quantity": 2,
+      "total_price_krw": 4260,
+      "name_confidence": "high"
+    },
+    {
+      "purchase_numbers": [
+        57
+      ],
+      "product_name": "제로 미니바이트 밀크 초코",
+      "store_product_code": "250282",
+      "unit_price_krw": 4100,
+      "quantity": 1,
+      "total_price_krw": 4100,
+      "name_confidence": "medium"
+    },
+    {
+      "purchase_numbers": [
+        61,
+        63
+      ],
+      "product_name": "미니스 여행용세트",
+      "store_product_code": "161528",
+      "unit_price_krw": 5520,
+      "quantity": 2,
+      "total_price_krw": 11040,
+      "name_confidence": "high"
+    },
+    {
+      "purchase_numbers": [
+        62
+      ],
+      "product_name": "규격(240046) 자외선차단쿨토시",
+      "store_product_code": "240543",
+      "unit_price_krw": 2970,
+      "quantity": 1,
+      "total_price_krw": 2970,
+      "name_confidence": "user_verified"
+    },
+    {
+      "purchase_numbers": [
+        64
+      ],
+      "product_name": "닥터지 모이스처 인 바디 5.0 바",
+      "store_product_code": "240309",
+      "unit_price_krw": 6960,
+      "quantity": 1,
+      "total_price_krw": 6960,
+      "name_confidence": "medium"
+    },
+    {
+      "purchase_numbers": [
+        65
+      ],
+      "product_name": "부케가르니 글로우 퍼퓸드 샴푸 화",
+      "store_product_code": "250258",
+      "unit_price_krw": 5190,
+      "quantity": 1,
+      "total_price_krw": 5190,
+      "name_confidence": "low"
+    },
+    {
+      "purchase_numbers": [
+        66
+      ],
+      "product_name": "비욘드에코네이처 릴렉싱 바디워시",
+      "store_product_code": "210261",
+      "unit_price_krw": 4510,
+      "quantity": 1,
+      "total_price_krw": 4510,
+      "name_confidence": "high"
+    },
+    {
+      "purchase_numbers": [
+        67
+      ],
+      "product_name": "부케가르니 나드 샴푸 시그니처",
+      "store_product_code": "250260",
+      "unit_price_krw": 4900,
+      "quantity": 1,
+      "total_price_krw": 4900,
+      "name_confidence": "high"
+    },
+    {
+      "purchase_numbers": [
+        68
+      ],
+      "product_name": "하림 닭가슴살림닭가슴살",
+      "store_product_code": "200054",
+      "unit_price_krw": 1920,
+      "quantity": 2,
+      "total_price_krw": 3840,
+      "name_confidence": "low"
+    },
+    {
+      "purchase_numbers": [
+        69
+      ],
+      "product_name": "안심닭가슴살",
+      "store_product_code": "160123",
+      "unit_price_krw": 1770,
+      "quantity": 2,
+      "total_price_krw": 3540,
+      "name_confidence": "high"
+    },
+    {
+      "purchase_numbers": [
+        70
+      ],
+      "product_name": "토마토케찹500g",
+      "store_product_code": "121955",
+      "unit_price_krw": 2530,
+      "quantity": 1,
+      "total_price_krw": 2530,
+      "name_confidence": "high"
+    },
+    {
+      "purchase_numbers": [
+        72
+      ],
+      "product_name": "햇반",
+      "store_product_code": "003609",
+      "unit_price_krw": 1130,
+      "quantity": 8,
+      "total_price_krw": 9040,
+      "name_confidence": "high"
+    },
+    {
+      "purchase_numbers": [
+        73,
+        94,
+        103
+      ],
+      "product_name": "햇반",
+      "store_product_code": "190370",
+      "unit_price_krw": 640,
+      "quantity": 3,
+      "total_price_krw": 1920,
+      "name_confidence": "high"
+    },
+    {
+      "purchase_numbers": [
+        74
+      ],
+      "product_name": "오리지널 글레이즈드 3개입",
+      "store_product_code": "260035",
+      "unit_price_krw": 4050,
+      "quantity": 2,
+      "total_price_krw": 8100,
+      "name_confidence": "user_verified"
+    },
+    {
+      "purchase_numbers": [
+        75
+      ],
+      "product_name": "(영외)데체코 링귀니 파스타면 500g",
+      "store_product_code": "260498",
+      "unit_price_krw": 3100,
+      "quantity": 2,
+      "total_price_krw": 6200,
+      "name_confidence": "user_verified"
+    },
+    {
+      "purchase_numbers": [
+        76
+      ],
+      "product_name": "대천김 곱창김(캔김)",
+      "store_product_code": "220332",
+      "unit_price_krw": 3200,
+      "quantity": 5,
+      "total_price_krw": 16000,
+      "name_confidence": "user_verified"
+    },
+    {
+      "purchase_numbers": [
+        77,
+        97
+      ],
+      "product_name": "그릭콤포트 블루베리",
+      "store_product_code": "260483",
+      "unit_price_krw": 2020,
+      "quantity": 2,
+      "total_price_krw": 4040,
+      "name_confidence": "high"
+    },
+    {
+      "purchase_numbers": [
+        78
+      ],
+      "product_name": "한돈 고추장불고기",
+      "store_product_code": "260183",
+      "unit_price_krw": 9390,
+      "quantity": 1,
+      "total_price_krw": 9390,
+      "name_confidence": "user_verified"
+    },
+    {
+      "purchase_numbers": [
+        79
+      ],
+      "product_name": "한돈 간장불고기",
+      "store_product_code": "260174",
+      "unit_price_krw": 9090,
+      "quantity": 1,
+      "total_price_krw": 9090,
+      "name_confidence": "user_verified"
+    },
+    {
+      "purchase_numbers": [
+        80
+      ],
+      "product_name": "쉬림프 스파이시 투움바 파스타",
+      "store_product_code": "260207",
+      "unit_price_krw": 4440,
+      "quantity": 2,
+      "total_price_krw": 8880,
+      "name_confidence": "high"
+    },
+    {
+      "purchase_numbers": [
+        81
+      ],
+      "product_name": "고추짜장면",
+      "store_product_code": "260138",
+      "unit_price_krw": 3180,
+      "quantity": 3,
+      "total_price_krw": 9540,
+      "name_confidence": "high"
+    },
+    {
+      "purchase_numbers": [
+        82
+      ],
+      "product_name": "크림우동",
+      "store_product_code": "110528",
+      "unit_price_krw": 2420,
+      "quantity": 3,
+      "total_price_krw": 7260,
+      "name_confidence": "high"
+    },
+    {
+      "purchase_numbers": [
+        83
+      ],
+      "product_name": "듀이트리 픽 앤 퀵 카밍플 마스크",
+      "store_product_code": "260361",
+      "unit_price_krw": 7900,
+      "quantity": 2,
+      "total_price_krw": 15800,
+      "name_confidence": "user_verified"
+    },
+    {
+      "purchase_numbers": [
+        84
+      ],
+      "product_name": "아몬드초코볼 (대)",
+      "store_product_code": "240271",
+      "unit_price_krw": 1440,
+      "quantity": 7,
+      "total_price_krw": 10080,
+      "name_confidence": "high"
+    },
+    {
+      "purchase_numbers": [
+        85
+      ],
+      "product_name": "(프로블레이드)질레트 프로쉴드 옐",
+      "store_product_code": "250393",
+      "unit_price_krw": 14700,
+      "quantity": 2,
+      "total_price_krw": 29400,
+      "name_confidence": "low"
+    },
+    {
+      "purchase_numbers": [
+        86
+      ],
+      "product_name": "(557.1프로블레이드)질레트프로",
+      "store_product_code": "250392",
+      "unit_price_krw": 11780,
+      "quantity": 1,
+      "total_price_krw": 11780,
+      "name_confidence": "low"
+    },
+    {
+      "purchase_numbers": [
+        87
+      ],
+      "product_name": "더단백 크런치바 초코",
+      "store_product_code": "260150",
+      "unit_price_krw": 1400,
+      "quantity": 27,
+      "total_price_krw": 37800,
+      "name_confidence": "high"
+    },
+    {
+      "purchase_numbers": [
+        88
+      ],
+      "product_name": "짜왕",
+      "store_product_code": "260112",
+      "unit_price_krw": 3530,
+      "quantity": 2,
+      "total_price_krw": 7060,
+      "name_confidence": "user_verified"
+    },
+    {
+      "purchase_numbers": [
+        89
+      ],
+      "product_name": "니베아맨센스티브쉐이빙",
+      "store_product_code": "106955",
+      "unit_price_krw": 3590,
+      "quantity": 1,
+      "total_price_krw": 3590,
+      "name_confidence": "user_verified"
+    },
+    {
+      "purchase_numbers": [
+        90
+      ],
+      "product_name": "빕스 오리지널 바비큐폭립",
+      "store_product_code": "260437",
+      "unit_price_krw": 13000,
+      "quantity": 2,
+      "total_price_krw": 26000,
+      "name_confidence": "high"
+    },
+    {
+      "purchase_numbers": [
+        91
+      ],
+      "product_name": "아비브 어성초 스팟패드 카밍터치",
+      "store_product_code": "250404",
+      "unit_price_krw": 13180,
+      "quantity": 2,
+      "total_price_krw": 26360,
+      "name_confidence": "high"
+    },
+    {
+      "purchase_numbers": [
+        92
+      ],
+      "product_name": "포테이토 마데카소사이드 수딩 패드",
+      "store_product_code": "260148",
+      "unit_price_krw": 7800,
+      "quantity": 1,
+      "total_price_krw": 7800,
+      "name_confidence": "high"
+    },
+    {
+      "purchase_numbers": [
+        93
+      ],
+      "product_name": "진라면매운맛(용기)",
+      "store_product_code": "200082",
+      "unit_price_krw": 670,
+      "quantity": 1,
+      "total_price_krw": 670,
+      "name_confidence": "high"
+    },
+    {
+      "purchase_numbers": [
+        95
+      ],
+      "product_name": "신라면큰사발",
+      "store_product_code": "150029",
+      "unit_price_krw": 870,
+      "quantity": 2,
+      "total_price_krw": 1740,
+      "name_confidence": "high"
+    },
+    {
+      "purchase_numbers": [
+        96,
+        115
+      ],
+      "product_name": "큰컵 까르보불닭볶음면",
+      "store_product_code": "190347",
+      "unit_price_krw": 1060,
+      "quantity": 3,
+      "total_price_krw": 3180,
+      "name_confidence": "high"
+    },
+    {
+      "purchase_numbers": [
+        98
+      ],
+      "product_name": "샤인머스켓",
+      "store_product_code": "230170",
+      "unit_price_krw": 500,
+      "quantity": 2,
+      "total_price_krw": 1000,
+      "name_confidence": "high"
+    },
+    {
+      "purchase_numbers": [
+        99,
+        106
+      ],
+      "product_name": "한입자색찐고구마",
+      "store_product_code": "160121",
+      "unit_price_krw": 1340,
+      "quantity": 2,
+      "total_price_krw": 2680,
+      "name_confidence": "high"
+    },
+    {
+      "purchase_numbers": [
+        100
+      ],
+      "product_name": "규격(110099) 스포츠런닝 110",
+      "store_product_code": "240586",
+      "unit_price_krw": 7480,
+      "quantity": 1,
+      "total_price_krw": 7480,
+      "name_confidence": "user_verified"
+    },
+    {
+      "purchase_numbers": [
+        101
+      ],
+      "product_name": "규격(170339) 네파 페넥스남드로우",
+      "store_product_code": "170398",
+      "unit_price_krw": 8390,
+      "quantity": 1,
+      "total_price_krw": 8390,
+      "name_confidence": "user_verified"
+    },
+    {
+      "purchase_numbers": [
+        102
+      ],
+      "product_name": "코주부 CLASSIC 육포 Hot",
+      "store_product_code": "190208",
+      "unit_price_krw": 6800,
+      "quantity": 1,
+      "total_price_krw": 6800,
+      "name_confidence": "user_verified"
+    },
+    {
+      "purchase_numbers": [
+        104,
+        113
+      ],
+      "product_name": "테이크핏 맥스 고소한맛",
+      "store_product_code": "240301",
+      "unit_price_krw": 1130,
+      "quantity": 3,
+      "total_price_krw": 3390,
+      "name_confidence": "high"
+    },
+    {
+      "purchase_numbers": [
+        105
+      ],
+      "product_name": "테이크핏 맥스 초코맛",
+      "store_product_code": "250301",
+      "unit_price_krw": 1130,
+      "quantity": 3,
+      "total_price_krw": 3390,
+      "name_confidence": "high"
+    },
+    {
+      "purchase_numbers": [
+        107
+      ],
+      "product_name": "팔도 도시락",
+      "store_product_code": "260432",
+      "unit_price_krw": 670,
+      "quantity": 2,
+      "total_price_krw": 1340,
+      "name_confidence": "high"
+    },
+    {
+      "purchase_numbers": [
+        108
+      ],
+      "product_name": "(250550)네파 반바지(105",
+      "store_product_code": "250621",
+      "unit_price_krw": 15360,
+      "quantity": 1,
+      "total_price_krw": 15360,
+      "name_confidence": "low"
+    },
+    {
+      "purchase_numbers": [
+        109
+      ],
+      "product_name": "닭가슴살단백질바베리",
+      "store_product_code": "240427",
+      "unit_price_krw": 1110,
+      "quantity": 8,
+      "total_price_krw": 8880,
+      "name_confidence": "medium"
+    },
+    {
+      "purchase_numbers": [
+        110
+      ],
+      "product_name": "삼각 로스트비프 40g",
+      "store_product_code": "190068",
+      "unit_price_krw": 2210,
+      "quantity": 2,
+      "total_price_krw": 4420,
+      "name_confidence": "high"
+    },
+    {
+      "purchase_numbers": [
+        111
+      ],
+      "product_name": "오뚜기 참깨라면",
+      "store_product_code": "140139",
+      "unit_price_krw": 1030,
+      "quantity": 2,
+      "total_price_krw": 2060,
+      "name_confidence": "high"
+    },
+    {
+      "purchase_numbers": [
+        112
+      ],
+      "product_name": "컵누들 매콤한맛 용기 큰컵",
+      "store_product_code": "260235",
+      "unit_price_krw": 1160,
+      "quantity": 2,
+      "total_price_krw": 2320,
+      "name_confidence": "user_verified"
+    },
+    {
+      "purchase_numbers": [
+        114
+      ],
+      "product_name": "Dr.G 레드-블레미쉬클리어크림_7",
+      "store_product_code": "160372",
+      "unit_price_krw": 6930,
+      "quantity": 1,
+      "total_price_krw": 6930,
+      "name_confidence": "medium"
+    },
+    {
+      "purchase_numbers": [
+        116
+      ],
+      "product_name": "복숭아에이드",
+      "store_product_code": "230171",
+      "unit_price_krw": 470,
+      "quantity": 2,
+      "total_price_krw": 940,
+      "name_confidence": "high"
+    },
+    {
+      "purchase_numbers": [
+        117
+      ],
+      "product_name": "애플망고",
+      "store_product_code": "240157",
+      "unit_price_krw": 570,
+      "quantity": 2,
+      "total_price_krw": 1140,
+      "name_confidence": "high"
+    },
+    {
+      "purchase_numbers": [
+        118
+      ],
+      "product_name": "라운드랩 1025 독도 로션",
+      "store_product_code": "230510",
+      "unit_price_krw": 13980,
+      "quantity": 1,
+      "total_price_krw": 13980,
+      "name_confidence": "high"
+    },
+    {
+      "purchase_numbers": [
+        119,
+        122
+      ],
+      "product_name": "셀퓨젼씨 포스트 알파 센테카솔연고",
+      "store_product_code": "230293",
+      "unit_price_krw": 8910,
+      "quantity": 2,
+      "total_price_krw": 17820,
+      "name_confidence": "user_verified"
+    },
+    {
+      "purchase_numbers": [
+        120
+      ],
+      "product_name": "닥터지 로얄 블랙스네일 크림 기획",
+      "store_product_code": "240312",
+      "unit_price_krw": 10320,
+      "quantity": 2,
+      "total_price_krw": 20640,
+      "name_confidence": "high"
+    },
+    {
+      "purchase_numbers": [
+        121
+      ],
+      "product_name": "더단백 워터 프로틴 복숭아",
+      "store_product_code": "260193",
+      "unit_price_krw": 1230,
+      "quantity": 1,
+      "total_price_krw": 1230,
+      "name_confidence": "high"
+    },
+    {
+      "purchase_numbers": [
+        123
+      ],
+      "product_name": "라운드랩 자작나무 수분 크림 대용",
+      "store_product_code": "240509",
+      "unit_price_krw": 10750,
+      "quantity": 1,
+      "total_price_krw": 10750,
+      "name_confidence": "medium"
+    },
+    {
+      "purchase_numbers": [
+        124
+      ],
+      "product_name": "테아닌과 밀크씨슬 활력솔루션",
+      "store_product_code": "190077",
+      "unit_price_krw": 13210,
+      "quantity": 1,
+      "total_price_krw": 13210,
+      "name_confidence": "user_verified"
+    },
+    {
+      "purchase_numbers": [
+        125
+      ],
+      "product_name": "(영외)백설허브맛솔트오리지널",
+      "store_product_code": "170166",
+      "unit_price_krw": 1580,
+      "quantity": 1,
+      "total_price_krw": 1580,
+      "name_confidence": "high"
+    }
+  ]
+}

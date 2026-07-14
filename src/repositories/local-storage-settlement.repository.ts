@@ -1,0 +1,3 @@
+import { SettlementBackupSchema, type SettlementBackup } from "./settlement.repository";
+const key="receipt-settlement-m1";
+export class LocalStorageSettlementRepository { load(receiptId:string):SettlementBackup|null { if(typeof window==="undefined") return null; const raw=window.localStorage.getItem(key); if(!raw) return null; try { const parsed=SettlementBackupSchema.parse(JSON.parse(raw)); return parsed.sourceReceiptId===receiptId?parsed:null; } catch { return null; } } save(data:SettlementBackup) { window.localStorage.setItem(key,JSON.stringify(data)); } clear() { window.localStorage.removeItem(key); } }
