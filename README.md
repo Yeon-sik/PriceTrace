@@ -19,6 +19,22 @@ npm.cmd run test:e2e
 npm.cmd run build
 ```
 
+## GitHub Pages 배포
+
+이 저장소는 `main`에 push하면 GitHub Actions가 Next.js 정적 산출물(`out/`)을 GitHub Pages에 배포합니다.
+
+```powershell
+git add next.config.ts .github/workflows/deploy-pages.yml README.md
+git commit -m "chore: configure GitHub Pages deployment"
+git push -u origin main
+```
+
+GitHub 저장소의 `Settings → Pages`에서 `Source`를 `GitHub Actions`로 선택한 뒤 Actions의 배포가 완료되면 다음 주소로 접속합니다.
+
+<https://yeon-sik.github.io/PriceTrace/>
+
+저장소가 `PriceTrace`라는 이름이므로 `next.config.ts`의 `basePath`도 `/PriceTrace`로 맞춰져 있습니다.
+
 ## 데이터 경계
 
 - 공개 샘플: `data/demo/receipt.sample.json`
