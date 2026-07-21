@@ -7,7 +7,7 @@ export function productsFromReceipts(receipts:Receipt[]):Product[] {
 }
 
 export function observationsForProduct(receipts:Receipt[], code:string):PriceObservation[] {
-  return receipts.flatMap(receipt=>receipt.items.filter(item=>item.storeProductCode===code).map(item=>({receiptId:receipt.id,storeProductCode:code,productName:item.productName,storeLabel:receipt.storeLabel,observedAt:receipt.purchasedAt,unitPriceKrw:item.unitPriceKrw,quantity:item.purchasedQuantity}))).sort((a,b)=>b.observedAt.localeCompare(a.observedAt));
+  return receipts.flatMap(receipt=>receipt.items.filter(item=>item.storeProductCode===code).map(item=>({receiptId:receipt.id,storeProductCode:code,productName:item.productName,storeLabel:receipt.storeLabel,observedAt:receipt.purchasedAt,unitPriceKrw:item.unitPriceKrw,quantity:item.purchasedQuantity,confidence:item.confidence}))).sort((a,b)=>b.observedAt.localeCompare(a.observedAt));
 }
 
 export function priceSummary(observations:PriceObservation[]) {

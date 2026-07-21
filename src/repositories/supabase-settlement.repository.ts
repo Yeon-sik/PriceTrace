@@ -27,7 +27,7 @@ export class SupabaseSettlementRepository {
       else {const {data:product,error:productError}=await client.from("products").insert({user_id:user.id,name:item.productName}).select("id").single();if(productError) throw productError;const {data:storeProduct,error:storeProductError}=await client.from("store_products").insert({user_id:user.id,store_id:store.id,product_id:product.id,store_product_code:item.storeProductCode}).select("id").single();if(storeProductError) throw storeProductError;storeProductId=storeProduct.id;}
       const {error:itemError}=await client.from("receipt_items").upsert({id:item.id,user_id:user.id,receipt_id:remoteReceipt.id,store_product_id:storeProductId,unit_price_krw:item.unitPriceKrw,purchased_quantity:item.purchasedQuantity,total_price_krw:item.totalPriceKrw,purchase_numbers:item.purchaseNumbers});
       if(itemError) throw itemError;
-      const {error:observationError}=await client.from("price_observations").upsert({user_id:user.id,store_product_id:storeProductId,receipt_item_id:item.id,observed_at:receipt.purchasedAt,unit_price_krw:item.unitPriceKrw,quantity:item.purchasedQuantity},{onConflict:"user_id,receipt_item_id"});
+      const {error:observationError}=await client.from("price_observations").upsert({user_id:user.id,store_product_id:storeProductId,receipt_item_id:item.id,observed_at:receipt.purchasedAt,unit_price_krw:item.unitPriceKrw,quantity:item.purchasedQuantity,verification_status:"verified",verified_at:new Date().toISOString()},{onConflict:"user_id,receipt_item_id"});
       if(observationError) throw observationError;
     }
   }
