@@ -1,0 +1,15 @@
+{
+  "receipt_metadata": {
+    "store_name": "와마트 일산점",
+    "date": "2026-07-15",
+    "transaction_number": "DEMO-131",
+    "currency": "KRW",
+    "receipt_total_krw": 7780,
+    "item_count": 3
+  },
+  "items": [
+    {"purchase_numbers":[1],"product_name":"(영외)5가지 재료로만 만든 부침","store_product_code":"240024","unit_price_krw":2850,"quantity":1,"total_price_krw":2850,"name_confidence":"high"},
+    {"purchase_numbers":[2],"product_name":"56시간 저온숙성 속 탕종숙식빵","store_product_code":"230229","unit_price_krw":1930,"quantity":1,"total_price_krw":1930,"name_confidence":"medium"},
+    {"purchase_numbers":[3],"product_name":"대일시프쿨파스","store_product_code":"200301","unit_price_krw":3000,"quantity":1,"total_price_krw":3000,"name_confidence":"medium"}
+  ]
+}
