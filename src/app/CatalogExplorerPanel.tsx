@@ -11,11 +11,11 @@ type CatalogProduct = { id: string; purchase_type: PurchaseType; canonical_name:
 type RemoteObservation = { location_label: string | null; unit_price_krw: number; observed_at: string; measurement_unit: string };
 
 const purchaseTypeLabels: Record<PurchaseType, string> = {
-  retail_product: "Retail product",
-  menu_item: "Restaurant menu",
-  raw_material: "Raw material",
-  property: "Property",
-  service: "Service",
+  retail_product: "소매 상품",
+  menu_item: "식당 메뉴",
+  raw_material: "원자재",
+  property: "부동산",
+  service: "서비스",
 };
 
 function descendantIds(categories: Category[], categoryId: string) {
@@ -56,7 +56,7 @@ export function CatalogExplorerPanel() {
       client.from("catalog_categories").select("id,purchase_type,parent_id,display_name,depth").eq("purchase_type", purchaseType).order("depth").order("display_name"),
       client.from("catalog_products").select("id,purchase_type,canonical_name,brand,specification,category_id").eq("purchase_type", purchaseType).eq("status", "active").order("canonical_name"),
     ]);
-    if (categoryError || productError) setMessage(categoryError?.message ?? productError?.message ?? "Could not load catalog.");
+    if (categoryError || productError) setMessage(categoryError?.message ?? productError?.message ?? "카탈로그를 불러오지 못했습니다.");
     else {
       setCategories((categoryData ?? []) as Category[]);
       setProducts((productData ?? []) as CatalogProduct[]);
@@ -115,7 +115,7 @@ export function CatalogExplorerPanel() {
       setCanonicalName("");
       setBrand("");
       setSpecification("");
-      setMessage("Canonical product created.");
+      setMessage("표준 상품을 등록했습니다.");
       await loadCatalog();
     }
   }
@@ -139,7 +139,7 @@ export function CatalogExplorerPanel() {
     else {
       setSourceLabel("");
       setSourceProductCode("");
-      setMessage("Source product mapping created. New synchronized observations will use it.");
+      setMessage("판매처 상품번호 매핑을 등록했습니다. 이후 동기화되는 관측가부터 표준 상품에 연결됩니다.");
     }
   }
 
@@ -149,17 +149,17 @@ export function CatalogExplorerPanel() {
     <section className={styles.section} aria-labelledby="catalog-title">
       <div className={styles.controls}>
         <div>
-          <h2 id="catalog-title">Catalog explorer</h2>
-          <p className={styles.muted}>Canonical products and categories are managed separately from receipt JSON.</p>
+          <h2 id="catalog-title">상품 카테고리 탐색</h2>
+          <p className={styles.muted}>표준 상품과 카테고리는 영수증 원본 JSON과 분리되어 관리됩니다.</p>
         </div>
-        <label>Purchase type
+        <label>구매 대상 유형
           <select value={purchaseType} onChange={(event) => setPurchaseType(event.target.value as PurchaseType)}>
             {Object.entries(purchaseTypeLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
           </select>
         </label>
-        <label>Category
+        <label>카테고리
           <select value={categoryId} onChange={(event) => setCategoryId(event.target.value)}>
-            <option value="">All</option>
+            <option value="">전체</option>
             {categories.map((category) => <option key={category.id} value={category.id}>{"-- ".repeat(category.depth)}{category.display_name}</option>)}
           </select>
         </label>
@@ -167,37 +167,37 @@ export function CatalogExplorerPanel() {
       {message && <p role="status" className={styles.muted}>{message}</p>}
       <div className={styles.catalogGrid}>
         <div>
-          <h3>Canonical products</h3>
-          {visibleProducts.length === 0 ? <p>No canonical products in this scope.</p> : <div className={styles.catalogList}>
+          <h3>표준 상품</h3>
+          {visibleProducts.length === 0 ? <p>선택한 범위에 등록된 표준 상품이 없습니다.</p> : <div className={styles.catalogList}>
             {visibleProducts.map((product) => <button type="button" className={product.id === selectedProductId ? styles.selectedCatalogProduct : styles.catalogProduct} key={product.id} onClick={() => setSelectedProductId(product.id)}>
               <strong>{product.canonical_name}</strong>
-              <small>{[product.brand, product.specification].filter(Boolean).join(" | ") || "No specification"}</small>
+              <small>{[product.brand, product.specification].filter(Boolean).join(" | ") || "규격 미입력"}</small>
             </button>)}
           </div>}
         </div>
         <div>
-          <h3>Observed prices by source</h3>
-          {!selectedProductId ? <p>Select a canonical product.</p> : priceSummaries.length === 0 ? <p>No synchronized observations are mapped to this product.</p> : <div className={styles.catalogList}>
+          <h3>판매처별 관측가</h3>
+          {!selectedProductId ? <p>표준 상품을 선택하세요.</p> : priceSummaries.length === 0 ? <p>이 표준 상품에 연결된 가격 관측이 없습니다.</p> : <div className={styles.catalogList}>
             {priceSummaries.map((summary) => <article className={styles.catalogProduct} key={summary.locationLabel}>
               <strong>{summary.locationLabel}</strong>
-              <small>Latest {summary.latestKrw.toLocaleString("ko-KR")} KRW | Min {summary.minimumKrw.toLocaleString("ko-KR")} | Max {summary.maximumKrw.toLocaleString("ko-KR")}</small>
-              <small>{summary.observationCount} observations | {summary.measurementUnits.join(", ")}</small>
+              <small>최근 {summary.latestKrw.toLocaleString("ko-KR")}원 | 최저 {summary.minimumKrw.toLocaleString("ko-KR")}원 | 최고 {summary.maximumKrw.toLocaleString("ko-KR")}원</small>
+              <small>{summary.observationCount}회 관측 | {summary.measurementUnits.join(", ")}</small>
             </article>)}
           </div>}
         </div>
       </div>
       {isAdmin && <div className={styles.catalogAdmin}>
-        <h3>Admin catalog and source mapping</h3>
+        <h3>관리자 표준 상품·판매처 코드 관리</h3>
         <form className={styles.inline} onSubmit={createCatalogProduct}>
-          <label>Canonical name<input value={canonicalName} onChange={(event) => setCanonicalName(event.target.value)} required /></label>
-          <label>Brand<input value={brand} onChange={(event) => setBrand(event.target.value)} /></label>
-          <label>Specification<input value={specification} onChange={(event) => setSpecification(event.target.value)} /></label>
-          <button type="submit">Create canonical product</button>
+          <label>표준 상품명<input value={canonicalName} onChange={(event) => setCanonicalName(event.target.value)} required /></label>
+          <label>브랜드<input value={brand} onChange={(event) => setBrand(event.target.value)} /></label>
+          <label>규격<input value={specification} onChange={(event) => setSpecification(event.target.value)} /></label>
+          <button type="submit">표준 상품 등록</button>
         </form>
         <form className={styles.inline} onSubmit={createSourceMapping}>
-          <label>Source<input value={sourceLabel} onChange={(event) => setSourceLabel(event.target.value)} required /></label>
-          <label>Source product code<input value={sourceProductCode} onChange={(event) => setSourceProductCode(event.target.value)} required /></label>
-          <button type="submit" disabled={!selectedProductId}>Map to selected product</button>
+          <label>판매처<input value={sourceLabel} onChange={(event) => setSourceLabel(event.target.value)} required /></label>
+          <label>판매처 상품번호<input value={sourceProductCode} onChange={(event) => setSourceProductCode(event.target.value)} required /></label>
+          <button type="submit" disabled={!selectedProductId}>선택 상품에 연결</button>
         </form>
       </div>}
     </section>
