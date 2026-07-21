@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">가격 추적기</string>
+    <string name="title_activity_main">가격 추적기</string>
+    <string name="package_name">com.yeonsik.pricetracker</string>
+    <string name="custom_url_scheme">com.yeonsik.pricetracker</string>
+</resources>
