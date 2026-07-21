@@ -32,11 +32,18 @@ PACKAGE_MANIFEST.json
 docs/
 schemas/
 
+# Keep the executable setup guide for the official-product discovery integration.
+!docs/
+docs/*
+!docs/OFFICIAL_PRODUCT_DISCOVERY.md
+!docs/Project_Intro.md
+
 # Local-only development and verification tooling
 e2e/
 playwright.config.ts
 vitest.config.ts
 eslint.config.mjs
 src/**/*.test.ts
+!src/domain/official-product.test.ts
 tsconfig.tsbuildinfo
 .env.example
