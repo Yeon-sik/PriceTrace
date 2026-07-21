@@ -24,10 +24,12 @@ export class SupabaseSettlementRepository {
       const {data:existingStoreProduct}=await client.from("store_products").select("id,product_id").eq("user_id",user.id).eq("store_id",store.id).eq("store_product_code",item.storeProductCode).maybeSingle();
       let storeProductId:string;
       if(existingStoreProduct){storeProductId=existingStoreProduct.id;}
-      else {const {data:product,error:productError}=await client.from("products").insert({user_id:user.id,name:item.productName}).select("id").single();if(productError) throw productError;const {data:storeProduct,error:storeProductError}=await client.from("store_products").insert({user_id:user.id,store_id:store.id,product_id:product.id,store_product_code:item.storeProductCode}).select("id").single();if(storeProductError) throw storeProductError;storeProductId=storeProduct.id;}
+      else {const {data:product,error:productError}=await client.from("products").insert({user_id:user.id,name:item.productName,purchase_type:"retail_product",category_tags:[]}).select("id").single();if(productError) throw productError;const {data:storeProduct,error:storeProductError}=await client.from("store_products").insert({user_id:user.id,store_id:store.id,product_id:product.id,store_product_code:item.storeProductCode}).select("id").single();if(storeProductError) throw storeProductError;storeProductId=storeProduct.id;}
       const {error:itemError}=await client.from("receipt_items").upsert({id:item.id,user_id:user.id,receipt_id:remoteReceipt.id,store_product_id:storeProductId,unit_price_krw:item.unitPriceKrw,purchased_quantity:item.purchasedQuantity,total_price_krw:item.totalPriceKrw,purchase_numbers:item.purchaseNumbers});
       if(itemError) throw itemError;
-      const {error:observationError}=await client.from("price_observations").upsert({user_id:user.id,store_product_id:storeProductId,receipt_item_id:item.id,observed_at:receipt.purchasedAt,unit_price_krw:item.unitPriceKrw,quantity:item.purchasedQuantity,verification_status:"verified",verified_at:new Date().toISOString()},{onConflict:"user_id,receipt_item_id"});
+      const {data:mapping,error:mappingError}=await client.from("source_product_mappings").select("catalog_product_id").eq("source_label",receipt.storeLabel).eq("source_product_code",item.storeProductCode).eq("review_status","verified").maybeSingle();
+      if(mappingError) throw mappingError;
+      const {error:observationError}=await client.from("price_observations").upsert({user_id:user.id,store_product_id:storeProductId,receipt_item_id:item.id,catalog_product_id:mapping?.catalog_product_id??null,observed_at:receipt.purchasedAt,unit_price_krw:item.unitPriceKrw,quantity:item.purchasedQuantity,measurement_unit:"each",location_label:receipt.storeLabel,verification_status:"verified",verified_at:new Date().toISOString()},{onConflict:"user_id,receipt_item_id"});
       if(observationError) throw observationError;
     }
   }
