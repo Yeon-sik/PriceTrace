@@ -3,7 +3,7 @@ import { discoverOfficialProduct } from "./official-product";
 
 describe("official product discovery", () => {
   it("automatically matches a verified store product code", () => {
-    const result = discoverOfficialProduct({ storeProductCode: "210059", productName: "하겐다즈 미니컵 스트로베리", storeLabel: "데모마트" });
+    const result = discoverOfficialProduct({ sourceProductCode: "210059", productName: "하겐다즈 미니컵 스트로베리", storeLabel: "데모마트" });
     expect(result.status).toBe("matched");
     if (result.status === "matched") {
       expect(result.record.matchMethod).toBe("auto_matched");
@@ -13,6 +13,6 @@ describe("official product discovery", () => {
   });
 
   it("does not turn an unknown receipt item into an official product", () => {
-    expect(discoverOfficialProduct({ storeProductCode: "unknown", productName: "임의 상품", storeLabel: "데모마트" }).status).toBe("unmatched");
+    expect(discoverOfficialProduct({ sourceProductCode: "unknown", productName: "임의 상품", storeLabel: "데모마트" }).status).toBe("unmatched");
   });
 });
