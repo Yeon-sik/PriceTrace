@@ -47,3 +47,13 @@ src/**/*.test.ts
 !src/domain/official-product.test.ts
 tsconfig.tsbuildinfo
 .env.example
+
+# Keep regression coverage for the shopping experience in version control.
+!e2e/
+e2e/*
+!e2e/shopping.spec.ts
+!playwright.config.ts
+!src/domain/product-browser.test.ts
+!src/repositories/cart.repository.test.ts
+!src/repositories/admin-receipt.repository.test.ts
+!src/repositories/official-product.repository.test.ts

@@ -1,0 +1,14 @@
+{
+  "schemaVersion": 1,
+  "products": {
+    "210059": {
+      "officialName": "하겐다즈 미니컵 스트로베리",
+      "officialUrl": "https://www.haagendazs.co.kr/products/strawberry-minicup",
+      "sourceName": "하겐다즈 코리아 공식 상품 페이지",
+      "matchMethod": "official_verified",
+      "confidence": 1,
+      "matchedBy": "store_product_code",
+      "updatedAt": "2026-07-21T00:00:00.000Z"
+    }
+  }
+}

@@ -1,5 +1,5 @@
 export type OfficialProductCandidate = {
-  storeProductCode: string;
+  sourceProductCode: string;
   productName: string;
   storeLabel: string;
 };
@@ -94,7 +94,7 @@ function tokenOverlap(left: string, right: string) {
 }
 
 export function discoverOfficialProduct(candidate: OfficialProductCandidate): OfficialDiscovery {
-  const exact = seededOfficialProducts[candidate.storeProductCode];
+  const exact = seededOfficialProducts[candidate.sourceProductCode];
   if (exact) {
     return {
       status: "matched",
@@ -118,5 +118,5 @@ export function discoverOfficialProduct(candidate: OfficialProductCandidate): Of
 }
 
 export function officialSearchUrl(candidate: OfficialProductCandidate) {
-  return `https://www.google.com/search?q=${encodeURIComponent(`${candidate.productName} ${candidate.storeProductCode} 공식 상품`)}`;
+  return `https://www.google.com/search?q=${encodeURIComponent(`${candidate.productName} ${candidate.sourceProductCode} 공식 상품`)}`;
 }
