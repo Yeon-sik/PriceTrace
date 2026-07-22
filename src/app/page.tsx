@@ -48,7 +48,7 @@ export default function Home() {
   const cartGroups = useMemo(() => productGroups.filter((group) => lines[group.id] > 0), [lines]);
   const cartTotal = cartGroups.reduce((sum, group) => sum + group.latestPriceKrw * lines[group.id], 0);
   const cartQuantityTotal = cartGroups.reduce((sum, group) => sum + lines[group.id], 0);
-  const officialCandidates = useMemo(() => productGroups.map((group) => ({ sourceProductCode: group.sourceProductCode, productName: group.productName, storeLabel: group.storeLabel })), []);
+  const officialCandidates = useMemo(() => productGroups.map((group) => ({ sourceProductCode: group.sourceProductCode, productName: group.productName, storeLabel: group.storeLabel, catalogNamespace: group.catalogNamespace })), []);
 
   function openCartModal(group: ProductGroup) {
     setCartGroupToAdd(group);

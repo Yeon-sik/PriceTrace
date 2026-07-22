@@ -23,7 +23,9 @@
     "merchant_id": null,
     "business_registration_number": null,
     "address": null,
-    "phone": null
+    "phone": null,
+    "retail_channel": "px",
+    "catalog_namespace": "korean-military-px"
   },
   "line_items": [
     {
@@ -104,7 +106,7 @@
     {
       "id": "line-004",
       "type": "product",
-      "description": "황금발말포크&스크램블 2인",
+      "description": "황금밥알포크&스크램블 2인",
       "source_line_references": [
         "4",
         "11",

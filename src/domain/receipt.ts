@@ -30,6 +30,9 @@ export const ReceiptJsonSchema = z.object({
   merchant: z.object({
     name: z.string().min(1),
     branch_name: z.string().min(1).nullable(),
+    retail_channel: z.enum(["px", "regular", "unknown"]).default("unknown"),
+    /** Shared product-code catalog, only when the merchant explicitly confirms it. */
+    catalog_namespace: z.string().trim().min(1).nullable(),
     merchant_id: z.string().min(1).nullable(),
     business_registration_number: z.string().min(1).nullable(),
     address: z.string().min(1).nullable(),
@@ -38,7 +41,7 @@ export const ReceiptJsonSchema = z.object({
   line_items: z.array(z.object({
     id: z.string().min(1),
     type: lineTypeSchema,
-    description: z.string().min(1),
+    description: z.string().min(1).nullable(),
     source_line_references: z.array(z.string().min(1)),
     identifiers: z.array(identifierSchema),
     quantity: z.object({ value: z.number().positive(), unit: z.string().min(1) }).nullable(),
@@ -78,9 +81,11 @@ export function mapReceipt(input: unknown): Receipt {
   const data = ReceiptJsonSchema.parse(input);
   if (data.document.currency !== "KRW") throw new Error("현재 정산 화면은 KRW 영수증만 지원합니다.");
   const receiptId = data.document.id ?? `${data.merchant.name}:${data.document.issued_at ?? data.document.issued_on}:${data.document.source.original_document_id ?? "unknown"}`;
-  const items = data.line_items.filter((line) => line.type === "product" && line.quantity?.unit === "each" && Number.isInteger(line.quantity.value) && line.quantity.value > 0 && line.net_amount_minor >= 0 && line.net_amount_minor % line.quantity.value === 0)
-    .map((line) => ({ id: receiptItemId(receiptId, line.id), receiptId, sourceLineReferences: line.source_line_references, productName: line.description, sourceProductCode: sourceProductCode(line), unitPriceKrw: line.net_amount_minor / line.quantity!.value, quantityValue: line.quantity!.value, totalPriceKrw: line.net_amount_minor, confidence: line.confidence }));
-  const receipt = { id: receiptId, storeLabel: data.merchant.branch_name ? `${data.merchant.name} ${data.merchant.branch_name}` : data.merchant.name, purchasedAt: data.document.issued_at ?? data.document.issued_on, transactionNumber: data.document.source.original_document_id ?? "", currency: "KRW" as const, totalPriceKrw: data.totals.grand_total_amount_minor, items };
+  const items = data.line_items.flatMap((line) => {
+    if (line.type !== "product" || line.description === null || line.quantity?.unit !== "each" || !Number.isInteger(line.quantity.value) || line.quantity.value <= 0 || line.net_amount_minor < 0 || line.net_amount_minor % line.quantity.value !== 0) return [];
+    return [{ id: receiptItemId(receiptId, line.id), receiptId, sourceLineReferences: line.source_line_references, productName: line.description, sourceProductCode: sourceProductCode(line), unitPriceKrw: line.net_amount_minor / line.quantity.value, quantityValue: line.quantity.value, totalPriceKrw: line.net_amount_minor, confidence: line.confidence }];
+  });
+  const receipt = { id: receiptId, storeLabel: data.merchant.branch_name ? `${data.merchant.name} ${data.merchant.branch_name}` : data.merchant.name, retailChannel: data.merchant.retail_channel, catalogNamespace: data.merchant.catalog_namespace, purchasedAt: data.document.issued_at ?? data.document.issued_on, transactionNumber: data.document.source.original_document_id ?? "", currency: "KRW" as const, totalPriceKrw: data.totals.grand_total_amount_minor, items };
   auditReceipt(receipt, data);
   return receipt;
 }

@@ -2,7 +2,26 @@ export type OfficialProductCandidate = {
   sourceProductCode: string;
   productName: string;
   storeLabel: string;
+  /** Explicit shared catalog only. Null means this seller owns the code namespace. */
+  catalogNamespace: string | null;
+  storeLabels?: string[];
 };
+
+export function officialProductCandidateKey(candidate: OfficialProductCandidate) {
+  const namespace = candidate.catalogNamespace ?? `merchant:${candidate.storeLabel}`;
+  return `${namespace}:${candidate.sourceProductCode}:${normalize(candidate.productName)}`;
+}
+
+export function mergeOfficialProductCandidates(candidates: OfficialProductCandidate[]): OfficialProductCandidate[] {
+  const grouped = new Map<string, OfficialProductCandidate>();
+  for (const candidate of candidates) {
+    const key = officialProductCandidateKey(candidate);
+    const existing = grouped.get(key);
+    const storeLabels = [...new Set([...(existing?.storeLabels ?? (existing ? [existing.storeLabel] : [])), ...(candidate.storeLabels ?? [candidate.storeLabel])])];
+    grouped.set(key, existing ? { ...existing, storeLabels } : { ...candidate, storeLabels });
+  }
+  return [...grouped.values()];
+}
 
 export type OfficialProductRecord = {
   officialName: string;
@@ -78,7 +97,7 @@ const officialProductSeeds: Record<string, OfficialProductSeed> = {
 };
 
 export const seededOfficialProducts: Record<string, OfficialProductRecord> = Object.fromEntries(
-  Object.entries(officialProductSeeds).map(([code, record]) => [code, asOfficialRecord(record)]),
+  Object.entries(officialProductSeeds).map(([code, record]) => [`korean-military-px:${code}`, asOfficialRecord(record)]),
 );
 
 function normalize(value: string) {
@@ -94,7 +113,7 @@ function tokenOverlap(left: string, right: string) {
 }
 
 export function discoverOfficialProduct(candidate: OfficialProductCandidate): OfficialDiscovery {
-  const exact = seededOfficialProducts[candidate.sourceProductCode];
+  const exact = candidate.catalogNamespace ? seededOfficialProducts[`${candidate.catalogNamespace}:${candidate.sourceProductCode}`] : undefined;
   if (exact) {
     return {
       status: "matched",

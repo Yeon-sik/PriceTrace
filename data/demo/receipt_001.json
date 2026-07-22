@@ -1,0 +1,70 @@
+{
+  "schema_version": "receipt.v2",
+  "document": {
+    "id": "demo:px-b-2026-06-12",
+    "type": "receipt",
+    "status": "final",
+    "issued_on": "2026-06-12",
+    "issued_at": "2026-06-12T12:00:00+09:00",
+    "currency": "KRW",
+    "source": {
+      "capture_method": "manual_transcription",
+      "original_document_id": "DEMO-PX-B-001",
+      "source_images": [],
+      "transcription_status": "verified",
+      "notes": ["Public, de-identified demo receipt for a second PX store."]
+    }
+  },
+  "merchant": {
+    "name": "PX 데모마트",
+    "branch_name": "B점",
+    "retail_channel": "px",
+    "catalog_namespace": "korean-military-px",
+    "merchant_id": null,
+    "business_registration_number": null,
+    "address": null,
+    "phone": null
+  },
+  "line_items": [
+    {
+      "id": "line-001",
+      "type": "product",
+      "description": "황금밥알포크&스크램블 2인",
+      "source_line_references": ["001"],
+      "identifiers": [{ "scheme": "merchant_sku", "value": "210157" }],
+      "quantity": { "value": 1, "unit": "each" },
+      "unit_price_amount_minor": 3440,
+      "gross_amount_minor": 3440,
+      "discount_amount_minor": 0,
+      "tax_amount_minor": 0,
+      "net_amount_minor": 3440,
+      "confidence": "user_verified",
+      "tax_rate_percent": null
+    },
+    {
+      "id": "line-002",
+      "type": "product",
+      "description": "PX 데모 음료 500ml",
+      "source_line_references": ["002"],
+      "identifiers": [{ "scheme": "merchant_sku", "value": "DEMO-500" }],
+      "quantity": { "value": 2, "unit": "each" },
+      "unit_price_amount_minor": 1200,
+      "gross_amount_minor": 2400,
+      "discount_amount_minor": 0,
+      "tax_amount_minor": 0,
+      "net_amount_minor": 2400,
+      "confidence": "user_verified",
+      "tax_rate_percent": null
+    }
+  ],
+  "totals": {
+    "items_gross_amount_minor": 5840,
+    "discount_amount_minor": 0,
+    "tax_amount_minor": 0,
+    "fee_amount_minor": 0,
+    "tip_amount_minor": 0,
+    "rounding_amount_minor": 0,
+    "grand_total_amount_minor": 5840
+  },
+  "payments": [{ "method": "card", "amount_minor": 5840, "status": "paid", "reference": null }]
+}
