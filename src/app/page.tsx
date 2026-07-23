@@ -12,14 +12,16 @@ import { CartNoticeModal, CartQuantityModal } from "./CartModals";
 import { CartPage } from "./CartPage";
 import { PriceTrendModal } from "./PriceTrendModal";
 import { ProductBrowser } from "./ProductBrowser";
+import { MarketBrowser } from "./MarketBrowser";
 import styles from "./page.module.css";
 
 const receipts = new JsonReceiptRepository().loadAll();
 const productGroups = groupProductObservations(listingsFromReceipts(receipts));
-type Page = "home" | "products" | "cart" | "admin";
+type Page = "home" | "products" | "markets" | "cart" | "admin";
 
 export default function Home() {
   const [page, setPage] = useState<Page>("home");
+  const [selectedMarket, setSelectedMarket] = useState<string | null>(null);
   const [category, setCategory] = useState<ProductCategory>("전체");
   const [query, setQuery] = useState("");
   const [martType, setMartType] = useState<MartType>("all");
@@ -83,13 +85,15 @@ export default function Home() {
         <button className={page === "home" ? styles.navActive : ""} aria-current={page === "home" ? "page" : undefined} onClick={() => setPage("home")}>홈</button>
         <button className={page === "products" ? styles.navActive : ""} aria-current={page === "products" ? "page" : undefined} onClick={() => setPage("products")}>상품 목록</button>
         <button className={page === "cart" ? styles.navActive : ""} aria-current={page === "cart" ? "page" : undefined} onClick={() => setPage("cart")}>장바구니 <span className={styles.navBadge}>{cartQuantityTotal}</span></button>
+        <button className={page === "markets" ? styles.navActive : ""} aria-current={page === "markets" ? "page" : undefined} onClick={() => { setSelectedMarket(null); setPage("markets"); }}>마트 물품</button>
         {isAdmin && <button className={page === "admin" ? styles.navActive : ""} aria-current={page === "admin" ? "page" : undefined} onClick={() => setPage("admin")}>관리자</button>}
       </div></nav>
     </header>
 
     <main className={styles.main}>
       {page === "home" && <><section className={styles.hero}><p className={styles.kicker}>PRICE OBSERVATION PLATFORM</p><h1>상품 가격을<br /><span>관측 기록으로 비교하세요.</span></h1><p>판매처와 시점이 명확한 영수증 관측가를 비교하고<br />필요한 상품을 장바구니에 모을 수 있습니다.</p><button onClick={() => openProducts()}>상품 둘러보기 <span>→</span></button></section><section className={styles.homeGrid}><CategoryBox category={category} onSelect={openProducts} /><CartBox count={cartGroups.length} quantity={cartQuantityTotal} total={cartTotal} onOpen={() => setPage("cart")} /></section></>}
-      {page === "products" && <ProductBrowser groups={productGroups} query={query} setQuery={setQuery} category={category} setCategory={setCategory} martType={martType} setMartType={setMartType} selectedStore={selectedStore} setSelectedStore={setSelectedStore} sort={sort} setSort={setSort} onAdd={openCartModal} onTrend={setTrendGroup} />}
+      {page === "products" && <ProductBrowser groups={productGroups} query={query} setQuery={setQuery} category={category} setCategory={setCategory} martType={martType} setMartType={setMartType} selectedStore={selectedStore} setSelectedStore={setSelectedStore} sort={sort} setSort={setSort} onAdd={openCartModal} onTrend={setTrendGroup} onOpenStore={(store) => { setSelectedMarket(store); setPage("markets"); }} />}
+      {page === "markets" && <MarketBrowser receipts={receipts} selectedStore={selectedMarket} onSelectStore={setSelectedMarket} />}
       {page === "cart" && <CartPage groups={productGroups} lines={lines} onQuantityChange={updateCartQuantity} onRemove={removeCart} onClear={clearCart} onBrowse={() => setPage("products")} />}
       {page === "admin" && isAdmin && <AdminPage candidates={officialCandidates} />}
     </main>
@@ -102,7 +106,7 @@ export default function Home() {
     </nav>
 
     {authOpen && <AuthPanel onChange={handleAuthChange} modal onClose={() => setAuthOpen(false)} />}
-    {trendGroup && <PriceTrendModal group={trendGroup} onClose={() => setTrendGroup(null)} />}
+    {trendGroup && <PriceTrendModal group={trendGroup} onClose={() => setTrendGroup(null)} onOpenStore={(store) => { setTrendGroup(null); setSelectedMarket(store); setPage("markets"); }} />}
     {cartGroupToAdd && <CartQuantityModal group={cartGroupToAdd} value={cartQuantity} error={cartQuantityError} onChange={(value) => { setCartQuantity(value); setCartQuantityError(""); }} onClose={() => setCartGroupToAdd(null)} onConfirm={confirmAddToCart} />}
     {cartNotice && <CartNoticeModal productName={cartNotice.productName} quantity={cartNotice.quantity} onClose={() => setCartNotice(null)} onGoCart={() => { setCartNotice(null); setPage("cart"); }} />}
   </div>;
