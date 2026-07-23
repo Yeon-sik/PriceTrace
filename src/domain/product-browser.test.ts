@@ -15,8 +15,15 @@ describe("product browser domain", () => {
     expect(martTypeFor(mapReceipt(source))).toBe("px");
   });
 
-  it("groups same-name observations from one seller before a shared catalog match", () => {
+  it("keeps same-name products with different product codes separate", () => {
     const groups = groupProductObservations([listing("2026-07-01", 1200, "A1"), listing("2026-07-02", 900, "B2")]);
+    expect(groups).toHaveLength(2);
+  });
+
+  it("falls back to the existing store-and-name grouping when product codes are absent", () => {
+    const first = listing("2026-07-01", 1200, "");
+    const second = listing("2026-07-02", 900, "");
+    const groups = groupProductObservations([first, second]);
     expect(groups).toHaveLength(1);
     expect(groups[0].observations).toHaveLength(2);
   });

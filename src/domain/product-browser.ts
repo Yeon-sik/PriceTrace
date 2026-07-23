@@ -68,7 +68,9 @@ export function listingsFromReceipts(receipts: Receipt[]): ProductObservationLis
 export function groupProductObservations(listings: ProductObservationListing[]): ProductGroup[] {
   const grouped = new Map<string, ProductObservationListing[]>();
   for (const listing of listings) {
-    const id = `${listing.storeLabel}:${normalizeReceiptProductName(listing.item.productName)}`;
+    const normalizedName = normalizeReceiptProductName(listing.item.productName);
+    const productCode = listing.item.sourceProductCode.trim();
+    const id = productCode ? `${listing.storeLabel}:${productCode}:${normalizedName}` : `${listing.storeLabel}:${normalizedName}`;
     grouped.set(id, [...(grouped.get(id) ?? []), listing]);
   }
   return [...grouped.entries()].map(([id, observations]) => {

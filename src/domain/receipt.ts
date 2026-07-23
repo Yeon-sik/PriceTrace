@@ -74,7 +74,7 @@ export type ReceiptJson = z.infer<typeof ReceiptJsonSchema>;
 export const receiptItemId = (receiptId: string, lineId: string) => `${receiptId}:${lineId}`;
 
 function sourceProductCode(line: ReceiptJson["line_items"][number]) {
-  return line.identifiers.find((identifier) => identifier.scheme === "merchant_sku")?.value ?? line.id;
+  return line.identifiers.find((identifier) => identifier.scheme === "merchant_sku")?.value ?? "";
 }
 
 export function mapReceipt(input: unknown): Receipt {
