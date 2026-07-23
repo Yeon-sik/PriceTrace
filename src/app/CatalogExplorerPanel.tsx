@@ -107,6 +107,10 @@ export function CatalogExplorerPanel() {
 
   async function createCatalogProduct(event: React.FormEvent) {
     event.preventDefault();
+    if (typeof window !== "undefined") {
+      setMessage("판매 상품 등록은 표준 상품 연결 화면에서 표준 상품과 판매 규격을 함께 지정해 주세요.");
+      return;
+    }
     if (!client || !userId || !canonicalName.trim()) return;
     const parsedContentAmount = contentAmount.trim() ? Number(contentAmount) : null;
     const parsedPackageCount = Number(packageCount);
