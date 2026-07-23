@@ -24,7 +24,7 @@ export default function Home() {
   const [query, setQuery] = useState("");
   const [martType, setMartType] = useState<MartType>("all");
   const [selectedStore, setSelectedStore] = useState("all");
-  const [sort, setSort] = useState<ProductSort>("recent");
+  const [sort, setSort] = useState<ProductSort>("cheap");
   const [authOpen, setAuthOpen] = useState(false);
   const [authRevision, setAuthRevision] = useState(0);
   const [trendGroup, setTrendGroup] = useState<ProductGroup | null>(null);

@@ -4,7 +4,7 @@ import type { OfficialProductRecord } from "./official-product";
 export const PRODUCT_CATEGORIES = ["전체", "식품", "생활용품", "주방용품", "신선식품", "음료", "간식", "미분류"] as const;
 export type ProductCategory = (typeof PRODUCT_CATEGORIES)[number];
 export type MartType = "all" | "regular" | "px";
-export type ProductSort = "recent" | "lowest" | "name" | "observations";
+export type ProductSort = "expensive" | "cheap" | "sellers";
 
 export type ProductObservationListing = {
   id: string;
@@ -121,9 +121,9 @@ export function filterAndSortProductGroups(groups: ProductGroup[], options: {
     .filter((group) => options.category === "전체" || group.category === options.category)
     .filter((group) => !normalizedQuery || `${group.productName} ${group.sourceProductCode} ${group.storeLabel}`.toLowerCase().includes(normalizedQuery))
     .sort((a, b) => {
-      if (options.sort === "lowest") return a.minimumPriceKrw - b.minimumPriceKrw || a.productName.localeCompare(b.productName);
-      if (options.sort === "name") return a.productName.localeCompare(b.productName);
-      if (options.sort === "observations") return b.observations.length - a.observations.length || a.productName.localeCompare(b.productName);
-      return b.latest.observedAt.localeCompare(a.latest.observedAt) || a.productName.localeCompare(b.productName);
+      const sellerCount = (group: ProductGroup) => new Set(group.observations.map((observation) => observation.storeLabel)).size;
+      if (options.sort === "expensive") return b.latestPriceKrw - a.latestPriceKrw || a.productName.localeCompare(b.productName);
+      if (options.sort === "sellers") return sellerCount(b) - sellerCount(a) || a.productName.localeCompare(b.productName);
+      return a.minimumPriceKrw - b.minimumPriceKrw || a.productName.localeCompare(b.productName);
     });
 }

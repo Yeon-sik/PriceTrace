@@ -20,6 +20,7 @@ export function StandardProductWorkspace({ candidates, revision }: { candidates:
   const [legacy, setLegacy] = useState(() => legacyRepository.loadAll());
   const [selected, setSelected] = useState<OfficialProductCandidate | null>(null);
   const [message, setMessage] = useState("");
+  const [searchQuery, setSearchQuery] = useState("");
 
   const load = useCallback(async () => {
     if (!client) return;
@@ -50,14 +51,22 @@ export function StandardProductWorkspace({ candidates, revision }: { candidates:
   }), [candidates, variantBySource, standardById, legacy]);
   const linked = states.filter((state) => state.variant && state.standard);
   const unlinked = states.filter((state) => !state.variant);
+  const matchesSearch = useCallback((state: (typeof states)[number]) => {
+    const query = searchQuery.trim().toLocaleLowerCase("ko-KR");
+    if (!query) return true;
+    return `${state.candidate.productName} ${state.candidate.sourceProductCode} ${sellers(state.candidate).join(" ")} ${state.standard?.canonical_name ?? ""} ${state.variant?.canonical_name ?? ""}`.toLocaleLowerCase("ko-KR").includes(query);
+  }, [searchQuery]);
+  const visibleLinked = linked.filter(matchesSearch);
+  const visibleUnlinked = unlinked.filter(matchesSearch);
 
   if (!client || !userId) return null;
   return <section className={styles.browser}>
     <div className={styles.browserHead}><div><p className={styles.kicker}>STANDARD PRODUCT MAPPING</p><h1>표준 상품 연결</h1><p>표준 상품은 햇반 같은 상품군입니다. 영수증 품목은 실제 판매 규격(예: 210g × 3)으로 등록해 표준 상품 아래에 보관합니다.</p></div></div>
     {message && <p className={styles.error} role="alert">{message}</p>}
+    <label className={styles.mappingSearch}><span className={styles.srOnly}>표준 상품 연결 검색</span><input type="search" value={searchQuery} onChange={(event) => setSearchQuery(event.target.value)} placeholder="상품명, 판매처, 상품 코드로 검색" /></label>
     <div className={styles.officialSummary}><span><b>{linked.length}</b>개 판매 기록 연결</span><span><b>{unlinked.length}</b>개 연결 필요</span></div>
-    <section className={styles.officialSection}><h2>연결된 표준 상품 기록</h2>{linked.length ? <div className={styles.officialGrid}>{linked.map(({ candidate, standard, variant }) => <article key={officialProductCandidateKey(candidate)}><div><span>표준 상품 · {standard!.canonical_name}</span><h3>{variant!.canonical_name}</h3><p>영수증 표기: {candidate.productName}</p><small>판매처 {sellers(candidate).join(", ")} · 코드 {candidate.sourceProductCode}</small><small>{variant!.content_amount ? `규격 ${variant!.content_amount}${variant!.content_unit} × ${variant!.package_count}` : "규격 미입력"}</small></div></article>)}</div> : <p>아직 연결된 판매 기록이 없습니다.</p>}</section>
-    <section className={styles.officialSection}><h2>표준 상품 연결 대기열</h2><p className={styles.manualHint}>기존 연결은 표준 상품과 하위 판매 규격으로 한 번 가져옵니다. 규격을 모르면 연결하지 말고 확인 후 등록하세요.</p><div className={styles.manualQueue}>{unlinked.map(({ candidate, legacy: legacyRecord, fromBrowserStorage }) => <article key={officialProductCandidateKey(candidate)}><div><strong>{legacyRecord?.officialName ?? candidate.productName}</strong><small>판매처 {sellers(candidate).join(", ")} · 코드 {candidate.sourceProductCode}</small>{legacyRecord && <small>{fromBrowserStorage ? "기존 브라우저 저장 연결" : "기존 시드 연결"}을 가져올 수 있습니다.</small>}</div><div className={styles.queueActions}><a href={legacyRecord?.officialUrl ?? officialSearchUrl(candidate)} target="_blank" rel="noreferrer">상품 정보 찾기</a><button onClick={() => setSelected(candidate)}>{legacyRecord ? "표준 상품으로 가져오기" : "표준 상품 연결"}</button></div></article>)}</div></section>
+    <section className={styles.officialSection}><h2>연결된 표준 상품 기록</h2>{visibleLinked.length ? <div className={styles.officialGrid}>{visibleLinked.map(({ candidate, standard, variant }) => <article key={officialProductCandidateKey(candidate)}><div><span>표준 상품 · {standard!.canonical_name}</span><h3>{variant!.canonical_name}</h3><p>영수증 표기: {candidate.productName}</p><small>판매처 {sellers(candidate).join(", ")} · 코드 {candidate.sourceProductCode}</small><small>{variant!.content_amount ? `규격 ${variant!.content_amount}${variant!.content_unit} × ${variant!.package_count}` : "규격 미입력"}</small></div></article>)}</div> : <p>검색 조건에 맞는 연결 기록이 없습니다.</p>}</section>
+    <section className={styles.officialSection}><h2>표준 상품 연결 대기열</h2><p className={styles.manualHint}>기존 연결은 표준 상품과 하위 판매 규격으로 한 번 가져옵니다. 규격을 모르면 연결하지 말고 확인 후 등록하세요.</p><div className={styles.manualQueue}>{visibleUnlinked.map(({ candidate, legacy: legacyRecord, fromBrowserStorage }) => <article key={officialProductCandidateKey(candidate)}><div><strong>{legacyRecord?.officialName ?? candidate.productName}</strong><small>판매처 {sellers(candidate).join(", ")} · 코드 {candidate.sourceProductCode}</small>{legacyRecord && <small>{fromBrowserStorage ? "기존 브라우저 저장 연결" : "기존 시드 연결"}을 가져올 수 있습니다.</small>}</div><div className={styles.queueActions}><a href={legacyRecord?.officialUrl ?? officialSearchUrl(candidate)} target="_blank" rel="noreferrer">상품 정보 찾기</a><button onClick={() => setSelected(candidate)}>{legacyRecord ? "표준 상품으로 가져오기" : "표준 상품 연결"}</button></div></article>)}</div></section>
     {selected && <StandardProductModal candidate={selected} legacy={legacy[officialProductCandidateKey(selected)]} standards={standards} userId={userId} onClose={() => setSelected(null)} onSaved={() => { setSelected(null); void load(); }} />}
   </section>;
 }
