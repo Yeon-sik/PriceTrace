@@ -6,6 +6,7 @@ import { formatKrw } from "@/domain/settlement";
 import { officialProductCandidateKey, seededOfficialProducts, type OfficialProductRecord } from "@/domain/official-product";
 import { OfficialProductRepository } from "@/repositories/official-product.repository";
 import { ProductImage } from "./ProductImage";
+import { StandardProductCatalog } from "./StandardProductCatalog";
 import styles from "./page.module.css";
 
 const officialProductRepository = new OfficialProductRepository();
@@ -24,6 +25,7 @@ export function ProductBrowser({ groups, query, setQuery, category, setCategory,
   const linkedCount = catalogGroups.filter((group) => group.officialProduct).length;
 
   return <section className={styles.browser}>
+    <StandardProductCatalog />
     <div className={styles.browserHead}><div><p className={styles.kicker}>PRODUCT CATALOG</p><h1>상품 목록</h1><p>공식 연결 전 상품도 표시합니다. 연결 전 가격 이력은 같은 매장의 동일 영수증 상품명만, 공식 연결 후에는 검증된 같은 공식 상품의 판매처별 관측을 비교합니다.</p></div><label className={styles.search}><span aria-hidden="true">⌕</span><span className={styles.srOnly}>상품 검색</span><input type="search" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="상품명, 판매처 코드, 판매 마트 검색" /></label></div>
     <div className={styles.marketControls}><div className={styles.segmented} aria-label="판매처 유형">{([ ["all", "전체"], ["regular", "일반 마트"], ["px", "PX (군마트)"] ] as const).map(([value, label]) => <button key={value} aria-pressed={martType === value} className={martType === value ? styles.selectedSegment : ""} onClick={() => { setMartType(value); setSelectedStore("all"); }}>{label}</button>)}</div><label className={styles.storeSelect}>판매 마트<select value={selectedStore} onChange={(event) => setSelectedStore(event.target.value)}><option value="all">전체 마트</option>{stores.map((store) => <option key={store} value={store}>{store}</option>)}</select></label><label className={styles.sortSelect}>정렬<select value={sort} onChange={(event) => setSort(event.target.value as ProductSort)}><option value="recent">최근 관측일</option><option value="lowest">최저 관측가</option><option value="name">상품명</option><option value="observations">관측 많은 순</option></select></label></div>
     <div className={styles.filters} aria-label="상품 카테고리">{PRODUCT_CATEGORIES.map((item) => <button aria-pressed={category === item} className={category === item ? styles.filterActive : ""} key={item} onClick={() => setCategory(item)}>{item}</button>)}</div>

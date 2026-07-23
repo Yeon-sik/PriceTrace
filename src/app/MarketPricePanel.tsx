@@ -7,7 +7,7 @@ import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import styles from "./page.module.css";
 
 type ContentUnit = "g" | "ml" | "each";
-type CatalogProduct = { id: string; canonical_name: string; brand: string | null; specification: string | null; content_amount: number | null; content_unit: ContentUnit | null; package_count: number; product_reference_url: string | null };
+type CatalogProduct = { id: string; canonical_name: string; brand: string | null; specification: string | null; content_amount: number | null; content_unit: ContentUnit | null; package_count: number; listing_reference_url: string | null };
 type StoredObservation = { id: string; seller_name: string; product_url: string; listed_price_krw: number; shipping_fee_krw: number; minimum_order_quantity: number; observed_at: string; verification_status: "pending" | "verified" | "rejected" };
 
 const initialOffer = { sellerName: "", productUrl: "", listedPriceKrw: "", shippingFeeKrw: "0", minimumOrderQuantity: "1" };
@@ -32,7 +32,7 @@ export function MarketPricePanel() {
 
   const loadProducts = useCallback(async () => {
     if (!client) return;
-    const { data, error } = await client.from("catalog_products").select("id,canonical_name,brand,specification,content_amount,content_unit,package_count,product_reference_url").eq("status", "active").order("canonical_name");
+    const { data, error } = await client.from("catalog_products").select("id,canonical_name,brand,specification,content_amount,content_unit,package_count,listing_reference_url").eq("status", "active").order("canonical_name");
     if (error) setMessage(error.message);
     else setProducts((data ?? []) as CatalogProduct[]);
   }, [client]);
@@ -75,7 +75,7 @@ export function MarketPricePanel() {
     <div className={styles.adminSectionHead}><div><p className={styles.kicker}>TRACKED SELLER PRICES</p><h2 id="market-price-title">관측 판매처 기준 최저가</h2><p>관리자가 상품 규격과 URL을 확인한 관측가만 비교합니다. 배송비는 포함하고 쿠폰·회원가는 포함하지 않습니다.</p></div></div>
     {message && <p role="status" className={styles.muted}>{message}</p>}
     <label className={styles.marketProductSelect}>표준 상품<select value={selectedProductId} onChange={(event) => { setSelectedProductId(event.target.value); setMessage(""); }}><option value="">상품을 선택하세요</option>{products.map((product) => <option key={product.id} value={product.id}>{[product.canonical_name, product.brand, product.specification].filter(Boolean).join(" | ")}</option>)}</select></label>
-    {selectedProduct && <div className={styles.marketSpecification}><strong>{selectedProduct.canonical_name}</strong>{specification ? <><span>규격 {specification.contentAmount}{specification.contentUnit} × {specification.packageCount}</span>{selectedProduct.product_reference_url && <a href={selectedProduct.product_reference_url} target="_blank" rel="noreferrer">상품 확인 출처</a>}</> : <span>규격이 없어 단위가격을 계산할 수 없습니다. 카탈로그 관리에서 내용량과 확인 URL을 먼저 등록하세요.</span>}</div>}
+    {selectedProduct && <div className={styles.marketSpecification}><strong>{selectedProduct.canonical_name}</strong>{specification ? <><span>규격 {specification.contentAmount}{specification.contentUnit} × {specification.packageCount}</span>{selectedProduct.listing_reference_url && <a href={selectedProduct.listing_reference_url} target="_blank" rel="noreferrer">상품 확인 출처</a>}</> : <span>규격이 없어 단위가격을 계산할 수 없습니다. 카탈로그 관리에서 내용량과 확인 URL을 먼저 등록하세요.</span>}</div>}
     {specification && <><div className={styles.marketLowest}>{lowest ? <><span>현재 관측 판매처 기준 최저가</span><strong>{lowest.sellerName} · {formatKrw(lowest.effectivePriceKrw)}</strong><b>{lowest.referenceLabel} {formatKrw(lowest.pricePerReferenceUnitKrw)}</b></> : <span>검증된 시장 관측가가 없습니다.</span>}</div>
       <form className={styles.marketOfferForm} onSubmit={saveOffer}>
         <h3>수동 시장 관측가 등록</h3><label>판매처<input required value={offer.sellerName} onChange={(event) => setOffer({ ...offer, sellerName: event.target.value })} /></label><label>상품 URL<input required type="url" placeholder="https://" value={offer.productUrl} onChange={(event) => setOffer({ ...offer, productUrl: event.target.value })} /></label><label>판매가<input required inputMode="numeric" value={offer.listedPriceKrw} onChange={(event) => setOffer({ ...offer, listedPriceKrw: event.target.value })} /></label><label>배송비<input required inputMode="numeric" value={offer.shippingFeeKrw} onChange={(event) => setOffer({ ...offer, shippingFeeKrw: event.target.value })} /></label><label>최소 구매 수량<input required type="number" min="1" step="1" value={offer.minimumOrderQuantity} onChange={(event) => setOffer({ ...offer, minimumOrderQuantity: event.target.value })} /></label><button type="submit">검증 후 등록</button>

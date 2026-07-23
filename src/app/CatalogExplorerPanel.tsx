@@ -8,7 +8,7 @@ import styles from "./page.module.css";
 
 type Category = { id: string; purchase_type: PurchaseType; parent_id: string | null; display_name: string; depth: number };
 type ContentUnit = "g" | "ml" | "each";
-type CatalogProduct = { id: string; purchase_type: PurchaseType; canonical_name: string; brand: string | null; specification: string | null; content_amount: number | null; content_unit: ContentUnit | null; package_count: number; product_reference_url: string | null; category_id: string | null };
+type CatalogProduct = { id: string; standard_product_id: string; purchase_type: PurchaseType; canonical_name: string; brand: string | null; specification: string | null; content_amount: number | null; content_unit: ContentUnit | null; package_count: number; listing_reference_url: string | null; category_id: string | null };
 type RemoteObservation = { location_label: string | null; unit_price_krw: number; observed_at: string; measurement_unit: string };
 
 const purchaseTypeLabels: Record<PurchaseType, string> = {
@@ -59,7 +59,7 @@ export function CatalogExplorerPanel() {
     if (!client) return;
     const [{ data: categoryData, error: categoryError }, { data: productData, error: productError }] = await Promise.all([
       client.from("catalog_categories").select("id,purchase_type,parent_id,display_name,depth").eq("purchase_type", purchaseType).order("depth").order("display_name"),
-      client.from("catalog_products").select("id,purchase_type,canonical_name,brand,specification,content_amount,content_unit,package_count,product_reference_url,category_id").eq("purchase_type", purchaseType).eq("status", "active").order("canonical_name"),
+      client.from("catalog_products").select("id,standard_product_id,purchase_type,canonical_name,brand,specification,content_amount,content_unit,package_count,listing_reference_url,category_id").eq("purchase_type", purchaseType).eq("status", "active").order("canonical_name"),
     ]);
     if (categoryError || productError) setMessage(categoryError?.message ?? productError?.message ?? "카탈로그를 불러오지 못했습니다.");
     else {
@@ -114,15 +114,17 @@ export function CatalogExplorerPanel() {
       setMessage("규격은 내용량, 단위, 묶음 수, 확인 URL을 함께 입력해야 합니다.");
       return;
     }
+    if (!parsedContentAmount || !productReferenceUrl.trim()) { setMessage("판매 규격은 표준 상품 연결 화면에서 등록하세요."); return; }
     const { error } = await client.from("catalog_products").insert({
+      standard_product_id: selectedProductId,
       purchase_type: purchaseType,
       canonical_name: canonicalName.trim(),
       brand: brand.trim() || null,
       specification: specification.trim() || null,
       content_amount: parsedContentAmount,
-      content_unit: parsedContentAmount === null ? null : contentUnit,
+      content_unit: contentUnit,
       package_count: parsedPackageCount,
-      product_reference_url: productReferenceUrl.trim() || null,
+      listing_reference_url: productReferenceUrl.trim(),
       created_by: userId,
     });
     if (error) setMessage(error.message);
