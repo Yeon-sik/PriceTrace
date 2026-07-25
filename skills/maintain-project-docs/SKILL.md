@@ -74,6 +74,9 @@ as the deterministic publisher.
   Markdown responses before any write.
 - Skip a page only when its complete retrieved Markdown equals the complete
   rendered output; a matching commit marker alone is not enough.
+- Embed a SHA-256 source fingerprint in the mirror banner. Accept a complete,
+  correct-page update response when Notion normalizes the enhanced Markdown
+  only if that fingerprint survives; report both source and Notion hashes.
 - Rewrite sibling document links to their Notion pages and other tracked
   relative links to immutable GitHub commit URLs.
 - Add the source commit banner and report both page results in the Actions

@@ -382,7 +382,42 @@ test("publication updates both pages only after successful preflight", async () 
   }
 });
 
-test("publication rejects a successful PATCH response with different Markdown", async () => {
+test("publication accepts Notion-normalized Markdown when the source fingerprint survives", async () => {
+  const root = temporaryProject();
+  const calls = [];
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async (url, init) => {
+    calls.push({ url: String(url), method: init.method });
+    const markdown =
+      init.method === "PATCH"
+        ? `${requestedMarkdown(init).trimEnd()}\n\n`
+        : "";
+    return pageMarkdownResponse(pageIdFromUrl(url), markdown);
+  };
+
+  try {
+    const result = await syncProjectDocuments({
+      environment: publicationEnvironment(),
+      rootDirectory: root,
+    });
+    assert.equal(calls.filter((call) => call.method === "PATCH").length, 2);
+    assert.deepEqual(
+      result.documents.map((document) => document.status),
+      ["Synced (Notion-normalized)", "Synced (Notion-normalized)"],
+    );
+    assert.ok(
+      result.documents.every(
+        (document) =>
+          document.sha256 !== document.notionSha256 &&
+          document.notionCharacters !== document.characters,
+      ),
+    );
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("publication rejects a successful PATCH response that loses the source fingerprint", async () => {
   const root = temporaryProject();
   const calls = [];
   const originalFetch = globalThis.fetch;
@@ -400,7 +435,7 @@ test("publication rejects a successful PATCH response with different Markdown", 
         environment: publicationEnvironment(),
         rootDirectory: root,
       }),
-      /publication was partial or failed/,
+      /lost the source fingerprint/,
     );
     assert.equal(calls.filter((call) => call.method === "PATCH").length, 2);
   } finally {
