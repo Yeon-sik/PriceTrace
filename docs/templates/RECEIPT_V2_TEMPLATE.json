@@ -1,0 +1,113 @@
+{
+  "schema_version": "receipt.v2",
+  "document": {
+    "id": "receipt:example-001",
+    "type": "receipt",
+    "status": "final",
+    "issued_on": "2026-01-15",
+    "issued_at": "2026-01-15T14:30:00+09:00",
+    "currency": "KRW",
+    "source": {
+      "capture_method": "ocr",
+      "original_document_id": "EXAMPLE-001",
+      "source_images": [
+        "receipt_example_001.jpg"
+      ],
+      "transcription_status": "parsed",
+      "notes": [],
+      "raw_text": null
+    }
+  },
+  "merchant": {
+    "name": "예시마트",
+    "branch_name": "예시점",
+    "business_kind": "retail",
+    "retail_channel": "regular",
+    "catalog_namespace": null,
+    "merchant_id": null,
+    "business_registration_number": null,
+    "address": null,
+    "phone": null
+  },
+  "line_items": [
+    {
+      "id": "line-001",
+      "type": "product",
+      "description": "예시 상품 A",
+      "source_line_references": [
+        "line-001"
+      ],
+      "identifiers": [
+        {
+          "scheme": "merchant_sku",
+          "value": "EXAMPLE-SKU-001"
+        }
+      ],
+      "quantity": {
+        "value": 2,
+        "unit": "each"
+      },
+      "unit_price_amount_minor": 3000,
+      "gross_amount_minor": 6000,
+      "discount_amount_minor": 0,
+      "tax_amount_minor": 0,
+      "net_amount_minor": 6000,
+      "confidence": "high",
+      "tax_rate_percent": null
+    },
+    {
+      "id": "line-002",
+      "type": "product",
+      "description": "예시 상품 B",
+      "source_line_references": [
+        "line-002"
+      ],
+      "identifiers": [],
+      "quantity": {
+        "value": 1,
+        "unit": "each"
+      },
+      "unit_price_amount_minor": 2500,
+      "gross_amount_minor": 2500,
+      "discount_amount_minor": 0,
+      "tax_amount_minor": 0,
+      "net_amount_minor": 2500,
+      "confidence": "medium",
+      "tax_rate_percent": null
+    },
+    {
+      "id": "line-003",
+      "type": "discount",
+      "description": "예시 할인",
+      "source_line_references": [
+        "line-003"
+      ],
+      "identifiers": [],
+      "quantity": null,
+      "unit_price_amount_minor": null,
+      "gross_amount_minor": 0,
+      "discount_amount_minor": 500,
+      "tax_amount_minor": 0,
+      "net_amount_minor": -500,
+      "confidence": "high",
+      "tax_rate_percent": null
+    }
+  ],
+  "totals": {
+    "items_gross_amount_minor": 8500,
+    "discount_amount_minor": 500,
+    "tax_amount_minor": 0,
+    "fee_amount_minor": 0,
+    "tip_amount_minor": 0,
+    "rounding_amount_minor": 0,
+    "grand_total_amount_minor": 8000
+  },
+  "payments": [
+    {
+      "method": "card",
+      "amount_minor": 8000,
+      "status": "paid",
+      "reference": null
+    }
+  ]
+}

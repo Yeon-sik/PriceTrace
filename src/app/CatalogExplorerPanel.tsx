@@ -7,7 +7,8 @@ import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import styles from "./page.module.css";
 
 type Category = { id: string; purchase_type: PurchaseType; parent_id: string | null; display_name: string; depth: number };
-type CatalogProduct = { id: string; purchase_type: PurchaseType; canonical_name: string; brand: string | null; specification: string | null; category_id: string | null };
+type ContentUnit = "g" | "ml" | "each";
+type CatalogProduct = { id: string; standard_product_id: string; purchase_type: PurchaseType; canonical_name: string; brand: string | null; specification: string | null; content_amount: number | null; content_unit: ContentUnit | null; package_count: number; listing_reference_url: string | null; category_id: string | null };
 type RemoteObservation = { location_label: string | null; unit_price_krw: number; observed_at: string; measurement_unit: string };
 
 const purchaseTypeLabels: Record<PurchaseType, string> = {
@@ -46,6 +47,10 @@ export function CatalogExplorerPanel() {
   const [canonicalName, setCanonicalName] = useState("");
   const [brand, setBrand] = useState("");
   const [specification, setSpecification] = useState("");
+  const [contentAmount, setContentAmount] = useState("");
+  const [contentUnit, setContentUnit] = useState<ContentUnit>("g");
+  const [packageCount, setPackageCount] = useState("1");
+  const [productReferenceUrl, setProductReferenceUrl] = useState("");
   const [sourceLabel, setSourceLabel] = useState("");
   const [sourceProductCode, setSourceProductCode] = useState("");
   const [message, setMessage] = useState("");
@@ -54,7 +59,7 @@ export function CatalogExplorerPanel() {
     if (!client) return;
     const [{ data: categoryData, error: categoryError }, { data: productData, error: productError }] = await Promise.all([
       client.from("catalog_categories").select("id,purchase_type,parent_id,display_name,depth").eq("purchase_type", purchaseType).order("depth").order("display_name"),
-      client.from("catalog_products").select("id,purchase_type,canonical_name,brand,specification,category_id").eq("purchase_type", purchaseType).eq("status", "active").order("canonical_name"),
+      client.from("catalog_products").select("id,standard_product_id,purchase_type,canonical_name,brand,specification,content_amount,content_unit,package_count,listing_reference_url,category_id").eq("purchase_type", purchaseType).eq("status", "active").order("canonical_name"),
     ]);
     if (categoryError || productError) setMessage(categoryError?.message ?? productError?.message ?? "카탈로그를 불러오지 못했습니다.");
     else {
@@ -102,12 +107,28 @@ export function CatalogExplorerPanel() {
 
   async function createCatalogProduct(event: React.FormEvent) {
     event.preventDefault();
+    if (typeof window !== "undefined") {
+      setMessage("판매 상품 등록은 표준 상품 연결 화면에서 표준 상품과 판매 규격을 함께 지정해 주세요.");
+      return;
+    }
     if (!client || !userId || !canonicalName.trim()) return;
+    const parsedContentAmount = contentAmount.trim() ? Number(contentAmount) : null;
+    const parsedPackageCount = Number(packageCount);
+    if ((parsedContentAmount !== null && (!Number.isFinite(parsedContentAmount) || parsedContentAmount <= 0)) || !Number.isInteger(parsedPackageCount) || parsedPackageCount <= 0 || (parsedContentAmount !== null && !productReferenceUrl.trim())) {
+      setMessage("규격은 내용량, 단위, 묶음 수, 확인 URL을 함께 입력해야 합니다.");
+      return;
+    }
+    if (!parsedContentAmount || !productReferenceUrl.trim()) { setMessage("판매 규격은 표준 상품 연결 화면에서 등록하세요."); return; }
     const { error } = await client.from("catalog_products").insert({
+      standard_product_id: selectedProductId,
       purchase_type: purchaseType,
       canonical_name: canonicalName.trim(),
       brand: brand.trim() || null,
       specification: specification.trim() || null,
+      content_amount: parsedContentAmount,
+      content_unit: contentUnit,
+      package_count: parsedPackageCount,
+      listing_reference_url: productReferenceUrl.trim(),
       created_by: userId,
     });
     if (error) setMessage(error.message);
@@ -115,6 +136,10 @@ export function CatalogExplorerPanel() {
       setCanonicalName("");
       setBrand("");
       setSpecification("");
+      setContentAmount("");
+      setContentUnit("g");
+      setPackageCount("1");
+      setProductReferenceUrl("");
       setMessage("표준 상품을 등록했습니다.");
       await loadCatalog();
     }
@@ -171,7 +196,7 @@ export function CatalogExplorerPanel() {
           {visibleProducts.length === 0 ? <p>선택한 범위에 등록된 표준 상품이 없습니다.</p> : <div className={styles.catalogList}>
             {visibleProducts.map((product) => <button type="button" className={product.id === selectedProductId ? styles.selectedCatalogProduct : styles.catalogProduct} key={product.id} onClick={() => setSelectedProductId(product.id)}>
               <strong>{product.canonical_name}</strong>
-              <small>{[product.brand, product.specification].filter(Boolean).join(" | ") || "규격 미입력"}</small>
+              <small>{[product.brand, product.specification, product.content_amount ? `${product.content_amount}${product.content_unit} × ${product.package_count}` : null].filter(Boolean).join(" | ") || "규격 미입력"}</small>
             </button>)}
           </div>}
         </div>
@@ -192,6 +217,10 @@ export function CatalogExplorerPanel() {
           <label>표준 상품명<input value={canonicalName} onChange={(event) => setCanonicalName(event.target.value)} required /></label>
           <label>브랜드<input value={brand} onChange={(event) => setBrand(event.target.value)} /></label>
           <label>규격<input value={specification} onChange={(event) => setSpecification(event.target.value)} /></label>
+          <label>내용량<input inputMode="decimal" value={contentAmount} onChange={(event) => setContentAmount(event.target.value)} placeholder="예: 400" /></label>
+          <label>내용 단위<select value={contentUnit} onChange={(event) => setContentUnit(event.target.value as ContentUnit)}><option value="g">g</option><option value="ml">ml</option><option value="each">개</option></select></label>
+          <label>묶음 수<input type="number" min="1" step="1" value={packageCount} onChange={(event) => setPackageCount(event.target.value)} /></label>
+          <label>상품 확인 URL<input type="url" value={productReferenceUrl} onChange={(event) => setProductReferenceUrl(event.target.value)} placeholder="https://" /></label>
           <button type="submit">표준 상품 등록</button>
         </form>
         <form className={styles.inline} onSubmit={createSourceMapping}>

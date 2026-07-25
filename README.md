@@ -42,6 +42,29 @@ GitHub 저장소의 `Settings → Pages`에서 `Source`를 `GitHub Actions`로 �
 - 앱의 변경 가능한 상태(수령자, 배분, 전달/입금 상태)는 localStorage에만 저장됩니다.
 - JSON 복원은 전체 Zod 검증을 통과한 경우에만 상태를 바꿉니다.
 
+### private 영수증 자동 인식
+
+로컬 개발은 기본적으로 private 영수증 모드로 실행합니다.
+
+```powershell
+npm.cmd run dev
+```
+
+- `npm.cmd run dev:private`도 동일하게 사용할 수 있습니다.
+- `private-data/`의 `receipt_*.json` 파일을 5초마다 다시 확인합니다.
+- `(1)`, `(2)`처럼 같은 파일의 수정본이 여러 개면 수정 시각이 가장 최신인 파일만 사용합니다.
+- 사업자번호와 주소가 동일한 영수증은 같은 매장으로 묶되 원본 영수증 기록은 날짜별로 유지합니다.
+- 최신 파일이 `ReceiptJsonSchema` 검증에 실패하면 이전 파일로 자동 복귀하지 않고 앱에 경고를 표시합니다.
+- 앱에는 마트명, 발행일, 상품명, 상품코드, 수량, 관측가와 합계만 전달합니다.
+- 주소, 전화번호, 거래번호, 결제정보, OCR 원문과 원본 이미지명은 전달하지 않습니다.
+- 공개 demo만 확인하려면 `npm.cmd run dev:demo`를 사용합니다. production build는 계속 공개 demo 데이터만 사용합니다.
+
+사전 검증만 실행하려면 다음 명령을 사용합니다.
+
+```powershell
+npm.cmd run validate:private-receipts -- receipt_YYYY-MM-DD_NNN.json
+```
+
 ## 수동 확인
 
 1. `/`에서 품목 수가 `95/95`이고 총액이 `737,790원`인지 확인합니다.

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { groupProductObservations, martTypeFor, mergeOfficialProductGroups, type ProductObservationListing } from "./product-browser";
+import { filterAndSortProductGroups, groupProductObservations, martTypeFor, mergeOfficialProductGroups, type ProductObservationListing } from "./product-browser";
 import type { ReceiptItem } from "./types";
 import { createUniversalReceipt } from "./receipt.fixture";
 import { mapReceipt } from "./receipt";
@@ -15,8 +15,15 @@ describe("product browser domain", () => {
     expect(martTypeFor(mapReceipt(source))).toBe("px");
   });
 
-  it("groups same-name observations from one seller before a shared catalog match", () => {
+  it("keeps same-name products with different product codes separate", () => {
     const groups = groupProductObservations([listing("2026-07-01", 1200, "A1"), listing("2026-07-02", 900, "B2")]);
+    expect(groups).toHaveLength(2);
+  });
+
+  it("falls back to the existing store-and-name grouping when product codes are absent", () => {
+    const first = listing("2026-07-01", 1200, "");
+    const second = listing("2026-07-02", 900, "");
+    const groups = groupProductObservations([first, second]);
     expect(groups).toHaveLength(1);
     expect(groups[0].observations).toHaveLength(2);
   });
@@ -44,5 +51,19 @@ describe("product browser domain", () => {
     const official = { officialName: "official 500ml", officialUrl: "https://example.com/500", sourceName: "official", matchMethod: "manual" as const, updatedAt: "2026-07-23T00:00:00.000Z" };
     const groups = groupProductObservations([listing("2026-07-01", 1200, "A1", "product", null, "Store A"), listing("2026-07-02", 900, "B2", "product", null, "Store B")]).map((group) => ({ ...group, officialProduct: official }));
     expect(mergeOfficialProductGroups(groups)).toHaveLength(1);
+  });
+
+  it("sorts products by expensive price, cheap price, or distinct seller count", () => {
+    const groups = groupProductObservations([
+      listing("2026-07-01", 1000, "A", "alpha", null, "Store A"),
+      listing("2026-07-01", 3000, "B", "beta", null, "Store B"),
+      listing("2026-07-02", 3000, "B", "beta", null, "Store C"),
+    ]);
+    const options = { query: "", category: "전체" as const, martType: "all" as const, storeLabel: "all" };
+    const betaWithTwoSellers = { ...groups[1], observations: [groups[1].observations[0], groups[2].observations[0]] };
+    const comparableGroups = [groups[0], betaWithTwoSellers];
+    expect(filterAndSortProductGroups(comparableGroups, { ...options, sort: "expensive" }).map((group) => group.productName)).toEqual(["beta", "alpha"]);
+    expect(filterAndSortProductGroups(comparableGroups, { ...options, sort: "cheap" }).map((group) => group.productName)).toEqual(["alpha", "beta"]);
+    expect(filterAndSortProductGroups(comparableGroups, { ...options, sort: "sellers" }).map((group) => group.productName)).toEqual(["beta", "alpha"]);
   });
 });

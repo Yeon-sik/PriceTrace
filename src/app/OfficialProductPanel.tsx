@@ -1,57 +1,112 @@
 "use client";
-/* eslint-disable @next/next/no-img-element */
 
-import { useEffect, useMemo, useState } from "react";
-import { discoverOfficialProduct, mergeOfficialProductCandidates, officialProductCandidateKey, officialSearchUrl, type OfficialProductCandidate, type OfficialProductRecord, type OfficialSearchResult } from "@/domain/official-product";
-import { OfficialProductDiscoveryRepository } from "@/repositories/official-product-discovery.repository";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { discoverOfficialProduct, mergeOfficialProductCandidates, officialProductCandidateKey, officialSearchUrl, type OfficialProductCandidate } from "@/domain/official-product";
+import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import { OfficialProductRepository } from "@/repositories/official-product.repository";
 import styles from "./page.module.css";
 
-const repository = new OfficialProductRepository();
-const discoveryRepository = new OfficialProductDiscoveryRepository();
-type CandidateState = { candidate: OfficialProductCandidate; record?: OfficialProductRecord; reason: string };
+type StandardProduct = { id: string; canonical_name: string; brand: string | null; product_reference_url: string | null };
+type Variant = { id: string; standard_product_id: string; canonical_name: string; content_amount: number | null; content_unit: string | null; package_count: number; listing_reference_url: string | null };
+const legacyRepository = new OfficialProductRepository();
 const sellers = (candidate: OfficialProductCandidate) => candidate.storeLabels?.length ? candidate.storeLabels : [candidate.storeLabel];
+const mappingKey = (sourceLabel: string, sourceProductCode: string) => `${sourceLabel}:${sourceProductCode}`;
 
-export function OfficialProductWorkspace({ candidates, onSelect, revision }: { candidates: OfficialProductCandidate[]; onSelect: (candidate: OfficialProductCandidate) => void; revision: number }) {
-  const [manual, setManual] = useState<Record<string, OfficialProductRecord>>({});
-  const [searches, setSearches] = useState<Record<string, OfficialSearchResult[]>>({});
-  const [searchMessages, setSearchMessages] = useState<Record<string, string>>({});
-  const [searching, setSearching] = useState<string | null>(null);
-  useEffect(() => setManual(repository.loadAll()), [revision]);
-  const states = useMemo<CandidateState[]>(() => mergeOfficialProductCandidates(candidates).map((candidate) => {
-    const manualRecord = manual[officialProductCandidateKey(candidate)];
-    if (manualRecord) return { candidate, record: manualRecord, reason: "사용자가 확인한 공식 상품 연결입니다." };
+export function StandardProductWorkspace({ candidates, revision }: { candidates: OfficialProductCandidate[]; revision: number }) {
+  const client = getSupabaseBrowserClient();
+  const [userId, setUserId] = useState<string | null>(null);
+  const [standards, setStandards] = useState<StandardProduct[]>([]);
+  const [variantBySource, setVariantBySource] = useState<Record<string, Variant>>({});
+  const [legacy, setLegacy] = useState(() => legacyRepository.loadAll());
+  const [selected, setSelected] = useState<OfficialProductCandidate | null>(null);
+  const [message, setMessage] = useState("");
+  const [searchQuery, setSearchQuery] = useState("");
+
+  const load = useCallback(async () => {
+    if (!client) return;
+    const [{ data: standardData, error: standardError }, { data: variantData, error: variantError }, { data: mappingData, error: mappingError }] = await Promise.all([
+      client.from("standard_products").select("id,canonical_name,brand,product_reference_url").eq("status", "active").order("canonical_name"),
+      client.from("catalog_products").select("id,standard_product_id,canonical_name,content_amount,content_unit,package_count,listing_reference_url").eq("status", "active"),
+      client.from("source_product_mappings").select("source_label,source_product_code,catalog_product_id").eq("review_status", "verified"),
+    ]);
+    if (standardError || variantError || mappingError) { setMessage(standardError?.message ?? variantError?.message ?? mappingError?.message ?? "표준 상품을 불러오지 못했습니다."); return; }
+    const byId = new Map((variantData ?? []).map((variant) => [variant.id, variant as Variant]));
+    setStandards((standardData ?? []) as StandardProduct[]);
+    setVariantBySource(Object.fromEntries((mappingData ?? []).flatMap((mapping) => {
+      const variant = byId.get(mapping.catalog_product_id);
+      return variant ? [[mappingKey(mapping.source_label, mapping.source_product_code), variant]] : [];
+    })));
+    setLegacy(legacyRepository.loadAll());
+  }, [client]);
+
+  useEffect(() => { if (client) void client.auth.getUser().then(({ data }) => setUserId(data.user?.id ?? null)); }, [client]);
+  useEffect(() => { void load(); }, [load, revision]);
+
+  const standardById = useMemo(() => new Map(standards.map((standard) => [standard.id, standard])), [standards]);
+  const states = useMemo(() => mergeOfficialProductCandidates(candidates).map((candidate) => {
+    const variant = sellers(candidate).map((seller) => variantBySource[mappingKey(seller, candidate.sourceProductCode)]).find(Boolean);
+    const browserRecord = legacy[officialProductCandidateKey(candidate)];
     const discovered = discoverOfficialProduct(candidate);
-    return discovered.status === "matched" ? { candidate, record: discovered.record, reason: discovered.reason } : { candidate, reason: discovered.reason };
-  }), [manual, candidates]);
-  const matched = states.filter((state) => state.record);
-  const unmatched = states.filter((state) => !state.record);
+    return { candidate, variant, standard: variant ? standardById.get(variant.standard_product_id) : undefined, legacy: browserRecord ?? (discovered.status === "matched" ? discovered.record : undefined), fromBrowserStorage: Boolean(browserRecord) };
+  }), [candidates, variantBySource, standardById, legacy]);
+  const linked = states.filter((state) => state.variant && state.standard);
+  const unlinked = states.filter((state) => !state.variant);
+  const matchesSearch = useCallback((state: (typeof states)[number]) => {
+    const query = searchQuery.trim().toLocaleLowerCase("ko-KR");
+    if (!query) return true;
+    return `${state.candidate.productName} ${state.candidate.sourceProductCode} ${sellers(state.candidate).join(" ")} ${state.standard?.canonical_name ?? ""} ${state.variant?.canonical_name ?? ""}`.toLocaleLowerCase("ko-KR").includes(query);
+  }, [searchQuery]);
+  const visibleLinked = linked.filter(matchesSearch);
+  const visibleUnlinked = unlinked.filter(matchesSearch);
+  const selectedState = selected ? states.find((state) => officialProductCandidateKey(state.candidate) === officialProductCandidateKey(selected)) : undefined;
 
-  async function search(candidate: OfficialProductCandidate) {
-    const key = officialProductCandidateKey(candidate);
-    setSearching(key); setSearchMessages((current) => ({ ...current, [key]: "공식 후보를 찾는 중입니다." }));
-    const response = await discoveryRepository.search(candidate);
-    if (response.status === "unavailable") setSearchMessages((current) => ({ ...current, [key]: response.message }));
-    else { setSearches((current) => ({ ...current, [key]: response.results })); setSearchMessages((current) => ({ ...current, [key]: response.results.length ? "검색 결과를 확인한 뒤 연결하세요." : "공식 후보를 찾지 못했습니다. 수동 검색을 사용하세요." })); }
-    setSearching(null);
-  }
-
+  if (!client || !userId) return null;
   return <section className={styles.browser}>
-    <div className={styles.browserHead}><div><p className={styles.kicker}>OFFICIAL PRODUCT DISCOVERY</p><h1>공식 상품 연결</h1><p>같은 카탈로그에서 코드와 상품명이 모두 일치한 후보만 묶습니다. 묶인 판매처는 모두 표시합니다.</p></div></div>
-    <div className={styles.officialSummary}><span><b>{matched.length}</b>개 연결됨</span><span><b>{unmatched.length}</b>개 검색 필요</span></div>
-    <section className={styles.officialSection}><h2>연결된 공식 상품</h2>{matched.length ? <div className={styles.officialGrid}>{matched.map((state) => <OfficialCard key={officialProductCandidateKey(state.candidate)} candidate={state.candidate} record={state.record!} reason={state.reason} onSelect={onSelect} />)}</div> : <p>검증된 공식 상품 연결이 없습니다.</p>}</section>
-    <section className={styles.officialSection}><h2>공식 상품 검색 대기열</h2><p className={styles.manualHint}>서로 다른 유통망은 코드가 같아도 자동으로 합치지 않습니다.</p><div className={styles.manualQueue}>{unmatched.map((state) => {
-      const key = officialProductCandidateKey(state.candidate);
-      return <article key={key}><div><strong>{state.candidate.productName}</strong><small>판매처 {sellers(state.candidate).join(", ")} · 코드 {state.candidate.sourceProductCode}</small><small>{state.reason}</small>{searchMessages[key] && <small className={styles.discoveryMessage}>{searchMessages[key]}</small>}{searches[key]?.map((result) => <div className={styles.discoveryResult} key={result.officialUrl}><b>{result.officialName}</b><small>{result.sourceName}</small>{result.description && <p>{result.description}</p>}<a href={result.officialUrl} target="_blank" rel="noreferrer">후보 열기</a><button onClick={() => onSelect({ ...state.candidate, productName: result.officialName })}>이 후보 연결</button></div>)}</div><div className={styles.queueActions}><button onClick={() => void search(state.candidate)} disabled={searching === key}>{searching === key ? "검색 중" : "자동 검색"}</button><a href={officialSearchUrl(state.candidate)} target="_blank" rel="noreferrer">수동 검색</a><button onClick={() => onSelect(state.candidate)}>직접 연결</button></div></article>;
-    })}</div></section>
+    <div className={styles.browserHead}><div><p className={styles.kicker}>STANDARD PRODUCT MAPPING</p><h1>표준 상품 연결</h1><p>표준 상품은 햇반 같은 상품군입니다. 영수증 품목은 실제 판매 규격(예: 210g × 3)으로 등록해 표준 상품 아래에 보관합니다.</p></div></div>
+    {message && <p className={styles.error} role="alert">{message}</p>}
+    <label className={styles.mappingSearch}><span className={styles.srOnly}>표준 상품 연결 검색</span><input type="search" value={searchQuery} onChange={(event) => setSearchQuery(event.target.value)} placeholder="상품명, 판매처, 상품 코드로 검색" /></label>
+    <div className={styles.officialSummary}><span><b>{linked.length}</b>개 판매 기록 연결</span><span><b>{unlinked.length}</b>개 연결 필요</span></div>
+    <section className={styles.officialSection}><h2>연결된 표준 상품 기록</h2>{visibleLinked.length ? <div className={styles.officialGrid}>{visibleLinked.map(({ candidate, standard, variant }) => <article key={officialProductCandidateKey(candidate)}><div><span>표준 상품 · {standard!.canonical_name}</span><h3>{variant!.canonical_name}</h3><p>영수증 표기: {candidate.productName}</p><small>판매처 {sellers(candidate).join(", ")} · 코드 {candidate.sourceProductCode}</small><small>{variant!.content_amount ? `규격 ${variant!.content_amount}${variant!.content_unit} × ${variant!.package_count}` : "규격 미입력"}</small></div></article>)}</div> : <p>검색 조건에 맞는 연결 기록이 없습니다.</p>}</section>
+    <section className={styles.officialSection}><h2>표준 상품 연결 대기열</h2><p className={styles.manualHint}>기존 연결은 표준 상품과 하위 판매 규격으로 한 번 가져옵니다. 규격을 모르면 연결하지 말고 확인 후 등록하세요.</p><div className={styles.manualQueue}>{visibleUnlinked.map(({ candidate, legacy: legacyRecord, fromBrowserStorage }) => <article key={officialProductCandidateKey(candidate)}><div><strong>{legacyRecord?.officialName ?? candidate.productName}</strong><small>판매처 {sellers(candidate).join(", ")} · 코드 {candidate.sourceProductCode}</small>{legacyRecord && <small>{fromBrowserStorage ? "기존 브라우저 저장 연결" : "기존 시드 연결"}을 가져올 수 있습니다.</small>}</div><div className={styles.queueActions}><a href={legacyRecord?.officialUrl ?? officialSearchUrl(candidate)} target="_blank" rel="noreferrer">상품 정보 찾기</a><button onClick={() => setSelected(candidate)}>{legacyRecord ? "표준 상품으로 가져오기" : "표준 상품 연결"}</button></div></article>)}</div></section>
+    {selected && <StandardProductModal candidate={selected} legacy={selectedState?.legacy} standards={standards} userId={userId} onClose={() => setSelected(null)} onSaved={() => { setSelected(null); void load(); }} />}
   </section>;
 }
 
-export function OfficialProductModal({ candidate, onClose, onSaved }: { candidate: OfficialProductCandidate; onClose: () => void; onSaved: () => void }) {
-  const [officialName, setOfficialName] = useState(""); const [officialUrl, setOfficialUrl] = useState(""); const [sourceName, setSourceName] = useState(""); const [imageUrl, setImageUrl] = useState(""); const [message, setMessage] = useState("");
-  useEffect(() => { const discovered = discoverOfficialProduct(candidate); const record = repository.loadAll()[officialProductCandidateKey(candidate)] ?? (discovered.status === "matched" ? discovered.record : undefined); setOfficialName(record?.officialName ?? candidate.productName); setOfficialUrl(record?.officialUrl ?? ""); setSourceName(record?.sourceName ?? ""); setImageUrl(record?.imageUrl ?? ""); }, [candidate]);
-  function save(event: React.FormEvent) { event.preventDefault(); try { const next: OfficialProductRecord = { officialName, officialUrl, sourceName, imageUrl: imageUrl || undefined, matchMethod: "manual", confidence: 1, matchedBy: "manual", updatedAt: new Date().toISOString() }; repository.save(officialProductCandidateKey(candidate), next); onSaved(); setMessage("공식 상품 연결을 이 브라우저에 저장했습니다."); } catch (error) { setMessage(error instanceof Error ? error.message : "공식 상품 정보를 저장하지 못했습니다."); } }
-  return <div className={styles.modalBackdrop} role="presentation" onMouseDown={(event) => event.target === event.currentTarget && onClose()}><section className={`${styles.authModal} ${styles.officialModal}`} role="dialog" aria-modal="true" aria-labelledby="official-title"><button className={styles.closeButton} onClick={onClose} aria-label="공식 상품 창 닫기">×</button><p className={styles.kicker}>OFFICIAL PRODUCT</p><h2 id="official-title">{candidate.productName}</h2><p className={styles.productCode}>판매처 {sellers(candidate).join(", ")} · 코드 {candidate.sourceProductCode}</p><a className={styles.officialSearch} href={officialSearchUrl(candidate)} target="_blank" rel="noreferrer">공식 상품 수동 검색</a><form className={styles.manualForm} onSubmit={save}><h3>확인한 공식 상품 연결</h3><label>공식 상품명<input required value={officialName} onChange={(event) => setOfficialName(event.target.value)} /></label><label>공식 상품 URL<input required type="url" placeholder="https://" value={officialUrl} onChange={(event) => setOfficialUrl(event.target.value)} /></label><label>출처명<input required placeholder="제조사 공식몰" value={sourceName} onChange={(event) => setSourceName(event.target.value)} /></label><label>상품 이미지 URL <small>선택 · 제조사 또는 공식몰 이미지만 사용</small><input type="url" placeholder="https://" value={imageUrl} onChange={(event) => setImageUrl(event.target.value)} /></label><button type="submit">공식 상품 연결 저장</button></form>{message && <p className={styles.authMessage} role="status">{message}</p>}</section></div>;
+function StandardProductModal({ candidate, legacy, standards, userId, onClose, onSaved }: { candidate: OfficialProductCandidate; legacy?: { officialName: string; officialUrl: string }; standards: StandardProduct[]; userId: string; onClose: () => void; onSaved: () => void }) {
+  const client = getSupabaseBrowserClient();
+  const [standardProductId, setStandardProductId] = useState("");
+  const [standardName, setStandardName] = useState(legacy?.officialName ?? candidate.productName);
+  const [listingName, setListingName] = useState(candidate.productName);
+  const [productUrl, setProductUrl] = useState(legacy?.officialUrl ?? "");
+  const [contentAmount, setContentAmount] = useState("");
+  const [contentUnit, setContentUnit] = useState<"g" | "ml" | "each">("g");
+  const [packageCount, setPackageCount] = useState("1");
+  const [message, setMessage] = useState("");
+  const selectedStandard = standards.find((standard) => standard.id === standardProductId);
+  const reusedListingName = legacy?.officialName ?? candidate.productName;
+  const reusedProductUrl = legacy?.officialUrl ?? selectedStandard?.product_reference_url ?? "";
+  async function save(event: React.FormEvent) {
+    event.preventDefault();
+    const resolvedListingName = selectedStandard ? reusedListingName : listingName.trim();
+    const resolvedProductUrl = selectedStandard ? reusedProductUrl : productUrl.trim();
+    if (!client || !resolvedListingName || !/^https?:\/\//.test(resolvedProductUrl)) { setMessage("상품명과 확인 URL을 확인하세요."); return; }
+    const parsedContentAmount = Number(contentAmount);
+    const parsedPackageCount = Number(packageCount);
+    if (!Number.isFinite(parsedContentAmount) || parsedContentAmount <= 0 || !Number.isInteger(parsedPackageCount) || parsedPackageCount <= 0) { setMessage("내용량과 묶음 수를 올바르게 입력하세요."); return; }
+    let selectedStandardId = standardProductId;
+    if (!selectedStandardId) {
+      if (!standardName.trim()) { setMessage("새 표준 상품명을 입력하세요."); return; }
+      const { data, error } = await client.from("standard_products").insert({ purchase_type: "retail_product", canonical_name: standardName.trim(), product_reference_url: resolvedProductUrl, created_by: userId }).select("id").single();
+      if (error || !data) { setMessage(error?.message ?? "표준 상품을 저장하지 못했습니다."); return; }
+      selectedStandardId = data.id;
+    }
+    const { data: variant, error: variantError } = await client.from("catalog_products").insert({ standard_product_id: selectedStandardId, purchase_type: "retail_product", canonical_name: resolvedListingName, content_amount: parsedContentAmount, content_unit: contentUnit, package_count: parsedPackageCount, listing_reference_url: resolvedProductUrl, created_by: userId }).select("id").single();
+    if (variantError || !variant) { setMessage(variantError?.message ?? "판매 규격을 저장하지 못했습니다."); return; }
+    const reviewedAt = new Date().toISOString();
+    const rows = sellers(candidate).map((sourceLabel) => ({ source_label: sourceLabel, source_product_code: candidate.sourceProductCode, catalog_product_id: variant.id, matching_method: "manual", confidence: 1, review_status: "verified", created_by: userId, reviewed_by: userId, reviewed_at: reviewedAt }));
+    const { error: mappingError } = await client.from("source_product_mappings").upsert(rows, { onConflict: "source_label,source_product_code" });
+    if (mappingError) { setMessage(mappingError.message); return; }
+    onSaved();
+  }
+  return <div className={styles.modalBackdrop} role="presentation" onMouseDown={(event) => event.target === event.currentTarget && onClose()}><section className={`${styles.authModal} ${styles.officialModal}`} role="dialog" aria-modal="true" aria-labelledby="standard-product-title"><button className={styles.closeButton} onClick={onClose} aria-label="표준 상품 연결 닫기">×</button><p className={styles.kicker}>STANDARD PRODUCT</p><h2 id="standard-product-title">표준 상품과 판매 규격 연결</h2><p className={styles.productCode}>판매처 {sellers(candidate).join(", ")} · 코드 {candidate.sourceProductCode}</p><form className={styles.manualForm} onSubmit={save}><label>기존 표준 상품<select value={standardProductId} onChange={(event) => { setStandardProductId(event.target.value); setMessage(""); }}><option value="">새 표준 상품 만들기</option>{standards.map((standard) => <option key={standard.id} value={standard.id}>{standard.canonical_name}</option>)}</select></label>{selectedStandard ? <section className={styles.reusedProductInfo} aria-label="재사용할 상품 정보"><span>표준 상품 <b>{selectedStandard.canonical_name}</b></span><span>하위 상품명 <b>{reusedListingName}</b></span>{reusedProductUrl ? <a href={reusedProductUrl} target="_blank" rel="noreferrer">기존 상품 URL 확인</a> : <strong>기존 URL이 없어 연결할 수 없습니다.</strong>}</section> : <><label>새 표준 상품명<input required value={standardName} onChange={(event) => setStandardName(event.target.value)} placeholder="예: 햇반" /></label><label>판매 규격명<input required value={listingName} onChange={(event) => setListingName(event.target.value)} placeholder="예: 햇반 210g × 3" /></label><label>상품 확인 URL<input required type="url" placeholder="https://" value={productUrl} onChange={(event) => setProductUrl(event.target.value)} /></label></>}<label>개별 내용량<input required inputMode="decimal" placeholder="예: 210" value={contentAmount} onChange={(event) => setContentAmount(event.target.value)} /></label><label>내용 단위<select value={contentUnit} onChange={(event) => setContentUnit(event.target.value as "g" | "ml" | "each")}><option value="g">g</option><option value="ml">ml</option><option value="each">개</option></select></label><label>묶음 수<input required type="number" min="1" step="1" value={packageCount} onChange={(event) => setPackageCount(event.target.value)} /></label><button type="submit" disabled={Boolean(selectedStandard && !reusedProductUrl)}>표준 상품에 판매 규격 등록</button></form>{message && <p className={styles.authMessage} role="status">{message}</p>}</section></div>;
 }
-
-function OfficialCard({ candidate, record, reason, onSelect }: CandidateState & { record: OfficialProductRecord; onSelect: (candidate: OfficialProductCandidate) => void }) { return <article><div className={styles.officialThumb}>{record.imageUrl ? <img src={record.imageUrl} alt="" onError={(event) => { event.currentTarget.style.display = "none"; }} /> : "공식"}</div><div><span>{record.matchMethod === "manual" ? "사용자 확인" : `자동 연결 · ${(record.confidence ?? 1) * 100}%`}</span><h3>{record.officialName}</h3><p>{candidate.productName}</p><small>판매처 {sellers(candidate).join(", ")}</small><small>{reason}</small><a href={record.officialUrl} target="_blank" rel="noreferrer">공식 정보 열기</a><button onClick={() => onSelect(candidate)}>연결 수정</button></div></article>; }
