@@ -1,0 +1,4 @@
+interface:
+  display_name: "Maintain Project Docs"
+  short_description: "Evidence-based project docs and safe Notion sync"
+  default_prompt: "Use $maintain-project-docs to audit and update the project Intro and Detail documents, validate every claim, and prepare the Git-to-Notion mirror."

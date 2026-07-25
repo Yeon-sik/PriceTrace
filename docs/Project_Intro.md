@@ -1,15 +1,14 @@
 # PriceTrace | 영수증 관측가를 비교 가능한 상품 기록으로 바꾸는 웹 앱
 
-> PriceTrace는 영수증에 남은 실제 구매 가격을 판매처·관측일·상품 코드와 함께
-> 보존하고, 상품 탐색·마트별 확인·장바구니 계산으로 연결하는 로컬 우선 웹
-> 애플리케이션입니다. 가격을 실시간 시세가 아닌 **영수증 관측가**로 다룹니다.
+> PriceTrace는 영수증에 남은 실제 구매 가격을 판매처·관측일·상품 코드와 함께 보존하고, 상품 탐색·마트별 확인·장바구니 계산으로 연결하는 로컬 우선 웹 애플리케이션입니다. 가격을 실시간 시세가 아닌 **영수증 관측가**로 다룹니다.
 
 | 항목 | 내용 |
 | --- | --- |
 | 개발 기간 | 2026-07 ~ 진행 중 |
 | 프로젝트 형태 | 개인 프로젝트 |
 | 담당 범위 | 제품 범위, 도메인 모델, 프론트엔드, 데이터 계층, 테스트, 배포 자동화 |
-| 현재 상태 | 웹 MVP 구현 · 원격 운영 환경 미검증 |
+| 현재 상태 | 상품 탐색·장바구니 로컬 MVP 구현 · 원격 운영 환경 미검증 |
+| 문서 기준 | 제품 코드 `5d6b8e1`; 게시 커밋은 Notion 미러 상단의 원본 링크로 추적 |
 | 주요 기술 | Next.js 15, React 19, TypeScript, Zod, Zustand, Supabase |
 | Demo | [GitHub Pages URL](https://yeon-sik.github.io/PriceTrace/) — 현재 응답은 별도 확인 필요 |
 | Repository | [GitHub](https://github.com/Yeon-sik/PriceTrace) |
@@ -21,8 +20,8 @@
 
 - **문제**: 실제 구매 가격은 영수증 안에 남지만, 나중에 상품·판매처·시점별로 다시 찾고 비교하기 어렵습니다.
 - **해결**: 영수증을 Zod로 검증해 상품 관측값으로 변환하고, 검색·필터·정렬·마트 탐색·장바구니 흐름으로 연결합니다.
-- **핵심 결과**: private 원본 4건에서 생성한 비식별 공개 관측 188건을 Git으로 추적하고, private 파일이 없는 정적 환경에서도 상품 탐색과 localStorage 장바구니를 사용할 수 있습니다.
-- **기술적 차별점**: 상품명을 식별자로 사용하지 않고, 판매처 상품 코드와 검토된 카탈로그 매핑을 가격 비교의 경계로 사용합니다.
+- **핵심 결과**: 검증된 private 원본에서 생성한 비식별 공개 관측 188건을 Git으로 추적하고, private 파일이 없는 정적 환경에서도 상품 탐색과 localStorage 장바구니를 사용할 수 있습니다.
+- **기술적 차별점**: 원본 항목 ID와 비교용 상품 그룹을 분리하고, 판매처 간 통합 비교는 검토된 카탈로그 매핑 뒤에서만 수행합니다.
 
 ## 2. 문제와 해결
 
@@ -58,7 +57,7 @@
 ## 5. 핵심 사용자 흐름
 
 ```text
-공개 영수증 fixture 또는 로컬 private 영수증 로드
+공개 관측 JSON 또는 로컬 private 영수증 로드
   → Zod 검증과 상품 관측값 변환
   → 상품 검색·필터·판매처/마트 탐색
   → 관측가와 가격 이력 확인
@@ -71,12 +70,12 @@
 
 ## 6. 핵심 기술적 판단
 
-### 상품명 대신 검증 가능한 식별 경계를 사용
+### 원본 항목 ID와 비교용 그룹 경계를 분리
 
 - **상황**: 판매처 표기가 달라도 같은 상품일 수 있고, 같은 이름이라도 용량·묶음·규격이 다를 수 있습니다.
-- **선택**: 영수증 항목 ID에는 영수증·판매처 상품 코드·단가를 사용하고, 판매처 간 비교는 검토된 카탈로그 매핑 뒤에서만 수행합니다.
+- **선택**: 원본 영수증 항목은 `receiptId:lineId`로 추적하고, 화면 그룹은 판매처·상품 코드·정규화 이름을 사용합니다. 판매처 간 통합 비교는 검토된 카탈로그 매핑 뒤에서만 수행합니다.
 - **이유**: 이름 유사도만으로 자동 병합하면 잘못된 최저가와 가격 추이가 생깁니다.
-- **결과**: 자동화율보다 데이터 신뢰도를 우선하며, 불확실한 연결은 검토 대기 상태로 남길 수 있습니다.
+- **결과**: 자동화율보다 데이터 신뢰도를 우선합니다. 다만 상품 코드가 없는 그룹은 정규화 이름에 의존하므로, 안정적인 별도 그룹 ID로 교체할 기술 부채가 남아 있습니다.
 
 추가 의사결정과 트레이드오프는 [Project Detail](./Project_Detail.md)에 정리했습니다.
 
@@ -84,12 +83,14 @@
 
 | 검증 항목 | 상태 | 마지막 확인 | 근거 |
 | --- | --- | --- | --- |
-| ESLint | 통과 | 2026-07-25 | `npm.cmd run lint` |
-| TypeScript strict | 통과 | 2026-07-25 | `npm.cmd run typecheck` |
-| 단위 테스트 | 통과 | 2026-07-25 | `npm.cmd run test`: 16개 파일·41개 테스트 |
-| E2E | 통과 | 2026-07-25 | private 모드에서 서버가 없어도 공개 관측 상품 탐색 → 장바구니 → 새로고침 복원 |
-| production build | 통과 | 2026-07-25 | `npm.cmd run build`: Next.js static export |
+| ESLint | 통과 | 2026-07-26 | `npm.cmd run lint` |
+| TypeScript strict | 통과 | 2026-07-26 | `npm.cmd run typecheck` |
+| 단위 테스트 | 통과 | 2026-07-26 | `npm.cmd run test`: 16개 파일·41개 테스트 |
+| E2E | 실패 | 2026-07-26 | Chromium 시나리오 1건은 1.3초에 통과했으나 runner가 종료되지 않아 180초 timeout, exit 124 |
+| production build | 통과 | 2026-07-26 | `npm.cmd run build`: Next.js static export |
+| 문서 자동화 | 통과 | 2026-07-26 | 문서·템플릿 validator 0 errors/0 warnings, publisher 단위 테스트 15건, dry-run 통과 |
 | GitHub Pages·Supabase 실환경 | 미검증 | 2026-07-25 | 워크플로·코드는 존재하나 실제 배포/권한 smoke test 미실행 |
+| Notion 문서 동기화 | 사용자 확인 | 2026-07-25 | 기존 workflow의 두 페이지 반영 확인; 현재 개선 workflow의 원격 실행은 미검증 |
 | Android 실기기 | 미검증 | 2026-07-25 | Capacitor 프로젝트만 존재 |
 
 ## 8. 현재 한계와 다음 단계
@@ -102,9 +103,7 @@
 ## 9. 관련 문서
 
 - [Project Detail](./Project_Detail.md): 구현 현황, 아키텍처, 데이터 모델, 기술 의사결정
-- [Receipt v2](./RECEIPT_V2.md): 범용 영수증 계약
-- [Data Policy](./DATA_POLICY.md): 공개·비공개 데이터 경계
 - [Operations Runbook](./OPERATIONS_RUNBOOK.md): 원격 운영 보호 장치와 복구 절차
-- [Future Backlog](./FUTURE_BACKLOG.md): 현재 범위 밖의 아이디어
+- [Official Product Discovery](./OFFICIAL_PRODUCT_DISCOVERY.md): 공식 상품 후보 검색 연동
 - [범용 Intro 템플릿](./templates/PROJECT_INTRO_TEMPLATE.md)
 - [범용 Detail 템플릿](./templates/PROJECT_DETAIL_TEMPLATE.md)
