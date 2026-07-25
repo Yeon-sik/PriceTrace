@@ -17,6 +17,8 @@
     "test:watch": "vitest",
     "test:e2e": "playwright test",
     "validate:private-receipts": "vite-node scripts/validate-private-receipts.ts",
+    "sync:public-observations": "vite-node scripts/sync-public-observations.ts",
+    "check:public-observations": "vite-node scripts/sync-public-observations.ts --check",
     "private-receipts:serve": "vite-node scripts/private-receipt-server.ts"
   },
   "dependencies": {

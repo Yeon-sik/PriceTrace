@@ -7,13 +7,14 @@ const allowedOrigin = /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/;
 
 const server = createServer(async (request, response) => {
   const origin = request.headers.origin;
+  const requestUrl = new URL(request.url ?? "/", `http://${host}:${port}`);
   if (origin && !allowedOrigin.test(origin)) {
     response.writeHead(403, { "Content-Type": "application/json; charset=utf-8" });
     response.end(JSON.stringify({ error: "로컬 앱에서만 접근할 수 있습니다." }));
     return;
   }
 
-  if (request.method !== "GET" || request.url !== "/receipts") {
+  if (request.method !== "GET" || requestUrl.pathname !== "/receipts") {
     response.writeHead(404, { "Content-Type": "application/json; charset=utf-8" });
     response.end(JSON.stringify({ error: "Not found" }));
     return;
@@ -21,11 +22,19 @@ const server = createServer(async (request, response) => {
 
   try {
     const result = await loadPrivateReceiptProjections();
-    response.writeHead(200, {
+    const responseHeaders = {
       "Access-Control-Allow-Origin": origin ?? `http://${host}`,
       "Cache-Control": "no-store",
-      "Content-Type": "application/json; charset=utf-8",
       Vary: "Origin",
+    };
+    if (requestUrl.searchParams.get("revision") === result.revision) {
+      response.writeHead(204, responseHeaders);
+      response.end();
+      return;
+    }
+    response.writeHead(200, {
+      ...responseHeaders,
+      "Content-Type": "application/json; charset=utf-8",
     });
     response.end(JSON.stringify(result));
   } catch (error) {
