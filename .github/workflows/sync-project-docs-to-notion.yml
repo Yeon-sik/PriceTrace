@@ -1,0 +1,91 @@
+name: Sync project documents to Notion
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - docs/Project_Intro.md
+      - docs/Project_Detail.md
+      - .github/workflows/sync-project-docs-to-notion.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: notion-project-documents
+  cancel-in-progress: true
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Sync Intro and Detail to separate Notion pages
+        env:
+          NOTION_API_KEY: ${{ secrets.NOTION_API_KEY }}
+          NOTION_INTRO_PAGE_ID: ${{ secrets.NOTION_INTRO_PAGE_ID || secrets.NOTION_PAGE_ID }}
+          NOTION_DETAIL_PAGE_ID: ${{ secrets.NOTION_DETAIL_PAGE_ID }}
+        run: |
+          node <<'NODE'
+          const fs = require('node:fs');
+
+          const documents = [
+            {
+              label: 'Project Intro',
+              file: 'docs/Project_Intro.md',
+              pageId: process.env.NOTION_INTRO_PAGE_ID,
+            },
+            {
+              label: 'Project Detail',
+              file: 'docs/Project_Detail.md',
+              pageId: process.env.NOTION_DETAIL_PAGE_ID,
+            },
+          ];
+
+          async function updateNotionPage({ label, file, pageId }, apiKey) {
+            if (!pageId) {
+              throw new Error(`${label} page ID GitHub Secret is required.`);
+            }
+
+            const markdown = fs.readFileSync(file, 'utf8');
+            const response = await fetch(
+              `https://api.notion.com/v1/pages/${pageId}/markdown`,
+              {
+                method: 'PATCH',
+                headers: {
+                  Authorization: `Bearer ${apiKey}`,
+                  'Content-Type': 'application/json',
+                  'Notion-Version': '2026-03-11',
+                },
+                body: JSON.stringify({
+                  type: 'replace_content',
+                  replace_content: { new_str: markdown },
+                }),
+              },
+            );
+
+            const body = await response.text();
+            if (!response.ok) {
+              throw new Error(`${label} sync failed (${response.status}): ${body}`);
+            }
+
+            console.log(`${label} synced from ${file}.`);
+          }
+
+          (async () => {
+            const apiKey = process.env.NOTION_API_KEY;
+            if (!apiKey) {
+              throw new Error('NOTION_API_KEY GitHub Secret is required.');
+            }
+
+            for (const document of documents) {
+              await updateNotionPage(document, apiKey);
+            }
+          })().catch((error) => {
+            console.error(error);
+            process.exitCode = 1;
+          });
+          NODE

@@ -4,6 +4,7 @@ export type StandardProductVariant = ProductSpecification & {
   id: string;
   listingName: string;
   sellerName: string;
+  sourceProductCode?: string;
   observedAt: string;
   listedPriceKrw: number;
   shippingFeeKrw?: number;

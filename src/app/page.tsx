@@ -1,8 +1,10 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { groupProductObservations, listingsFromReceipts, PRODUCT_CATEGORIES, type MartType, type ProductCategory, type ProductGroup, type ProductSort } from "@/domain/product-browser";
+import { PrivateReceiptResponseSchema } from "@/domain/private-receipt-response";
 import { formatKrw } from "@/domain/settlement";
+import type { Receipt } from "@/domain/types";
 import { useAdminAccess } from "@/hooks/use-admin-access";
 import { JsonReceiptRepository } from "@/repositories/json-receipt.repository";
 import { useCartStore } from "@/stores/cart.store";
@@ -15,11 +17,15 @@ import { ProductBrowser } from "./ProductBrowser";
 import { MarketBrowser } from "./MarketBrowser";
 import styles from "./page.module.css";
 
-const receipts = new JsonReceiptRepository().loadAll();
-const productGroups = groupProductObservations(listingsFromReceipts(receipts));
+const demoReceipts = new JsonReceiptRepository().loadAll();
+const privateReceiptMode = process.env.NEXT_PUBLIC_RECEIPT_DATA_MODE === "private";
+const privateReceiptUrl = process.env.NEXT_PUBLIC_PRIVATE_RECEIPT_URL ?? "http://127.0.0.1:3210/receipts";
 type Page = "home" | "products" | "markets" | "cart" | "admin";
 
 export default function Home() {
+  const [receipts, setReceipts] = useState<Receipt[]>(privateReceiptMode ? [] : demoReceipts);
+  const [receiptSourceMessage, setReceiptSourceMessage] = useState("");
+  const receiptRevision = useRef("");
   const [page, setPage] = useState<Page>("home");
   const [selectedMarket, setSelectedMarket] = useState<string | null>(null);
   const [category, setCategory] = useState<ProductCategory>("전체");
@@ -44,13 +50,37 @@ export default function Home() {
   const { isAdmin, loading: adminLoading } = useAdminAccess(authRevision);
   const handleAuthChange = useCallback(() => setAuthRevision((revision) => revision + 1), []);
 
+  const productGroups = useMemo(() => groupProductObservations(listingsFromReceipts(receipts)), [receipts]);
+
   useEffect(() => { if (!hydrated) hydrateCart(); }, [hydrateCart, hydrated]);
   useEffect(() => { if (page === "admin" && !adminLoading && !isAdmin) setPage("home"); }, [adminLoading, isAdmin, page]);
+  useEffect(() => {
+    if (!privateReceiptMode) return;
+    let active = true;
+    const loadPrivateReceipts = async () => {
+      try {
+        const response = await fetch(privateReceiptUrl, { cache: "no-store" });
+        if (!response.ok) throw new Error(`로컬 영수증 서버 응답 오류 (${response.status})`);
+        const result = PrivateReceiptResponseSchema.parse(await response.json());
+        if (!active) return;
+        if (receiptRevision.current !== result.revision) {
+          receiptRevision.current = result.revision;
+          setReceipts(result.receipts);
+        }
+        setReceiptSourceMessage(result.warnings.length > 0 ? `일부 영수증을 제외했습니다: ${result.warnings.join(" / ")}` : "");
+      } catch (error) {
+        if (active) setReceiptSourceMessage(error instanceof Error ? error.message : "로컬 영수증을 불러오지 못했습니다.");
+      }
+    };
+    void loadPrivateReceipts();
+    const timer = window.setInterval(() => void loadPrivateReceipts(), 5_000);
+    return () => { active = false; window.clearInterval(timer); };
+  }, []);
 
-  const cartGroups = useMemo(() => productGroups.filter((group) => lines[group.id] > 0), [lines]);
+  const cartGroups = useMemo(() => productGroups.filter((group) => lines[group.id] > 0), [lines, productGroups]);
   const cartTotal = cartGroups.reduce((sum, group) => sum + group.latestPriceKrw * lines[group.id], 0);
   const cartQuantityTotal = cartGroups.reduce((sum, group) => sum + lines[group.id], 0);
-  const officialCandidates = useMemo(() => productGroups.map((group) => ({ sourceProductCode: group.sourceProductCode, productName: group.productName, storeLabel: group.storeLabel, catalogNamespace: group.catalogNamespace })), []);
+  const officialCandidates = useMemo(() => productGroups.map((group) => ({ sourceProductCode: group.sourceProductCode, productName: group.productName, storeLabel: group.storeLabel, catalogNamespace: group.catalogNamespace })), [productGroups]);
 
   function openCartModal(group: ProductGroup) {
     setCartGroupToAdd(group);
@@ -91,11 +121,12 @@ export default function Home() {
     </header>
 
     <main className={styles.main}>
+      {receiptSourceMessage && <p className={styles.dataNotice} role="alert">{receiptSourceMessage}</p>}
       {page === "home" && <><section className={styles.hero}><p className={styles.kicker}>PRICE OBSERVATION PLATFORM</p><h1>상품 가격을<br /><span>관측 기록으로 비교하세요.</span></h1><p>판매처와 시점이 명확한 영수증 관측가를 비교하고<br />필요한 상품을 장바구니에 모을 수 있습니다.</p><button onClick={() => openProducts()}>상품 둘러보기 <span>→</span></button></section><section className={styles.homeGrid}><CategoryBox category={category} onSelect={openProducts} /><CartBox count={cartGroups.length} quantity={cartQuantityTotal} total={cartTotal} onOpen={() => setPage("cart")} /></section></>}
       {page === "products" && <ProductBrowser groups={productGroups} query={query} setQuery={setQuery} category={category} setCategory={setCategory} martType={martType} setMartType={setMartType} selectedStore={selectedStore} setSelectedStore={setSelectedStore} sort={sort} setSort={setSort} onAdd={openCartModal} onTrend={setTrendGroup} onOpenStore={(store) => { setSelectedMarket(store); setPage("markets"); }} />}
       {page === "markets" && <MarketBrowser receipts={receipts} selectedStore={selectedMarket} onSelectStore={setSelectedMarket} />}
       {page === "cart" && <CartPage groups={productGroups} lines={lines} onQuantityChange={updateCartQuantity} onRemove={removeCart} onClear={clearCart} onBrowse={() => setPage("products")} />}
-      {page === "admin" && isAdmin && <AdminPage candidates={officialCandidates} />}
+      {page === "admin" && isAdmin && <AdminPage candidates={officialCandidates} receipts={receipts} />}
     </main>
 
     <footer className={styles.footer}>가격 추적기 <span>영수증 관측가로 투명하게 비교하세요.</span></footer>

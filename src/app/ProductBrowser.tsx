@@ -35,7 +35,7 @@ export function ProductBrowser({ groups, query, setQuery, category, setCategory,
   const visibleGroups = useMemo(() => mergeOfficialProductGroups(filterAndSortProductGroups(unlinkedCatalogGroups, { query, category, martType, storeLabel: selectedStore, sort })), [category, martType, query, selectedStore, sort, unlinkedCatalogGroups]);
 
   return <section className={styles.browser}>
-    <StandardProductCatalog query={query} sort={sort} />
+    <StandardProductCatalog groups={groups} query={query} sort={sort} />
     <div className={styles.browserHead}><div><p className={styles.kicker}>PRODUCT CATALOG</p><h1>상품 목록</h1><p>표준 상품에 연결된 하위 판매 상품은 통합된 표준 상품 카드에서만 보여 줍니다.</p></div><label className={styles.search}><span aria-hidden="true">⌕</span><span className={styles.srOnly}>상품 검색</span><input type="search" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="상품명, 판매처 코드, 판매 마트 검색" /></label></div>
     <div className={styles.marketControls}>
       <div className={styles.segmented} aria-label="판매처 유형">{([ ["all", "전체"], ["regular", "일반 마트"], ["px", "PX (군마트)"] ] as const).map(([value, label]) => <button key={value} aria-pressed={martType === value} className={martType === value ? styles.selectedSegment : ""} onClick={() => { setMartType(value); setSelectedStore("all"); }}>{label}</button>)}</div>
