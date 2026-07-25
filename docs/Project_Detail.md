@@ -1,15 +1,14 @@
 # PriceTrace | Project Detail
 
-> 이 문서는 PriceTrace의 구현 근거, 실제 코드 경계, 검증 결과와 미검증
-> 영역을 설명합니다. 빠른 소개는 [Project_Intro.md](./Project_Intro.md)를
-> 참고합니다.
+> 이 문서는 PriceTrace의 구현 근거, 실제 코드 경계, 검증 결과와 미검증 영역을 설명합니다. 빠른 소개는 [Project_Intro.md](./Project_Intro.md)를 참고합니다.
 
 | 항목 | 내용 |
 | --- | --- |
 | 문서 상태 | Active |
-| 적용 범위 | `2f8cd83`의 웹 MVP, 가격 관측·카탈로그·원격 저장 경계 |
-| 최종 갱신 | 2026-07-25T23:00:00+09:00 |
-| 최종 검증 기준 | 2026-07-25 로컬 작업 트리의 lint, typecheck, unit test, production build |
+| 적용 범위 | 제품 코드 `5d6b8e1`; 현재 작업 트리의 문서·Notion 자동화 변경 |
+| 최종 갱신 | 2026-07-26T00:05:02+09:00 |
+| 최종 검증 기준 | `5d6b8e1` + 문서 전용 작업 트리의 로컬 명령 결과 |
+| 문서 진실 원천 | Git 저장소의 `docs/Project_Detail.md`; Notion은 읽기 전용 미러 |
 | 담당자 | Yeon-sik (개인 프로젝트) |
 
 ---
@@ -46,7 +45,7 @@ PriceTrace의 가격은 실시간 시세가 아닙니다. 영수증 또는 관�
 ### 핵심 제약
 
 - 정적 GitHub Pages UI에는 실제 영수증·service role·외부 API 비밀값을 넣지 않습니다.
-- 공개 기본 데이터는 데모 JSON이며, private 영수증은 로컬 개발 서버 경로에서만 읽습니다.
+- 공개 기본 데이터는 최소 필드의 관측 projection JSON이며, private 영수증은 로컬 개발 서버 경로에서만 읽습니다.
 - Supabase 스키마·RLS·Edge Function은 저장소에 있으나 배포 환경의 권한과 장애 처리는 이 문서 작성 시점에 검증하지 않았습니다.
 - 현재 탐색 UI와 기존 공동 정산 module은 분리되어 있으며, 후자는 주 화면에서 노출되지 않습니다.
 
@@ -81,20 +80,25 @@ Demo JSON 또는 local private receipt server
 
 ## 4. 범위와 구현 현황
 
-상태는 **검증 완료**, **구현 완료·운영 미검증**, **부분 구현**, **계획**으로만 구분합니다.
+구현 상태와 검증 수준을 독립적으로 기록합니다.
 
-| 기능 | 상태 | 확인된 근거 | 남은 위험 |
-| --- | --- | --- | --- |
-| 공개 관측 JSON 로드와 상품 탐색 | 검증 완료 | `PublicObservationRepository`, projection test, 2026-07-25 build/E2E | 원격 Pages 최신 배포는 별도 미검증 |
-| 검색·필터·정렬·마트 탐색 | 구현 완료·운영 미검증 | `ProductBrowser`, `MarketBrowser`, `PriceTrendModal` | 실제 사용성과 모바일 흐름 미검증 |
-| 장바구니와 예상 합계 | 구현 완료·운영 미검증 | `cart.store`, cart repository test, Playwright E2E | 다기기 동기화 없음 |
-| 수령자·배분·정산·백업 | 부분 구현 | settlement domain/store 및 3개 불변식 test | 현재 주 화면 미연결, 사용자 E2E 없음 |
-| 가격 이력·판매처 비교 | 부분 구현 | price-history·canonical-price·market analytics domain test | 운영 관측 데이터와 UX 미검증 |
-| 표준 카탈로그·상품 매핑 | 부분 구현 | 마이그레이션, 관리자 UI, mapping domain | 실제 관리자 권한·검토 운영 미검증 |
-| Supabase 인증·원격 저장 | 구현 완료·운영 미검증 | browser repository, Auth UI, RLS migration | 실제 프로젝트 연결·권한·장애 UX 미검증 |
-| private 영수증 개발 모드 | 구현 완료·운영 미검증 | `dev-private.ts`, local receipt server, response schema | 로컬 파일 경로·운영 사용 미검증 |
-| GitHub Pages 정적 배포 | 구현 완료·운영 미검증 | `deploy-pages.yml`, 2026-07-25 static export build | 원격 Pages 최신 배포 확인 필요 |
-| OCR 자동 추출 | 계획 | `receipt.v2` 템플릿과 검토용 스키마 | 제공자·정확도·검토 UX 미확정 |
+- **구현 상태**: 구현 완료 / 부분 구현 / 계획
+- **검증 수준**: 실환경 검증 / 저장소 검증 / 사용자 확인 / 미검증
+
+| 기능 | 구현 상태 | 검증 수준 | 환경·기준 | 확인된 근거 | 남은 위험 |
+| --- | --- | --- | --- | --- | --- |
+| 공개 관측 JSON 로드와 상품 탐색 | 구현 완료 | 저장소 검증 | `5d6b8e1` + 2026-07-26 로컬 | `PublicObservationRepository`, projection test, 공개 관측 검사, build | 원격 Pages 최신 배포 미검증 |
+| 검색·필터·정렬·마트 탐색 | 구현 완료 | 저장소 검증 | `5d6b8e1` + 2026-07-26 로컬 | `ProductBrowser`, `MarketBrowser`, `PriceTrendModal`, unit/build | 실제 사용성과 모바일 흐름 미검증 |
+| 장바구니와 예상 합계 | 구현 완료 | 저장소 검증 | `5d6b8e1` + 2026-07-26 로컬 | `cart.store`, repository test, Playwright 시나리오 1건 성공 | E2E runner 종료 실패, 다기기 동기화 없음 |
+| 수령자·배분·정산·백업 | 부분 구현 | 저장소 검증 | 2026-07-26 로컬 전용 테스트 포함 | settlement domain/store와 불변식 test | 현재 주 화면 미연결, clean clone 재현성 부족 |
+| 가격 이력·판매처 비교 | 부분 구현 | 저장소 검증 | 2026-07-26 로컬 전용 테스트 포함 | price-history, canonical-price, market-analytics test | 운영 관측 데이터와 UX 미검증 |
+| 표준 카탈로그·상품 매핑 | 부분 구현 | 저장소 검증 | `5d6b8e1` + 2026-07-26 로컬 | 마이그레이션, 관리자 UI, mapping domain | 실제 관리자 권한·검토 운영 미검증 |
+| Supabase 인증·원격 저장 | 구현 완료 | 저장소 검증 | `5d6b8e1` | browser repository, Auth UI, RLS migration | 실제 프로젝트 연결·권한·장애 UX 미검증 |
+| private 영수증 개발 모드 | 구현 완료 | 저장소 검증 | `5d6b8e1` | `dev-private.ts`, local receipt server, response schema | 이번 검증에서 private 서버 미실행 |
+| GitHub Pages 정적 배포 | 구현 완료 | 저장소 검증 | `5d6b8e1` + 2026-07-26 local build | `deploy-pages.yml`, static export | 원격 Pages 최신 배포 미검증 |
+| 개선된 Notion 문서 게시 | 구현 완료 | 저장소 검증 | 현재 문서 전용 작업 트리 | validator, publisher test 15건, dry-run | 개선 workflow의 첫 GitHub Actions 실행 미검증 |
+| 기존 Notion 두 페이지 반영 | 구현 완료 | 사용자 확인 | 2026-07-25 기존 workflow | Intro·Detail 정상 반영에 대한 사용자 확인 | 개선 workflow와 동일한 실행 증거가 아님 |
+| OCR 자동 추출 | 계획 | 미검증 | 해당 없음 | 구현 근거 없음 | 제공자·정확도·검토 UX 미확정 |
 
 ## 5. 시스템 아키텍처
 
@@ -136,8 +140,8 @@ UI는 외부 JSON과 localStorage를 직접 파싱하지 않습니다. 입력은
 
 | 엔터티 | 식별자 또는 경계 | 진실 원천 | 변경 가능 여부 |
 | --- | --- | --- | --- |
-| Receipt / ReceiptItem | `receiptId:storeProductCode:unitPriceKrw` | 원본 JSON 또는 원격 영수증 | 원본 구매 사실은 불변 |
-| ProductGroup | 판매처·상품 코드 기반 그룹 | 영수증 관측값에서 계산 | 계산값 |
+| Receipt / ReceiptItem | `receiptId:lineId` | 원본 JSON 또는 원격 영수증 | 원본 구매 사실은 불변 |
+| ProductGroup | catalog mapping이 있으면 catalog ID, 없으면 판매처·상품 코드·정규화 이름 조합 | 영수증 관측값에서 계산 | 계산값 |
 | Cart lines | 상품 그룹 ID | localStorage | 가변 |
 | Catalog / mapping | 카탈로그 namespace와 검토 상태 | Supabase의 검토된 매핑 | 검토 후 변경 |
 | Market price observation | 판매처 URL·검증 상태·관측일 | 관리자 검증 입력 | 관측 이력 |
@@ -149,11 +153,15 @@ UI는 외부 JSON과 localStorage를 직접 파싱하지 않습니다. 입력은
 2. 구매·배분 수량은 양의 정수이고, 배분 합은 구매 수량을 초과할 수 없습니다.
 3. `totalPriceKrw = unitPriceKrw × purchasedQuantity`를 유지합니다.
 4. 친구별 합계와 미배분 수량은 배분 내역으로 계산하며 별도 합계를 진실 원천으로 저장하지 않습니다.
-5. 상품명은 식별자가 아니며, 원본 구매번호 배열과 원본 증거 행을 보존합니다.
+5. 원본 `ReceiptItem` ID는 상품명이 아닌 영수증 ID와 원본 line ID로 생성하고, 원본 구매번호 배열과 원본 증거 행을 보존합니다.
 
 공유 카탈로그 비교에는 `catalog_namespace`, 판매처 상품 코드, 정규화한 상품명
 등의 검토된 연결을 사용합니다. 공식·표준 상품 연결은 이보다 강한 사람 검토
 경계이며, 규격이나 묶음 수가 다르면 별도 변형으로 유지합니다.
+
+현재 `ProductGroup` ID는 상품 코드가 있어도 정규화 이름을 포함하고, 코드가 없으면
+판매처와 정규화 이름에 의존합니다. 따라서 “상품명을 식별자로 사용하지 않는다”는
+목표는 원본 항목에는 충족하지만 화면 그룹에는 아직 충족하지 못한 기술 부채입니다.
 
 ## 7. 핵심 기술 의사결정
 
@@ -167,12 +175,13 @@ UI는 외부 JSON과 localStorage를 직접 파싱하지 않습니다. 입력은
 - **비용과 위험**: 공개 데이터는 판매처를 채널 단위로 축약하고 날짜를 월 단위로 낮추므로 지점별·일별 분석에는 사용할 수 없습니다.
 - **재검토 조건**: 업로드·동기화 요구가 확정되면 서버 측 접근 제어와 감사 흐름을 먼저 검증합니다.
 
-### 결정 2. 상품명 대신 코드와 검토된 매핑을 사용한다
+### 결정 2. 원본 항목 식별과 판매처 간 비교를 분리한다
 
 - **상황**: 이름이 같아도 용량·규격·묶음 수가 다른 상품이 존재합니다.
 - **제약**: 잘못된 병합은 거짓 최저가와 잘못된 가격 추이를 만듭니다.
-- **선택**: 판매처 상품 코드와 카탈로그 namespace를 보존하고, 검토된 mapping만 통합 비교에 사용합니다.
+- **선택**: 원본 항목은 `receiptId:lineId`로 보존하고, 판매처 상품 코드와 카탈로그 namespace를 유지하며, 검토된 mapping만 판매처 간 통합 비교에 사용합니다.
 - **결과**: 자동화율은 낮지만 불확실한 연결을 확정 데이터로 만들지 않습니다.
+- **비용과 위험**: 현재 화면 그룹 키에는 정규화 이름이 포함되며, 상품 코드가 없으면 이름이 fallback이 됩니다.
 - **재검토 조건**: 라벨된 검토 결과로 자동 매핑의 오류율을 측정할 수 있을 때 보조 자동화를 검토합니다.
 
 ### 결정 3. 정적 UI와 권한·비밀값 경계를 분리한다
@@ -191,13 +200,13 @@ UI는 외부 JSON과 localStorage를 직접 파싱하지 않습니다. 입력은
 
 ## 8. 외부 연동과 실패 경계
 
-| 연동 대상 | 목적 | 인증/비밀값 | 실패 처리 | 재시도/제한 |
-| --- | --- | --- | --- | --- |
-| Supabase Auth | 사용자·관리자 식별 | publishable key만 브라우저에 노출 | 인증되지 않으면 관리자 UI를 노출하지 않음 | 실환경 미검증 |
-| Supabase PostgreSQL/RLS | 카탈로그, 관측, 사용자 상태 | service role은 서버 전용 | 로컬 상태를 무조건 덮어쓰지 않음 | 운영 권한·장애 UX 미검증 |
-| Edge Function | 공식 상품 후보 검색 | 함수 Secret | 검색 결과를 확정 상품으로 저장하지 않음 | 제공자 응답·제한 미검증 |
-| GitHub Pages | 정적 UI 배포 | 비밀값 없음 | 원격 기능 장애와 UI 가용성을 분리 | workflow는 존재, 배포 상태 미확인 |
-| Notion API | Intro/Detail 동기화 | GitHub Actions Secret | 저장소 Markdown을 진실 원천으로 유지 | `NOTION_DETAIL_PAGE_ID`와 실제 실행 미검증 |
+| 연동 대상 | 목적 | 인증/비밀값 | 실패 처리 | 재시도/제한 | 마지막 실환경 확인 |
+| --- | --- | --- | --- | --- | --- |
+| Supabase Auth | 사용자·관리자 식별 | publishable key만 브라우저에 노출 | 인증되지 않으면 관리자 UI를 노출하지 않음 | 실환경 정책 미검증 | 미검증 |
+| Supabase PostgreSQL/RLS | 카탈로그, 관측, 사용자 상태 | service role은 서버 전용 | 로컬 상태를 무조건 덮어쓰지 않음 | 운영 권한·장애 UX 미검증 | 미검증 |
+| Edge Function | 공식 상품 후보 검색 | 함수 Secret | 검색 결과를 확정 상품으로 저장하지 않음 | 제공자 응답·제한 미검증 | 미검증 |
+| GitHub Pages | 정적 UI 배포 | 비밀값 없음 | 원격 기능 장애와 UI 가용성을 분리 | workflow는 존재, 배포 상태 미확인 | 미검증 |
+| Notion API | Intro/Detail 읽기 전용 미러 | GitHub Actions Secret | 두 페이지 사전 GET, 부분 실패 집계, 원본 Git 링크 유지 | 요청 30초 timeout, 429·5xx·network 최대 4회 | 기존 workflow는 2026-07-25 사용자 확인; 개선 workflow는 미검증 |
 
 ## 9. 데이터 보호와 보안
 
@@ -218,24 +227,28 @@ UI는 외부 JSON과 localStorage를 직접 파싱하지 않습니다. 입력은
 
 ## 10. 테스트와 검증 전략
 
-| 수준 | 도구 | 검증 대상 | 2026-07-25 상태 |
+| 수준 | 도구 | 검증 대상 | 현재 상태 |
 | --- | --- | --- | --- |
 | 정적 분석 | ESLint | `src/` 코드 규칙 | 통과 |
 | 타입 검사 | TypeScript strict | 타입·경계 | 통과 |
-| 단위/저장소 테스트 | Vitest | 영수증, 공개 projection, 상품 탐색, 카탈로그, 장바구니, 정산 불변식 | 16개 파일·41개 테스트 통과 |
-| E2E | Playwright | 공개 관측 상품 탐색 → 장바구니 → 새로고침 복원 | 통과 |
+| 단위/저장소 테스트 | Vitest | 영수증, 공개 projection, 상품 탐색, 카탈로그, 장바구니, 정산 불변식 | 로컬 16개 파일·41개 테스트 통과; 이 중 일부 테스트·설정은 Git ignored |
+| E2E | Playwright | 공개 관측 상품 탐색 → 장바구니 → 새로고침 복원 | Chromium 시나리오 성공, runner 미종료로 명령 timeout |
 | production build | Next.js | static export | 통과 |
-| 운영 검증 | Supabase/GitHub Pages/Notion | 권한·비밀값·원격 배포 | 미검증 |
+| 문서 자동화 | Node test/validator | 템플릿, 링크, Notion 사전검증·재시도·멱등성 | validator 0 errors/0 warnings, publisher test 15건 통과 |
+| 운영 검증 | Supabase/GitHub Pages | 권한·비밀값·원격 배포 | 미검증 |
+| 기존 문서 동기화 | GitHub Actions/Notion | Intro·Detail 두 페이지 교체 | 2026-07-25 사용자 확인 |
+| 개선 문서 동기화 | GitHub Actions/Notion | 사전검증 뒤 두 페이지 교체와 응답 검증 | 로컬 dry-run만 통과, 원격 미검증 |
 
 ### 검증 이력
 
-| 일시 | 기준 | 명령/환경 | 결과 | 미검증 항목 |
-| --- | --- | --- | --- | --- |
-| 2026-07-25 | `codex/public-observation-tracker` 로컬 작업 트리 | `npm.cmd run check:public-observations` | 188건·금지 필드 없음·revision 검증 통과 | 실제 Pages 배포 |
-| 2026-07-25 | 동일 | `npm.cmd run lint` / `npm.cmd run typecheck` | 통과 | 원격 환경 |
-| 2026-07-25 | 동일 | `npm.cmd run test` | 16 files / 41 tests 통과 | 실환경 |
-| 2026-07-25 | 동일 | private 모드·private 서버 미실행 + `npm.cmd run test:e2e` | 공개 fallback 장바구니 1 scenario 통과 | 모바일 실기기 |
-| 2026-07-25 | 동일 | `npm.cmd run build` | static export 통과 | 실제 Pages 배포 |
+| 일시 | 기준 커밋 | 명령/환경 | 결과 | 근거 위치 | 미검증 항목 |
+| --- | --- | --- | --- | --- | --- |
+| 2026-07-26 | `5d6b8e1` + 문서 작업 트리 | `npm.cmd run check:public-observations` | exit 0, 188건·금지 필드 없음·revision 검증 통과 | 현재 로컬 실행 로그 | 실제 Pages 배포 |
+| 2026-07-26 | 동일 | `npm.cmd run lint` / `npm.cmd run typecheck` | 모두 exit 0 | 현재 로컬 실행 로그 | clean clone의 ignored 설정 재현 |
+| 2026-07-26 | 동일 | `npm.cmd run test` | exit 0, 16 files / 41 tests | 현재 로컬 실행 로그 | 5개 테스트 파일과 일부 설정이 Git ignored |
+| 2026-07-26 | 동일 | `npm.cmd run build` | exit 0, static export | 현재 로컬 실행 로그 | 실제 Pages 배포 |
+| 2026-07-26 | 동일 | private server 미실행 + `npm.cmd run test:e2e` | 시나리오 1건 1.3초 성공 후 runner 미종료, 180초 timeout·exit 124 | 현재 로컬 실행 로그 | clean exit 원인, 모바일 실기기 |
+| 2026-07-26 | 동일 | docs validator 2종 / publisher test / dry-run | 0 errors·0 warnings / 15 tests / 성공 | 현재 로컬 실행 로그 | 개선 workflow의 GitHub Actions·Notion 실환경 |
 
 ## 11. 배포·운영·복구
 
@@ -247,12 +260,16 @@ UI는 외부 JSON과 localStorage를 직접 파싱하지 않습니다. 입력은
   → GitHub Pages
 
 Project_Intro/Project_Detail 변경
-  → 별도 GitHub Actions workflow
-  → Notion 두 페이지 replace_content
+  → PR/main 문서·템플릿·publisher 검증
+  → main에서 Notion 두 페이지 GET preflight
+  → 서로 다른 두 페이지 replace_content
+  → 응답 ID·완전성 검증과 Actions summary
 ```
 
 - `deploy-pages.yml`은 `main` push 또는 수동 실행에서 static export를 배포하도록 구성돼 있습니다.
-- `sync-project-docs-to-notion.yml`은 Intro와 Detail을 각각 동기화하지만, 필요한 Secret과 원격 실행 성공은 확인하지 않았습니다.
+- 기존 `sync-project-docs-to-notion.yml`의 Secret 기반 Intro·Detail 반영은 2026-07-25 사용자가 확인했습니다.
+- 현재 개선 workflow는 로컬 validator·단위 테스트·dry-run만 통과했습니다. 같은 Skill bundle을 커밋·push한 뒤 첫 GitHub Actions 실행과 두 페이지 렌더링을 별도로 확인해야 합니다.
+- 저장소 Markdown이 진실 원천이고 Notion 본문은 읽기 전용 미러입니다. 두 페이지 쓰기는 트랜잭션이 아니므로, 부분 실패 시 같은 커밋을 재실행해 수렴시킵니다.
 - 잘못된 정산 백업 import는 schema 검증 전에 기존 상태를 바꾸지 않도록 설계돼 있습니다. 다만 현재 UI에서 복원 흐름은 노출되지 않습니다.
 - 원격 데이터 복구는 Supabase Dashboard backup 확인이 런북에 기록돼 있으나, 복구 리허설은 미실행입니다.
 
@@ -270,10 +287,13 @@ Project_Intro/Project_Detail 변경
 
 | 우선순위 | 항목 | 사용자/운영 영향 | 다음 행동 |
 | --- | --- | --- | --- |
-| P0 | 정산 UI 미연결 | 구현된 정산 규칙을 사용자가 실행할 수 없음 | 정산 화면을 복구하거나 module의 유지 범위를 재결정 |
+| P0 | 로컬 권위 문서의 정산 M1 범위와 현재 가격 탐색 제품 범위가 충돌 | 완료 기준과 우선순위 판정이 일관되지 않음 | `AGENTS.md`·Acceptance를 갱신할지 정산 UI를 복구할지 명시적으로 결정 |
+| P1 | E2E 시나리오 뒤 runner가 종료되지 않음 | CI gate가 성공 시에도 timeout될 수 있음 | Windows process tree와 Playwright webServer 종료 경로 재현·수정 |
+| P1 | 개선 Notion workflow 실환경 미검증 | 새 read capability·페이지 권한 문제를 아직 모름 | bundle을 함께 커밋한 뒤 main Actions 실행과 두 미러 렌더링 확인 |
 | P1 | Supabase 권한·장애 흐름 미검증 | 원격 관리자·동기화 신뢰성 불확실 | 테스트 프로젝트에서 RLS·관리자·실패 UX smoke test |
+| P1 | 상품 코드가 없는 ProductGroup이 정규화 이름에 의존 | 이름 변경·충돌 시 그룹 ID가 불안정 | 원본 관측 ID와 별도의 안정적 group ID 도입 |
 | P1 | 상품 규격·판매처 관측 데이터 부족 | 단위 가격 비교 범위 제한 | 검증된 규격과 관측 근거 축적 |
-| P1 | Notion 동기화 실환경 미검증 | 문서 자동 동기화 신뢰성 불확실 | Secret 설정 후 수동 workflow 실행·결과 확인 |
+| P2 | Notion 수동 드리프트의 주기 감지 없음 | 문서 push 사이에 미러가 수동 변경될 수 있음 | 반복 운영 가치가 확인되면 read-only 정기 검증 추가 |
 | P2 | Android 실기기 미검증 | 모바일 품질 미확인 | 대표 기기 smoke test |
 
 OCR, 알림, 지도, 추가 가격 API는 위 P0/P1 위험을 줄이기 전에는 우선 구현하지
@@ -290,9 +310,5 @@ OCR, 알림, 지도, 추가 가격 API는 위 P0/P1 위험을 줄이기 전에�
 - [Project Intro](./Project_Intro.md)
 - [범용 Intro 템플릿](./templates/PROJECT_INTRO_TEMPLATE.md)
 - [범용 Detail 템플릿](./templates/PROJECT_DETAIL_TEMPLATE.md)
-- [Architecture](./ARCHITECTURE.md): M1 설계 스냅샷; 현재 UI 구조의 최종 근거는 본 문서와 소스 코드
-- [Receipt v2](./RECEIPT_V2.md)
-- [Data Policy](./DATA_POLICY.md)
 - [Operations Runbook](./OPERATIONS_RUNBOOK.md)
-- [Future Backlog](./FUTURE_BACKLOG.md)
-- [ADR](./adr/)
+- [Official Product Discovery](./OFFICIAL_PRODUCT_DISCOVERY.md)
