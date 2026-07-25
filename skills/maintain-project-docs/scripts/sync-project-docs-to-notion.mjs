@@ -8,6 +8,15 @@ import { fileURLToPath } from "node:url";
 const NOTION_API_VERSION = "2026-03-11";
 const API_BASE_URL = "https://api.notion.com";
 const MAX_ATTEMPTS = 4;
+const SOURCE_FINGERPRINT_PATTERN = /source sha256\s+`?([0-9a-f]{64})`?/i;
+
+function markdownSha256(markdown) {
+  return createHash("sha256").update(markdown).digest("hex");
+}
+
+function extractSourceFingerprint(markdown) {
+  return SOURCE_FINGERPRINT_PATTERN.exec(markdown)?.[1]?.toLocaleLowerCase() ?? "";
+}
 
 function delay(milliseconds) {
   return new Promise((resolve) => setTimeout(resolve, milliseconds));
@@ -168,10 +177,11 @@ export function renderNotionMarkdown(sourceDocument, documents, context) {
 
   const shortSha = context.sourceSha.slice(0, 12);
   const commitUrl = `${context.serverUrl}/${context.repository}/commit/${context.sourceSha}`;
+  const sourceFingerprint = markdownSha256(rewritten);
   const banner =
     `> Automated read-only mirror. Canonical source: ` +
     `[${sourceDocument.repositoryPath}](${context.serverUrl}/${context.repository}/blob/${context.sourceSha}/${sourceDocument.repositoryPath}) | ` +
-    `[commit ${shortSha}](${commitUrl})\n\n`;
+    `[commit ${shortSha}](${commitUrl}) | source sha256 \`${sourceFingerprint}\`\n\n`;
   return `${banner}${rewritten}`;
 }
 
@@ -275,21 +285,35 @@ async function updateDocument(document, configuration, markdown) {
   if (normalizedPageId(result.id) !== normalizedPageId(document.pageId)) {
     throw new Error(`${document.label} sync returned a different page.`);
   }
-  if (result.truncated || (result.unknown_block_ids?.length ?? 0) > 0) {
+  if (
+    typeof result.markdown !== "string" ||
+    result.truncated ||
+    (result.unknown_block_ids?.length ?? 0) > 0
+  ) {
     throw new Error(
       `${document.label} sync response was incomplete (truncated=${Boolean(result.truncated)}, unknown=${result.unknown_block_ids?.length ?? 0}).`,
     );
   }
-  if (result.markdown !== markdown) {
-    throw new Error(`${document.label} sync response did not match the requested Markdown.`);
+
+  const sourceFingerprint = extractSourceFingerprint(markdown);
+  const notionNormalized = result.markdown !== markdown;
+  if (
+    notionNormalized &&
+    (!sourceFingerprint || !result.markdown.toLocaleLowerCase().includes(sourceFingerprint))
+  ) {
+    throw new Error(
+      `${document.label} sync response lost the source fingerprint during Notion normalization.`,
+    );
   }
 
   return {
     label: document.label,
     pageUrl: pageUrl(document.pageId),
-    status: "Synced",
+    status: notionNormalized ? "Synced (Notion-normalized)" : "Synced",
     characters: markdown.length,
-    sha256: createHash("sha256").update(markdown).digest("hex"),
+    sha256: markdownSha256(markdown),
+    notionCharacters: result.markdown.length,
+    notionSha256: markdownSha256(result.markdown),
     elapsedMilliseconds: Date.now() - startedAt,
     requestId: response.headers.get("x-request-id") || "",
   };
@@ -300,17 +324,23 @@ function writeSummary(configuration, results, failures) {
   const lines = [
     "## Project docs to Notion",
     "",
-    "| Document | Result | Source hash | Duration | Request |",
-    "| --- | --- | --- | --- | --- |",
+    "| Document | Result | Source hash | Notion hash | Size | Duration | Request |",
+    "| --- | --- | --- | --- | --- | --- | --- |",
   ];
 
   for (const result of results) {
+    const notionHash = result.notionSha256 || result.sha256;
+    const notionCharacters = result.notionCharacters ?? result.characters;
+    const size =
+      notionCharacters === result.characters
+        ? `${result.characters} chars`
+        : `${result.characters} -> ${notionCharacters} chars`;
     lines.push(
-      `| [${result.label}](${result.pageUrl}) | ${result.status} (${result.characters} chars) | \`${result.sha256.slice(0, 12)}\` | ${result.elapsedMilliseconds} ms | ${result.requestId ? `\`${result.requestId.slice(0, 12)}\`` : "-"} |`,
+      `| [${result.label}](${result.pageUrl}) | ${result.status} | \`${result.sha256.slice(0, 12)}\` | \`${notionHash.slice(0, 12)}\` | ${size} | ${result.elapsedMilliseconds} ms | ${result.requestId ? `\`${result.requestId.slice(0, 12)}\`` : "-"} |`,
     );
   }
   for (const failure of failures) {
-    lines.push(`| ${failure.label} | Failed | - | - | - |`);
+    lines.push(`| ${failure.label} | Failed | - | - | - | - | - |`);
   }
   if (configuration.sourceSha) {
     lines.push("", `Source commit: \`${configuration.sourceSha}\``);
@@ -381,7 +411,9 @@ export async function syncProjectDocuments({
         pageUrl: pageUrl(document.pageId),
         status: "Already current",
         characters: markdown.length,
-        sha256: createHash("sha256").update(markdown).digest("hex"),
+        sha256: markdownSha256(markdown),
+        notionCharacters: markdown.length,
+        notionSha256: markdownSha256(markdown),
         elapsedMilliseconds: 0,
         requestId: "",
       });
