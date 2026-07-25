@@ -12,6 +12,7 @@ export type PrivateReceiptSourceResult = {
 };
 
 const privateDirectory = path.join(process.cwd(), "private-data");
+let cachedSource: { signature: string; result: PrivateReceiptSourceResult } | null = null;
 
 function logicalFilename(file: string) {
   return file.replace(/\(\d+\)(?=\.json$)/i, "").toLowerCase();
@@ -45,7 +46,10 @@ export async function loadPrivateReceiptProjections(): Promise<PrivateReceiptSou
   const candidates = await Promise.all(
     (await readdir(privateDirectory))
       .filter((file) => /^receipt_.+\.json$/i.test(file))
-      .map(async (file) => ({ file, modifiedAt: (await stat(path.join(privateDirectory, file))).mtimeMs })),
+      .map(async (file) => {
+        const fileStat = await stat(path.join(privateDirectory, file));
+        return { file, modifiedAt: fileStat.mtimeMs, size: fileStat.size };
+      }),
   );
 
   const latestByLogicalName = new Map<string, (typeof candidates)[number]>();
@@ -56,6 +60,9 @@ export async function loadPrivateReceiptProjections(): Promise<PrivateReceiptSou
   }
 
   const selected = [...latestByLogicalName.values()].sort((left, right) => left.file.localeCompare(right.file));
+  const signature = selected.map(({ file, modifiedAt, size }) => `${file}:${modifiedAt}:${size}`).join("|");
+  if (cachedSource?.signature === signature) return cachedSource.result;
+
   const warnings: string[] = [];
   const validSources: Array<{ candidate: (typeof selected)[number]; source: ReceiptJson }> = [];
 
@@ -82,10 +89,8 @@ export async function loadPrivateReceiptProjections(): Promise<PrivateReceiptSou
   });
 
   receipts.sort((left, right) => right.purchasedAt.localeCompare(left.purchasedAt));
-  const revision = createHash("sha256")
-    .update(selected.map(({ file, modifiedAt }) => `${file}:${modifiedAt}`).join("|"))
-    .digest("hex")
-    .slice(0, 16);
-
-  return { revision, receipts, warnings };
+  const revision = createHash("sha256").update(signature).digest("hex").slice(0, 16);
+  const result = { revision, receipts, warnings };
+  cachedSource = { signature, result };
+  return result;
 }

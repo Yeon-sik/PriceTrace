@@ -1,16 +1,16 @@
 import { expect, test } from "@playwright/test";
 
-test("공식 상품만 보여 주고 새로고침 뒤에도 장바구니를 유지한다", async ({ page }) => {
+test("공개 관측 상품을 보여 주고 새로고침 뒤에도 장바구니를 유지한다", async ({ page }) => {
   const productName = "하겐다즈 미니컵 스트로베리";
 
   await page.goto("/PriceTrace");
   await page.getByRole("button", { name: "상품 둘러보기 →" }).click();
-  await expect(page.getByText("3개 공식 연결 상품 · 3개 관측 기록")).toBeVisible();
 
   const product = page.getByRole("article").filter({
     has: page.getByRole("heading", { name: productName, exact: true }),
   });
   await expect(product).toContainText("2,030원");
+  await expect(product).toContainText("최근 관측일 · 2026-07");
   await product
     .getByRole("button", { name: `${productName} 장바구니에 담기`, exact: true })
     .click();

@@ -13,6 +13,7 @@ export type ProductObservationListing = {
   catalogNamespace: string | null;
   observedAt: string;
   martType: Exclude<MartType, "all">;
+  source?: "receipt" | "public";
 };
 
 export type ProductGroup = {
@@ -62,6 +63,7 @@ export function listingsFromReceipts(receipts: Receipt[]): ProductObservationLis
     catalogNamespace: receipt.catalogNamespace,
     observedAt: receipt.purchasedAt,
     martType: martTypeFor(receipt),
+    source: "receipt",
   })));
 }
 

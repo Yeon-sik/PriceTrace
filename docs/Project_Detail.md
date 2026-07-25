@@ -85,9 +85,9 @@ Demo JSON 또는 local private receipt server
 
 | 기능 | 상태 | 확인된 근거 | 남은 위험 |
 | --- | --- | --- | --- |
-| 공개 영수증 JSON 로드와 상품 탐색 | 구현 완료·운영 미검증 | `JsonReceiptRepository`, receipt/product-browser test, 2026-07-25 build | 현재 E2E 실패 |
+| 공개 관측 JSON 로드와 상품 탐색 | 검증 완료 | `PublicObservationRepository`, projection test, 2026-07-25 build/E2E | 원격 Pages 최신 배포는 별도 미검증 |
 | 검색·필터·정렬·마트 탐색 | 구현 완료·운영 미검증 | `ProductBrowser`, `MarketBrowser`, `PriceTrendModal` | 실제 사용성과 모바일 흐름 미검증 |
-| 장바구니와 예상 합계 | 부분 구현 | `cart.store`, cart repository test | E2E fixture/selector 갱신 필요, 다기기 동기화 없음 |
+| 장바구니와 예상 합계 | 구현 완료·운영 미검증 | `cart.store`, cart repository test, Playwright E2E | 다기기 동기화 없음 |
 | 수령자·배분·정산·백업 | 부분 구현 | settlement domain/store 및 3개 불변식 test | 현재 주 화면 미연결, 사용자 E2E 없음 |
 | 가격 이력·판매처 비교 | 부분 구현 | price-history·canonical-price·market analytics domain test | 운영 관측 데이터와 UX 미검증 |
 | 표준 카탈로그·상품 매핑 | 부분 구현 | 마이그레이션, 관리자 UI, mapping domain | 실제 관리자 권한·검토 운영 미검증 |
@@ -99,11 +99,13 @@ Demo JSON 또는 local private receipt server
 ## 5. 시스템 아키텍처
 
 ```text
-data/demo/*.json ─┐
-                  ├→ JsonReceiptRepository → Zod mapper → domain
-private receipt ──┘                                 │
-                                                     ├→ ProductBrowser / MarketBrowser / CartPage
-                                                     └→ PriceTrendModal
+private-data/receipt_*.json
+    ├→ local private server → private Receipt projection ─┐
+    └→ explicit sync command → public observation JSON ───┤
+                                                          ├→ ProductBrowser / MarketBrowser / CartPage
+                                                          └→ PriceTrendModal
+
+public observation JSON → strict Zod validation → public product listings
 
 Cart store → LocalStorageCartRepository
 
@@ -155,14 +157,14 @@ UI는 외부 JSON과 localStorage를 직접 파싱하지 않습니다. 입력은
 
 ## 7. 핵심 기술 의사결정
 
-### 결정 1. 공개 demo와 private 원본을 분리한다
+### 결정 1. 공개 관측 projection과 private 원본을 분리한다
 
 - **상황**: 실제 영수증에는 거래번호·주소·결제 정보 등 공개하면 안 되는 값이 있을 수 있습니다.
 - **제약**: 정적 배포는 로컬 파일이나 비밀값을 숨겨 주지 않습니다.
 - **검토한 대안**: 실제 원본을 데모로 사용, 모든 데이터를 원격 DB에 올리기.
-- **선택**: `data/demo/` fixture를 기본으로 쓰고, private 모드는 로컬 개발 서버와 환경 변수에서만 사용합니다.
-- **근거**: 공개 재현성과 원본 보호를 동시에 유지할 수 있습니다.
-- **비용과 위험**: private 모드의 실제 사용자 환경은 아직 검증하지 않았습니다.
+- **선택**: `data/public/product-observations.v1.json`을 기본으로 쓰고, private 모드는 로컬 개발 서버 응답이 정상일 때만 우선합니다.
+- **근거**: 공개 재현성과 원본 보호를 동시에 유지하며, private 파일이 없는 정적 환경에서도 상품 목록을 보장합니다.
+- **비용과 위험**: 공개 데이터는 판매처를 채널 단위로 축약하고 날짜를 월 단위로 낮추므로 지점별·일별 분석에는 사용할 수 없습니다.
 - **재검토 조건**: 업로드·동기화 요구가 확정되면 서버 측 접근 제어와 감사 흐름을 먼저 검증합니다.
 
 ### 결정 2. 상품명 대신 코드와 검토된 매핑을 사용한다
@@ -202,10 +204,14 @@ UI는 외부 JSON과 localStorage를 직접 파싱하지 않습니다. 입력은
 | 경계 | 정책 | 검증 방법 |
 | --- | --- | --- |
 | 실제 영수증 | `private-data/`에만 두고 Git·공개 번들에서 제외 | `.gitignore`, private dev server 경로 |
-| 공개 데이터 | `data/demo/`의 비식별 fixture만 로드 | `JsonReceiptRepository`와 fixture test |
+| 공개 데이터 | 월·판매 채널·상품·관측가 최소 projection만 Git 추적 | strict Zod schema, 금지 필드 회귀 테스트, `check:public-observations` |
 | 외부 JSON | 전체 Zod 검증 뒤 도메인 변환 | schema/repository test |
 | 사용자 권한 | `auth.uid()` 소유권과 관리자 metadata를 사용 | RLS migration 존재, live test 미실행 |
 | 비밀값 | service role·외부 API 키를 `NEXT_PUBLIC_*`에 두지 않음 | Edge Function/Actions 경계 검토 |
+
+현재 트리에서는 실제 영수증 형태의 `data/demo/receipt_001.json`을 제거했습니다. 다만
+과거 Git commit과 이미 복제된 저장소에는 내용이 남아 있을 수 있으므로, 이력 재작성과
+강제 push는 별도 승인·백업·협업자 조율이 필요한 미완료 보안 작업입니다.
 
 주요 잔여 위험은 배포된 정책이 로컬 코드와 다를 수 있다는 점입니다. 마이그레이션
 파일과 browser client의 존재는 운영 권한 검증을 대체하지 않습니다.
@@ -216,8 +222,8 @@ UI는 외부 JSON과 localStorage를 직접 파싱하지 않습니다. 입력은
 | --- | --- | --- | --- |
 | 정적 분석 | ESLint | `src/` 코드 규칙 | 통과 |
 | 타입 검사 | TypeScript strict | 타입·경계 | 통과 |
-| 단위/저장소 테스트 | Vitest | 영수증, 상품 탐색, 카탈로그, 장바구니, 정산 불변식 | 15개 파일·38개 테스트 통과 |
-| E2E | Playwright | 상품 탐색 → 장바구니 → 새로고침 복원 | 실패: 이전 요약 문구 locator timeout |
+| 단위/저장소 테스트 | Vitest | 영수증, 공개 projection, 상품 탐색, 카탈로그, 장바구니, 정산 불변식 | 16개 파일·41개 테스트 통과 |
+| E2E | Playwright | 공개 관측 상품 탐색 → 장바구니 → 새로고침 복원 | 통과 |
 | production build | Next.js | static export | 통과 |
 | 운영 검증 | Supabase/GitHub Pages/Notion | 권한·비밀값·원격 배포 | 미검증 |
 
@@ -225,10 +231,10 @@ UI는 외부 JSON과 localStorage를 직접 파싱하지 않습니다. 입력은
 
 | 일시 | 기준 | 명령/환경 | 결과 | 미검증 항목 |
 | --- | --- | --- | --- | --- |
-| 2026-07-25 | `2f8cd83` + 문서 변경만 포함한 로컬 작업 트리 | `npm.cmd run lint` | 통과 | 브라우저/원격 환경 |
-| 2026-07-25 | 동일 | `npm.cmd run typecheck` | 통과 | 브라우저/원격 환경 |
-| 2026-07-25 | 동일 | `npm.cmd run test` | 15 files / 38 tests 통과 | E2E·실환경 |
-| 2026-07-25 | 동일 | `npm.cmd run test:e2e` | 1 scenario 실패 후 runner timeout | fixture·접근 가능한 이름 갱신 |
+| 2026-07-25 | `codex/public-observation-tracker` 로컬 작업 트리 | `npm.cmd run check:public-observations` | 188건·금지 필드 없음·revision 검증 통과 | 실제 Pages 배포 |
+| 2026-07-25 | 동일 | `npm.cmd run lint` / `npm.cmd run typecheck` | 통과 | 원격 환경 |
+| 2026-07-25 | 동일 | `npm.cmd run test` | 16 files / 41 tests 통과 | 실환경 |
+| 2026-07-25 | 동일 | private 모드·private 서버 미실행 + `npm.cmd run test:e2e` | 공개 fallback 장바구니 1 scenario 통과 | 모바일 실기기 |
 | 2026-07-25 | 동일 | `npm.cmd run build` | static export 통과 | 실제 Pages 배포 |
 
 ## 11. 배포·운영·복구
@@ -252,19 +258,18 @@ Project_Intro/Project_Detail 변경
 
 ## 12. 문제 해결 사례
 
-### E2E가 현재 상품 fixture를 따라가지 못함
+### 공개 데이터 전환 뒤 E2E 고정 기대값이 어긋남
 
-- **증상**: `npm.cmd run test:e2e`의 유일한 시나리오가 5초 안에 이전 요약 문구를 찾지 못해 실패합니다.
+- **증상**: 기존 시나리오가 5초 안에 이전 공개 영수증 요약 문구를 찾지 못해 실패했습니다.
 - **재현**: 홈에서 "상품 둘러보기"를 누른 뒤 `3개 공식 연결 상품 · 3개 관측 기록`의 표시를 기대합니다.
-- **원인**: `data/demo/receipt_001.json`과 상품 표시 구조가 바뀌었지만 `e2e/shopping.spec.ts`의 고정 문구·상품 기대값이 함께 갱신되지 않았습니다.
-- **현재 대응**: 이 문서에서 E2E를 통과로 표현하지 않고 실패 상태로 기록했습니다.
-- **회귀 방지**: 다음 코드 작업에서 현재 fixture와 stable role/name을 기준으로 시나리오를 갱신하고, 통과 결과를 다시 기록합니다.
+- **원인**: 민감 영수증 fixture를 공개 관측 projection으로 대체했지만 E2E가 과거 집계 문구를 고정값으로 기대했습니다.
+- **현재 대응**: 집계 개수 대신 접근 가능한 상품명·관측 월·가격·장바구니 복원을 검증하도록 수정했고 통과했습니다.
+- **회귀 방지**: 데이터 건수처럼 정상적으로 변하는 값보다 사용자 행동과 접근 가능한 이름을 기준으로 검증합니다.
 
 ## 13. 한계, 기술 부채, 다음 단계
 
 | 우선순위 | 항목 | 사용자/운영 영향 | 다음 행동 |
 | --- | --- | --- | --- |
-| P0 | stale Playwright scenario | 핵심 공개 흐름의 회귀 검증 불가 | 현재 fixture·접근 가능한 이름 기준으로 E2E 갱신 |
 | P0 | 정산 UI 미연결 | 구현된 정산 규칙을 사용자가 실행할 수 없음 | 정산 화면을 복구하거나 module의 유지 범위를 재결정 |
 | P1 | Supabase 권한·장애 흐름 미검증 | 원격 관리자·동기화 신뢰성 불확실 | 테스트 프로젝트에서 RLS·관리자·실패 UX smoke test |
 | P1 | 상품 규격·판매처 관측 데이터 부족 | 단위 가격 비교 범위 제한 | 검증된 규격과 관측 근거 축적 |
