@@ -5,9 +5,9 @@
 | 항목 | 내용 |
 | --- | --- |
 | 문서 상태 | Active |
-| 적용 범위 | 제품 코드 `5d6b8e1`; 운영 자동화 기준 `f227699` |
+| 적용 범위 | 제품 코드 `5d6b8e1`; 운영 자동화 기준 `f86ec4b` |
 | 최종 갱신 | 2026-07-26T18:57:30+09:00 |
-| 최종 검증 기준 | `218c9a4`; GitHub Actions·GitHub Pages·Notion 미러의 2026-07-26 실행 근거 |
+| 최종 검증 기준 | `f86ec4b`; GitHub Actions·GitHub Pages·Notion 미러의 2026-07-26 실행 근거 |
 | 문서 진실 원천 | Git 저장소의 `docs/Project_Detail.md`; Notion은 읽기 전용 미러 |
 | 담당자 | Yeon-sik (개인 프로젝트) |
 
@@ -95,8 +95,8 @@ Demo JSON 또는 local private receipt server
 | 표준 카탈로그·상품 매핑 | 부분 구현 | 저장소 검증 | `5d6b8e1` + 2026-07-26 로컬 | 마이그레이션, 관리자 UI, mapping domain | 실제 관리자 권한·검토 운영 미검증 |
 | Supabase 인증·원격 저장 | 구현 완료 | 저장소 검증 | `5d6b8e1` | browser repository, Auth UI, RLS migration | 실제 프로젝트 연결·권한·장애 UX 미검증 |
 | private 영수증 개발 모드 | 구현 완료 | 저장소 검증 | `5d6b8e1` | `dev-private.ts`, local receipt server, response schema | 이번 검증에서 private 서버 미실행 |
-| GitHub Pages 정적 배포 | 구현 완료 | 실환경 검증 | `f227699` + 2026-07-26 GitHub Pages | Actions [run 30197236649](https://github.com/Yeon-sik/PriceTrace/actions/runs/30197236649) build·deploy 성공, 배포 URL HTTP 200 | 배포 UI의 기능별 브라우저·모바일 smoke test 미실행 |
-| 정책 기반 Notion 문서 게시 | 구현 완료 | 실환경 검증 | `218c9a4` + 2026-07-26 GitHub Actions/Notion | 수동 복구 경로 [run 30198169508](https://github.com/Yeon-sik/PriceTrace/actions/runs/30198169508) 성공·재조회; PriceTrace는 `on-main-push` 정책 적용 | 정기 드리프트 감지는 미구현 |
+| GitHub Pages 정적 배포 | 구현 완료 | 실환경 검증 | `f86ec4b` + 2026-07-26 GitHub Pages | Actions [run 30198781229](https://github.com/Yeon-sik/PriceTrace/actions/runs/30198781229) build·deploy 성공 | 배포 UI의 기능별 브라우저·모바일 smoke test 미실행 |
+| 정책 기반 Notion 문서 게시 | 구현 완료 | 실환경 검증 | `f86ec4b` + 2026-07-26 GitHub Actions/Notion | `main` 병합 자동 발행 [run 30198781222](https://github.com/Yeon-sik/PriceTrace/actions/runs/30198781222) 성공; Intro·Detail source commit·fingerprint 재조회 | 정기 드리프트 감지는 미구현 |
 | OCR 자동 추출 | 계획 | 미검증 | 해당 없음 | 구현 근거 없음 | 제공자·정확도·검토 UX 미확정 |
 
 ## 5. 시스템 아키텍처
@@ -204,8 +204,8 @@ UI는 외부 JSON과 localStorage를 직접 파싱하지 않습니다. 입력은
 | Supabase Auth | 사용자·관리자 식별 | publishable key만 브라우저에 노출 | 인증되지 않으면 관리자 UI를 노출하지 않음 | 실환경 정책 미검증 | 미검증 |
 | Supabase PostgreSQL/RLS | 카탈로그, 관측, 사용자 상태 | service role은 서버 전용 | 로컬 상태를 무조건 덮어쓰지 않음 | 운영 권한·장애 UX 미검증 | 미검증 |
 | Edge Function | 공식 상품 후보 검색 | 함수 Secret | 검색 결과를 확정 상품으로 저장하지 않음 | 제공자 응답·제한 미검증 | 미검증 |
-| GitHub Pages | 정적 UI 배포 | 비밀값 없음 | 원격 기능 장애와 UI 가용성을 분리 | main build·deploy 후 URL HTTP 확인 | 2026-07-26 `f227699`, run `30197236649`, HTTP 200 |
-| Notion API | Intro/Detail 읽기 전용 미러 | `notion-production` Environment Secret | 두 페이지 사전 GET, 부분 실패 집계, 원본 Git 링크 유지 | 요청 30초 timeout, 429·5xx·network 최대 4회 | 2026-07-26 `a5abec7`, run `30196804832`, 두 페이지 재조회 |
+| GitHub Pages | 정적 UI 배포 | 비밀값 없음 | 원격 기능 장애와 UI 가용성을 분리 | main build·deploy 후 URL HTTP 확인 | 2026-07-26 `f86ec4b`, run `30198781229` |
+| Notion API | Intro/Detail 읽기 전용 미러 | `notion-production` Environment Secret | 두 페이지 사전 GET, 부분 실패 집계, 원본 Git 링크 유지 | 요청 30초 timeout, 429·5xx·network 최대 4회 | 2026-07-26 `f86ec4b`, run `30198781222`, 두 페이지 재조회 |
 
 ## 9. 데이터 보호와 보안
 
@@ -234,10 +234,10 @@ UI는 외부 JSON과 localStorage를 직접 파싱하지 않습니다. 입력은
 | E2E | Playwright | 공개 관측 상품 탐색 → 장바구니 → 새로고침 복원 | Chromium 시나리오 성공, runner 미종료로 명령 timeout |
 | production build | Next.js | static export | 통과 |
 | 문서 자동화 | Node test/validator | 템플릿, 링크, 발행 정책, Notion 사전검증·재시도·멱등성 | validator 0 errors/0 warnings, 독립 배포본 테스트 23건 통과 |
-| GitHub Pages 운영 | GitHub Actions/HTTP | static export 배포와 URL 가용성 | `f227699` 배포 성공, HTTP 200 |
+| GitHub Pages 운영 | GitHub Actions/HTTP | static export 배포와 URL 가용성 | `f86ec4b` build·deploy 성공 |
 | Supabase 운영 | Supabase | 권한·비밀값·원격 장애 흐름 | 미검증 |
 | 기존 문서 동기화 | GitHub Actions/Notion | Intro·Detail 두 페이지 교체 | 2026-07-25 사용자 확인 |
-| 정책 기반 문서 동기화 | GitHub Actions/Notion | `manual` 또는 `on-main-push` 정책, 사전검증 뒤 두 페이지 교체와 응답 검증 | `218c9a4` 수동 복구 경로에서 sync·재조회 검증; 자동 정책 적용 |
+| 정책 기반 문서 동기화 | GitHub Actions/Notion | `manual` 또는 `on-main-push` 정책, 사전검증 뒤 두 페이지 교체와 응답 검증 | `f86ec4b` `main` 병합에서 승인 대기 없이 자동 sync·재조회 검증 |
 
 ### 검증 이력
 
@@ -252,6 +252,7 @@ UI는 외부 JSON과 localStorage를 직접 파싱하지 않습니다. 입력은
 | 2026-07-26 | `a5abec7` | Actions [run 30196804832](https://github.com/Yeon-sik/PriceTrace/actions/runs/30196804832), `publish` + Environment 승인 | Intro 5,511자·Detail 14,814자 sync 성공; 두 페이지의 source commit·fingerprint 재조회 | GitHub Actions 로그와 Notion connector 조회 | 장기 드리프트·Notion UI별 시각 차이 |
 | 2026-07-26 | `f227699` | Actions [run 30197236636](https://github.com/Yeon-sik/PriceTrace/actions/runs/30197236636) / Pages [run 30197236649](https://github.com/Yeon-sik/PriceTrace/actions/runs/30197236649) / HTTP HEAD | 문서 validate 성공, Pages build·deploy 성공, URL HTTP 200, Action 런타임 경고 없음 | GitHub Actions와 배포 URL | 기능별 브라우저·모바일 smoke test |
 | 2026-07-26 | `218c9a4` | Actions [run 30198169508](https://github.com/Yeon-sik/PriceTrace/actions/runs/30198169508), 수동 복구 경로 | Intro 5,924자·Detail 15,827자 sync 성공; 두 페이지의 source commit·fingerprint 재조회 | GitHub Actions 로그와 Notion connector 조회 | `on-main-push` 자동 발행 실환경 검증 |
+| 2026-07-26 | `f86ec4b` | 자동 발행 [run 30198781222](https://github.com/Yeon-sik/PriceTrace/actions/runs/30198781222) / Pages [run 30198781229](https://github.com/Yeon-sik/PriceTrace/actions/runs/30198781229) | 수동 실행·승인 대기 없이 Intro 5,938자·Detail 16,421자 sync 성공; 두 페이지 source commit·fingerprint 재조회; Pages 배포 성공 | GitHub Actions 로그, Notion connector 조회, Pages 실행 | 정기 드리프트·기능별 브라우저 smoke test |
 
 ## 11. 배포·운영·복구
 
@@ -277,7 +278,8 @@ Project_Intro/Project_Detail 변경
 - 새 workflow는 `publicationMode`에 따라 동작합니다. PriceTrace의 `on-main-push` 설정은 관련 Markdown·설정·런타임이 `main`에 병합되면 canonical branch 검사와 검증을 거쳐 자동 발행합니다. `manual` 설정은 정확한 `PUBLISH` 입력과 Environment 승인을 요구합니다.
 - 첫 승인형 발행은 2026-07-26 Actions [run 30196804832](https://github.com/Yeon-sik/PriceTrace/actions/runs/30196804832)에서 성공했고, Intro·Detail 미러를 별도 조회해 `a5abec7` 원본 링크와 fingerprint를 확인했습니다.
 - 최신 수동 복구 경로 발행은 [run 30198169508](https://github.com/Yeon-sik/PriceTrace/actions/runs/30198169508)에서 성공했고, 두 미러가 `218c9a4` 원본 링크와 새 fingerprint를 가진 것을 재조회했습니다.
-- GitHub Pages는 `f227699`의 [run 30197236649](https://github.com/Yeon-sik/PriceTrace/actions/runs/30197236649)에서 build·deploy가 성공했고 배포 URL이 HTTP 200으로 응답했습니다.
+- 첫 `on-main-push` 자동 발행은 `f86ec4b`의 [run 30198781222](https://github.com/Yeon-sik/PriceTrace/actions/runs/30198781222)에서 별도 승인 없이 성공했고, 두 미러의 source commit과 fingerprint를 재조회했습니다.
+- GitHub Pages는 같은 커밋의 [run 30198781229](https://github.com/Yeon-sik/PriceTrace/actions/runs/30198781229)에서 build·deploy가 성공했습니다.
 - 저장소 Markdown이 진실 원천이고 Notion 본문은 읽기 전용 미러입니다. 두 페이지 쓰기는 트랜잭션이 아니므로, 부분 실패 시 같은 커밋을 재실행해 수렴시킵니다.
 - 구체적인 Secret 마이그레이션과 첫 발행 절차는 `docs/PROJECT_DOCS_OPERATIONS.md`에 기록합니다.
 - 잘못된 정산 백업 import는 schema 검증 전에 기존 상태를 바꾸지 않도록 설계돼 있습니다. 다만 현재 UI에서 복원 흐름은 노출되지 않습니다.
