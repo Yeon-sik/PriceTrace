@@ -43,7 +43,13 @@ export function validateProjectDocsConfig(rawConfig) {
   if (!rawConfig || typeof rawConfig !== "object" || Array.isArray(rawConfig)) {
     fail("the root value must be an object.");
   }
-  const rootFields = new Set(["$schema", "version", "canonicalBranch", "documents"]);
+  const rootFields = new Set([
+    "$schema",
+    "version",
+    "canonicalBranch",
+    "publicationMode",
+    "documents",
+  ]);
   const unknownRootFields = Object.keys(rawConfig).filter((field) => !rootFields.has(field));
   if (unknownRootFields.length > 0) {
     fail(`unknown root field(s): ${unknownRootFields.join(", ")}.`);
@@ -60,6 +66,11 @@ export function validateProjectDocsConfig(rawConfig) {
     canonicalBranch.endsWith("/")
   ) {
     fail("canonicalBranch is not a valid Git branch name.");
+  }
+
+  const publicationMode = rawConfig.publicationMode ?? "manual";
+  if (!["manual", "on-main-push"].includes(publicationMode)) {
+    fail('publicationMode must be "manual" or "on-main-push".');
   }
 
   if (
@@ -116,6 +127,7 @@ export function validateProjectDocsConfig(rawConfig) {
   return {
     version: 1,
     canonicalBranch,
+    publicationMode,
     documents,
   };
 }
