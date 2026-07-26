@@ -8,7 +8,7 @@
 | 프로젝트 형태 | 개인 프로젝트 |
 | 담당 범위 | 제품 범위, 도메인 모델, 프론트엔드, 데이터 계층, 테스트, 배포 자동화 |
 | 현재 상태 | 상품 탐색·장바구니 로컬 MVP 구현 · GitHub Pages와 Notion 문서 발행 운영 검증 |
-| 문서 기준 | 제품 코드 `5d6b8e1`; 운영 검증 기준 `218c9a4`; 게시 커밋은 Notion 미러 상단에서 추적 |
+| 문서 기준 | 제품 코드 `5d6b8e1`; 운영 검증 기준 `f86ec4b`; 게시 커밋은 Notion 미러 상단에서 추적 |
 | 주요 기술 | Next.js 15, React 19, TypeScript, Zod, Zustand, Supabase |
 | Demo | [GitHub Pages URL](https://yeon-sik.github.io/PriceTrace/) — 2026-07-26 HTTP 200 확인 |
 | Repository | [GitHub](https://github.com/Yeon-sik/PriceTrace) |
@@ -89,9 +89,9 @@
 | 단위 테스트 | 통과 | 2026-07-26 | `npm.cmd run test`: 16개 파일·41개 테스트 |
 | E2E | 실패 | 2026-07-26 | Chromium 시나리오 1건은 1.3초에 통과했으나 runner가 종료되지 않아 180초 timeout, exit 124 |
 | production build | 통과 | 2026-07-26 | `npm.cmd run build`: Next.js static export |
-| 문서 자동화 | 운영 검증 | 2026-07-26 | 수동 승인 발행 [run 30198169508](https://github.com/Yeon-sik/PriceTrace/actions/runs/30198169508) 성공; 독립 배포본 테스트 23건 통과; PriceTrace는 `on-main-push` 정책 적용 |
-| GitHub Pages | 운영 검증 | 2026-07-26 | commit `f227699`, Actions [run 30197236649](https://github.com/Yeon-sik/PriceTrace/actions/runs/30197236649) build·deploy 성공, 배포 URL HTTP 200 |
-| Notion 문서 동기화 | 운영 검증 | 2026-07-26 | commit `218c9a4`, Actions [run 30198169508](https://github.com/Yeon-sik/PriceTrace/actions/runs/30198169508); 두 미러의 원본 링크와 fingerprint 재조회 확인 |
+| 문서 자동화 | 운영 검증 | 2026-07-26 | `main` 병합 자동 발행 [run 30198781222](https://github.com/Yeon-sik/PriceTrace/actions/runs/30198781222) 성공; 독립 배포본 테스트 23건 통과 |
+| GitHub Pages | 운영 검증 | 2026-07-26 | commit `f86ec4b`, Actions [run 30198781229](https://github.com/Yeon-sik/PriceTrace/actions/runs/30198781229) build·deploy 성공 |
+| Notion 문서 동기화 | 운영 검증 | 2026-07-26 | commit `f86ec4b`, Actions [run 30198781222](https://github.com/Yeon-sik/PriceTrace/actions/runs/30198781222); 승인 대기 없는 자동 sync 후 두 미러의 원본 링크와 fingerprint 재조회 확인 |
 | Supabase 실환경 | 미검증 | 2026-07-26 | 스키마·RLS·연결 코드는 존재하나 실제 권한·장애 smoke test 미실행 |
 | Android 실기기 | 미검증 | 2026-07-25 | Capacitor 프로젝트만 존재 |
 
