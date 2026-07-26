@@ -38,11 +38,15 @@ docs/*
 !docs/OFFICIAL_PRODUCT_DISCOVERY.md
 !docs/Project_Intro.md
 !docs/Project_Detail.md
+!docs/PROJECT_DOCS_OPERATIONS.md
 !docs/templates/
 !docs/templates/PROJECT_INTRO_TEMPLATE.md
 !docs/templates/PROJECT_DETAIL_TEMPLATE.md
 !docs/templates/RECEIPT_V2_TEMPLATE.json
 !docs/templates/RECEIPT_IMAGE_ANALYSIS_PROMPT.md
+
+# The public plugin is released from its own repository, not from PriceTrace.
+/standalone/notion-project-docs/
 
 # Local-only development and verification tooling
 e2e/

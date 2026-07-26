@@ -5,34 +5,10 @@ import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
-const INTRO_SECTIONS = [
-  "30초 요약",
-  "문제와 해결",
-  "핵심 기능",
-  "담당 범위",
-  "핵심 사용자 흐름",
-  "핵심 기술적 판단",
-  "검증 현황",
-  "현재 한계",
-  "관련 문서",
-];
-
-const DETAIL_SECTIONS = [
-  "문서 목적과 범위",
-  "문제 맥락과 제약",
-  "사용자와 핵심 흐름",
-  "범위와 구현 현황",
-  "시스템 아키텍처",
-  "도메인 모델과 불변식",
-  "핵심 기술 의사결정",
-  "외부 연동과 실패 경계",
-  "데이터 보호와 보안",
-  "테스트와 검증 전략",
-  "배포·운영·복구",
-  "한계, 기술 부채, 다음 단계",
-  "배운 점과 재설계 방향",
-  "관련 문서",
-];
+import {
+  DEFAULT_CONFIG_PATH,
+  loadProjectDocsConfig,
+} from "./project-docs-config.mjs";
 
 const SECRET_PATTERNS = [
   /\bsk-[A-Za-z0-9_-]{20,}\b/g,
@@ -40,6 +16,7 @@ const SECRET_PATTERNS = [
   /\bgh[pousr]_[A-Za-z0-9]{20,}\b/g,
   /\bAKIA[A-Z0-9]{16}\b/g,
   /\bsecret_[A-Za-z0-9_-]{16,}\b/g,
+  /\bBearer\s+[A-Za-z0-9._~+/-]{20,}=*\b/gi,
 ];
 
 const LOCAL_PATH_PATTERNS = [
@@ -47,51 +24,42 @@ const LOCAL_PATH_PATTERNS = [
   /\/(?:Users|home)\/[^/\s]+/g,
 ];
 
-const PLACEHOLDER_MARKERS = [
-  "[프로젝트명]",
-  "[YYYY",
-  "[현재 문서",
-  "[사용자 유형]",
-  "[핵심 기능]",
-  "[기능]",
-  "[상태]",
-  "[항목]",
-  "[내용]",
-  "[컴포넌트]",
-  "[엔터티]",
-  "[외부 서비스]",
-  "[문제 1]",
-  "[명령 또는 CI]",
-  "[기기/OS]",
-  "{{",
-  "TODO",
-  "TBD",
-  "FIXME",
+const PLACEHOLDER_PATTERNS = [
+  /^#\s+\[[^\]\n]+\]\s*$/gm,
+  /\{\{[^}\n]+\}\}/g,
+  /\[(?:PROJECT NAME|YYYY[^\]\n]*|WRITE[^\]\n]*|INSERT[^\]\n]*|DESCRIBE[^\]\n]*|ADD[^\]\n]*)\]/gi,
+  /\b(?:TODO|TBD|FIXME)\b/g,
 ];
 
 function parseArguments(argv) {
   const options = {
+    configPath: undefined,
     requireTracked: false,
     templates: false,
     files: [],
   };
 
-  for (const argument of argv) {
+  for (let index = 0; index < argv.length; index += 1) {
+    const argument = argv[index];
     if (argument === "--require-tracked") options.requireTracked = true;
     else if (argument === "--templates") options.templates = true;
-    else if (argument.startsWith("--")) throw new Error(`Unknown option: ${argument}`);
-    else options.files.push(argument);
+    else if (argument === "--config") {
+      options.configPath = argv[index + 1];
+      if (!options.configPath) throw new Error("--config requires a path.");
+      index += 1;
+    } else if (argument.startsWith("--")) {
+      throw new Error(`Unknown option: ${argument}`);
+    } else {
+      options.files.push(argument);
+    }
   }
 
-  if (options.files.length === 0) {
-    options.files = options.templates
-      ? [
-          "docs/templates/PROJECT_INTRO_TEMPLATE.md",
-          "docs/templates/PROJECT_DETAIL_TEMPLATE.md",
-        ]
-      : ["docs/Project_Intro.md", "docs/Project_Detail.md"];
+  if (options.templates && options.files.length === 0) {
+    throw new Error("--templates requires at least one template path.");
   }
-
+  if (!options.templates && options.files.length === 0 && !options.configPath) {
+    options.configPath = DEFAULT_CONFIG_PATH;
+  }
   return options;
 }
 
@@ -103,7 +71,7 @@ function findRepositoryRoot(startDirectory) {
       stdio: ["ignore", "pipe", "ignore"],
     }).trim();
   } catch {
-    return startDirectory;
+    return path.resolve(startDirectory);
   }
 }
 
@@ -119,11 +87,11 @@ function extractHeadings(text) {
   }));
 }
 
-function sectionTitleMatches(heading, requiredTitle) {
-  return heading
+function normalizedHeading(value) {
+  return value
     .replace(/^\d+(?:-\d+)?[.)]?\s*/, "")
-    .toLocaleLowerCase()
-    .includes(requiredTitle.toLocaleLowerCase());
+    .trim()
+    .toLocaleLowerCase();
 }
 
 function trackedByGit(repositoryRoot, targetPath) {
@@ -148,7 +116,14 @@ function markdownTarget(rawTarget) {
   return trimmed.split(/\s+["'(]/, 1)[0];
 }
 
-function validateLinks({ filePath, text, repositoryRoot, requireTracked, addIssue }) {
+function validateLinks({
+  addIssue,
+  filePath,
+  repositoryRoot,
+  requireTracked,
+  templates,
+  text,
+}) {
   const linkPattern = /(!?)\[([^\]]*)\]\(([^)\n]+)\)/g;
 
   for (const match of text.matchAll(linkPattern)) {
@@ -160,7 +135,6 @@ function validateLinks({ filePath, text, repositoryRoot, requireTracked, addIssu
     if (isImage && label.length === 0) {
       addIssue("error", filePath, line, "Image alt text must not be empty.");
     }
-
     if (
       target.length === 0 ||
       target.startsWith("#") ||
@@ -168,9 +142,19 @@ function validateLinks({ filePath, text, repositoryRoot, requireTracked, addIssu
     ) {
       continue;
     }
-
     if (/^[A-Za-z]:[\\/]/.test(target) || target.startsWith("/")) {
-      addIssue("error", filePath, line, `Publishable Markdown contains an absolute local path: ${target}`);
+      addIssue("error", filePath, line, `Publishable Markdown contains an absolute path: ${target}`);
+      continue;
+    }
+    if (templates) {
+      if (target.startsWith("../")) {
+        addIssue(
+          "error",
+          filePath,
+          line,
+          "Template links must be relative to the generated docs file, not the template location.",
+        );
+      }
       continue;
     }
 
@@ -185,10 +169,7 @@ function validateLinks({ filePath, text, repositoryRoot, requireTracked, addIssu
     const resolvedTarget = path.resolve(path.dirname(filePath), decodedTarget);
     if (!existsSync(resolvedTarget)) {
       addIssue("error", filePath, line, `Relative link target does not exist: ${target}`);
-      continue;
-    }
-
-    if (requireTracked && !trackedByGit(repositoryRoot, resolvedTarget)) {
+    } else if (requireTracked && !trackedByGit(repositoryRoot, resolvedTarget)) {
       addIssue("error", filePath, line, `Relative link target is not tracked by Git: ${target}`);
     }
   }
@@ -196,10 +177,11 @@ function validateLinks({ filePath, text, repositoryRoot, requireTracked, addIssu
 
 export function validateProjectDocuments(rawOptions = {}) {
   const options = {
+    configPath: rawOptions.configPath,
     requireTracked: Boolean(rawOptions.requireTracked),
     templates: Boolean(rawOptions.templates),
     files: rawOptions.files ?? [],
-    cwd: rawOptions.cwd ?? process.cwd(),
+    cwd: path.resolve(rawOptions.cwd ?? process.cwd()),
   };
   const repositoryRoot = findRepositoryRoot(options.cwd);
   const issues = [];
@@ -212,7 +194,29 @@ export function validateProjectDocuments(rawOptions = {}) {
     });
   };
 
-  for (const inputFile of options.files) {
+  let projectConfig;
+  if (options.configPath) {
+    projectConfig = loadProjectDocsConfig({
+      rootDirectory: options.cwd,
+      configPath: options.configPath,
+    });
+    if (options.requireTracked && !trackedByGit(repositoryRoot, projectConfig.configPath)) {
+      addIssue("error", projectConfig.configPath, 1, "Configuration file is not tracked by Git.");
+    }
+  }
+
+  const configuredByPath = new Map(
+    (projectConfig?.documents ?? []).map((document) => [
+      path.resolve(projectConfig.rootDirectory, document.repositoryPath).toLocaleLowerCase(),
+      document,
+    ]),
+  );
+  const files =
+    options.files.length > 0
+      ? options.files
+      : (projectConfig?.documents ?? []).map((document) => document.repositoryPath);
+
+  for (const inputFile of files) {
     const filePath = path.resolve(options.cwd, inputFile);
     if (!existsSync(filePath)) {
       addIssue("error", filePath, 1, "Document does not exist.");
@@ -222,9 +226,7 @@ export function validateProjectDocuments(rawOptions = {}) {
     const text = readFileSync(filePath, "utf8");
     const lines = text.split(/\r?\n/);
     const headings = extractHeadings(text);
-    const baseName = path.basename(filePath).toLocaleLowerCase();
-    const isIntro = baseName.includes("intro");
-    const isDetail = baseName.includes("detail");
+    const configuredDocument = configuredByPath.get(filePath.toLocaleLowerCase());
 
     if (options.requireTracked && !trackedByGit(repositoryRoot, filePath)) {
       addIssue("error", filePath, 1, "Published document itself is not tracked by Git.");
@@ -256,9 +258,9 @@ export function validateProjectDocuments(rawOptions = {}) {
       }
     }
 
-    const requiredSections = isIntro ? INTRO_SECTIONS : isDetail ? DETAIL_SECTIONS : [];
-    for (const requiredSection of requiredSections) {
-      if (!headings.some((heading) => sectionTitleMatches(heading.title, requiredSection))) {
+    for (const requiredSection of configuredDocument?.requiredSections ?? []) {
+      const normalizedRequired = normalizedHeading(requiredSection);
+      if (!headings.some((heading) => normalizedHeading(heading.title).includes(normalizedRequired))) {
         addIssue("error", filePath, 1, `Required section is missing: ${requiredSection}`);
       }
     }
@@ -278,50 +280,27 @@ export function validateProjectDocuments(rawOptions = {}) {
         );
       }
     }
-
     if (!options.templates) {
-      if (isIntro && !/^\|\s*문서 기준\s*\|/m.test(text)) {
-        addIssue("error", filePath, 1, "Project Intro must state one explicit document source boundary.");
-      }
-      if (isDetail && !/^\|\s*문서 진실 원천\s*\|/m.test(text)) {
-        addIssue("error", filePath, 1, "Project Detail must identify the canonical document source.");
-      }
-      if (
-        isDetail &&
-        !/^\|\s*기능\s*\|\s*구현 상태\s*\|\s*검증 수준\s*\|/m.test(text)
-      ) {
-        addIssue(
-          "error",
-          filePath,
-          1,
-          "Project Detail must separate implementation status from verification level.",
-        );
-      }
-      for (const marker of PLACEHOLDER_MARKERS) {
-        const index = text.indexOf(marker);
-        if (index >= 0) {
-          addIssue("error", filePath, sourceLine(text, index), `Unresolved placeholder marker: ${marker}`);
+      for (const placeholderPattern of PLACEHOLDER_PATTERNS) {
+        for (const match of text.matchAll(placeholderPattern)) {
+          addIssue(
+            "error",
+            filePath,
+            sourceLine(text, match.index),
+            `Unresolved placeholder marker: ${match[0]}`,
+          );
         }
       }
-      validateLinks({
-        filePath,
-        text,
-        repositoryRoot,
-        requireTracked: options.requireTracked,
-        addIssue,
-      });
-    } else {
-      const outputRelativeLink = /\]\(\.\.\/(?:Project_(?:Intro|Detail)|ARCHITECTURE|OPERATIONS_RUNBOOK|FUTURE_BACKLOG)/;
-      const match = outputRelativeLink.exec(text);
-      if (match) {
-        addIssue(
-          "error",
-          filePath,
-          sourceLine(text, match.index),
-          "Template links must be relative to the generated docs/ file, not docs/templates/.",
-        );
-      }
     }
+
+    validateLinks({
+      addIssue,
+      filePath,
+      repositoryRoot,
+      requireTracked: options.requireTracked,
+      templates: options.templates,
+      text,
+    });
   }
 
   return {
@@ -334,10 +313,8 @@ export function validateProjectDocuments(rawOptions = {}) {
 
 function printResult(result) {
   for (const issue of result.issues) {
-    const label = issue.severity.toUpperCase();
-    console.error(`${label} ${issue.file}:${issue.line} ${issue.message}`);
+    console.error(`${issue.severity.toUpperCase()} ${issue.file}:${issue.line} ${issue.message}`);
   }
-
   const checked = result.errorCount === 0 ? "passed" : "failed";
   console.log(
     `Project document validation ${checked}: ${result.errorCount} error(s), ${result.warningCount} warning(s).`,
