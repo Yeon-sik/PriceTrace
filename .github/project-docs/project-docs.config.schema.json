@@ -16,6 +16,11 @@
       "type": "string",
       "minLength": 1
     },
+    "publicationMode": {
+      "type": "string",
+      "enum": ["manual", "on-main-push"],
+      "default": "manual"
+    },
     "documents": {
       "type": "array",
       "minItems": 1,

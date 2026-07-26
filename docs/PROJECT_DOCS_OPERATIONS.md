@@ -14,7 +14,7 @@ PriceTrace 저장소
   ├─ docs/Project_Intro.md: intro 원본
   ├─ docs/Project_Detail.md: detail 원본
   ├─ .github/project-docs/: 저장소에 고정한 검증·발행 런타임
-  └─ .github/workflows/project-docs-notion.yml: 검증과 승인형 발행
+  └─ .github/workflows/project-docs-notion.yml: 검증과 설정 기반 발행
 ```
 
 플러그인은 Codex가 문서를 유지보수하는 작업 방식이고, 저장소의
@@ -47,8 +47,9 @@ PriceTrace의 대응표 형식은 다음과 같다.
 {"intro":"<Project Intro page ID>","detail":"<Project Detail page ID>"}
 ```
 
-두 페이지를 integration에 공유하고, Environment에는 required reviewer와
-`main` 브랜치 제한을 설정한다. 페이지는 문서 미러 전용으로 사용하며
+두 페이지를 integration에 공유하고, Environment에는 `main` 브랜치
+제한을 설정한다. PriceTrace는 `publicationMode=on-main-push`이므로 required
+reviewer를 두지 않는다. 페이지는 문서 미러 전용으로 사용하며
 수동 메모, 하위 페이지, 데이터베이스를 섞지 않는다.
 
 기존 Secret은 다음과 같이 마이그레이션한다.
@@ -63,21 +64,21 @@ PriceTrace의 대응표 형식은 다음과 같다.
 
 ## 검증과 발행
 
-- Pull request와 push에서는 문서 검증과 Notion 렌더링 dry-run만 수행한다.
-- Notion 쓰기는 Actions의 `Validate and publish project docs`를 수동 실행한
-  경우에만 가능하다.
-- 먼저 `operation=validate`로 실행 결과를 확인한다.
-- 발행할 때는 `main` 브랜치에서 `operation=publish`,
-  `confirmation=PUBLISH`를 입력한다.
-- `notion-production` Environment 승인을 통과하면 모든 대상 페이지를
-  먼저 조회한다. 하나라도 접근할 수 없거나 완전하게 읽을 수 없으면
-  아무 페이지도 수정하지 않는다.
+- Pull request와 `main` 이외의 push에서는 문서 검증과 Notion 렌더링
+  dry-run만 수행한다.
+- `main`에 설정·런타임·대상 문서 변경이 병합되면 검증 뒤 Notion
+  발행을 자동 실행한다.
+- 수동 복구가 필요하면 `main`에서 `operation=publish`,
+  `confirmation=PUBLISH`로 다시 실행할 수 있다.
+- 자동·수동 발행 모두 모든 대상 페이지를 먼저 조회한다. 하나라도
+  접근할 수 없거나 완전하게 읽을 수 없으면 아무 페이지도 수정하지
+  않는다.
 - 사전 점검을 통과하면 각 전용 페이지 본문을 해당 Markdown 렌더링으로
   교체한다. 이미 같은 내용인 페이지는 건너뛴다.
 
-`main` 병합이나 push만으로 Notion을 자동 수정하지 않는다. 이는 코드
-병합과 외부 문서 발행 승인을 분리해, 사용자가 변경 내용을 이해하고
-승인한 뒤 운영 페이지를 갱신하기 위한 기본 정책이다.
+PriceTrace는 문서 변경의 pull request 검토와 `main` 병합을 발행 승인
+경계로 사용한다. 공개 플러그인의 기본값은 `manual`이며, 다른 저장소가
+동일한 자동 동작을 원할 때만 `publicationMode=on-main-push`를 선택한다.
 
 ## 실패와 복구
 

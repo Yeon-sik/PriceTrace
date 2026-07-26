@@ -39,6 +39,8 @@ jobs:
   validate:
     runs-on: ubuntu-24.04
     timeout-minutes: 5
+    outputs:
+      publication_mode: ${{ steps.publication-mode.outputs.mode }}
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -73,6 +75,15 @@ jobs:
           --config project-docs.config.json
           --require-tracked
 
+      - name: Resolve publication mode
+        id: publication-mode
+        run: >-
+          node -e
+          "const fs = require('node:fs');
+          const config = JSON.parse(fs.readFileSync('project-docs.config.json', 'utf8'));
+          fs.appendFileSync(process.env.GITHUB_OUTPUT,
+          'mode=' + (config.publicationMode || 'manual') + '\n');"
+
       - name: Render a publication dry run
         run: >-
           node .github/project-docs/sync-project-docs-to-notion.mjs
@@ -81,9 +92,12 @@ jobs:
   publish:
     needs: validate
     if: >-
-      github.event_name == 'workflow_dispatch' &&
+      (github.event_name == 'push' &&
+      github.ref == 'refs/heads/main' &&
+      needs.validate.outputs.publication_mode == 'on-main-push') ||
+      (github.event_name == 'workflow_dispatch' &&
       inputs.operation == 'publish' &&
-      inputs.confirmation == 'PUBLISH'
+      inputs.confirmation == 'PUBLISH')
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     environment: "notion-production"
