@@ -5,9 +5,9 @@
 | 항목 | 내용 |
 | --- | --- |
 | 문서 상태 | Active |
-| 적용 범위 | 제품 코드 `5d6b8e1`; 현재 작업 트리의 문서·Notion 자동화 변경 |
-| 최종 갱신 | 2026-07-26T00:05:02+09:00 |
-| 최종 검증 기준 | `5d6b8e1` + 문서 전용 작업 트리의 로컬 명령 결과 |
+| 적용 범위 | 제품 코드 `5d6b8e1`; 운영 자동화 기준 `f227699` |
+| 최종 갱신 | 2026-07-26T18:57:30+09:00 |
+| 최종 검증 기준 | `f227699`; GitHub Actions·GitHub Pages·Notion 미러의 2026-07-26 실행 근거 |
 | 문서 진실 원천 | Git 저장소의 `docs/Project_Detail.md`; Notion은 읽기 전용 미러 |
 | 담당자 | Yeon-sik (개인 프로젝트) |
 
@@ -21,7 +21,7 @@
 - 상품 검색·필터·정렬, 마트 탐색, 관측가 이력, 장바구니
 - 표준 상품·판매처 매핑과 관리자용 시장 관측가 입력 경계
 - 정산 도메인·백업·원격 동기화 코드의 현재 연결 상태
-- 테스트, 정적 배포, 데이터 보호, 원격 운영의 미검증 위험
+- 테스트, 정적 배포, 데이터 보호, 원격 운영의 확인된 근거와 미검증 위험
 
 ### 제외
 
@@ -87,7 +87,7 @@ Demo JSON 또는 local private receipt server
 
 | 기능 | 구현 상태 | 검증 수준 | 환경·기준 | 확인된 근거 | 남은 위험 |
 | --- | --- | --- | --- | --- | --- |
-| 공개 관측 JSON 로드와 상품 탐색 | 구현 완료 | 저장소 검증 | `5d6b8e1` + 2026-07-26 로컬 | `PublicObservationRepository`, projection test, 공개 관측 검사, build | 원격 Pages 최신 배포 미검증 |
+| 공개 관측 JSON 로드와 상품 탐색 | 구현 완료 | 저장소 검증 | `5d6b8e1` + 2026-07-26 로컬 | `PublicObservationRepository`, projection test, 공개 관측 검사, build | 배포 UI의 기능별 브라우저 smoke test 미실행 |
 | 검색·필터·정렬·마트 탐색 | 구현 완료 | 저장소 검증 | `5d6b8e1` + 2026-07-26 로컬 | `ProductBrowser`, `MarketBrowser`, `PriceTrendModal`, unit/build | 실제 사용성과 모바일 흐름 미검증 |
 | 장바구니와 예상 합계 | 구현 완료 | 저장소 검증 | `5d6b8e1` + 2026-07-26 로컬 | `cart.store`, repository test, Playwright 시나리오 1건 성공 | E2E runner 종료 실패, 다기기 동기화 없음 |
 | 수령자·배분·정산·백업 | 부분 구현 | 저장소 검증 | 2026-07-26 로컬 전용 테스트 포함 | settlement domain/store와 불변식 test | 현재 주 화면 미연결, clean clone 재현성 부족 |
@@ -95,9 +95,8 @@ Demo JSON 또는 local private receipt server
 | 표준 카탈로그·상품 매핑 | 부분 구현 | 저장소 검증 | `5d6b8e1` + 2026-07-26 로컬 | 마이그레이션, 관리자 UI, mapping domain | 실제 관리자 권한·검토 운영 미검증 |
 | Supabase 인증·원격 저장 | 구현 완료 | 저장소 검증 | `5d6b8e1` | browser repository, Auth UI, RLS migration | 실제 프로젝트 연결·권한·장애 UX 미검증 |
 | private 영수증 개발 모드 | 구현 완료 | 저장소 검증 | `5d6b8e1` | `dev-private.ts`, local receipt server, response schema | 이번 검증에서 private 서버 미실행 |
-| GitHub Pages 정적 배포 | 구현 완료 | 저장소 검증 | `5d6b8e1` + 2026-07-26 local build | `deploy-pages.yml`, static export | 원격 Pages 최신 배포 미검증 |
-| 개선된 Notion 문서 게시 | 구현 완료 | 저장소 검증 | 현재 문서 전용 작업 트리 | validator, publisher test 15건, dry-run | 개선 workflow의 첫 GitHub Actions 실행 미검증 |
-| 기존 Notion 두 페이지 반영 | 구현 완료 | 사용자 확인 | 2026-07-25 기존 workflow | Intro·Detail 정상 반영에 대한 사용자 확인 | 개선 workflow와 동일한 실행 증거가 아님 |
+| GitHub Pages 정적 배포 | 구현 완료 | 실환경 검증 | `f227699` + 2026-07-26 GitHub Pages | Actions [run 30197236649](https://github.com/Yeon-sik/PriceTrace/actions/runs/30197236649) build·deploy 성공, 배포 URL HTTP 200 | 배포 UI의 기능별 브라우저·모바일 smoke test 미실행 |
+| 승인형 Notion 문서 게시 | 구현 완료 | 실환경 검증 | `a5abec7` + 2026-07-26 GitHub Actions/Notion | [run 30196804832](https://github.com/Yeon-sik/PriceTrace/actions/runs/30196804832), Intro·Detail sync 성공, 두 미러의 원본 링크·fingerprint 재조회 | 정기 드리프트 감지는 미구현 |
 | OCR 자동 추출 | 계획 | 미검증 | 해당 없음 | 구현 근거 없음 | 제공자·정확도·검토 UX 미확정 |
 
 ## 5. 시스템 아키텍처
@@ -205,8 +204,8 @@ UI는 외부 JSON과 localStorage를 직접 파싱하지 않습니다. 입력은
 | Supabase Auth | 사용자·관리자 식별 | publishable key만 브라우저에 노출 | 인증되지 않으면 관리자 UI를 노출하지 않음 | 실환경 정책 미검증 | 미검증 |
 | Supabase PostgreSQL/RLS | 카탈로그, 관측, 사용자 상태 | service role은 서버 전용 | 로컬 상태를 무조건 덮어쓰지 않음 | 운영 권한·장애 UX 미검증 | 미검증 |
 | Edge Function | 공식 상품 후보 검색 | 함수 Secret | 검색 결과를 확정 상품으로 저장하지 않음 | 제공자 응답·제한 미검증 | 미검증 |
-| GitHub Pages | 정적 UI 배포 | 비밀값 없음 | 원격 기능 장애와 UI 가용성을 분리 | workflow는 존재, 배포 상태 미확인 | 미검증 |
-| Notion API | Intro/Detail 읽기 전용 미러 | GitHub Actions Secret | 두 페이지 사전 GET, 부분 실패 집계, 원본 Git 링크 유지 | 요청 30초 timeout, 429·5xx·network 최대 4회 | 기존 workflow는 2026-07-25 사용자 확인; 개선 workflow는 미검증 |
+| GitHub Pages | 정적 UI 배포 | 비밀값 없음 | 원격 기능 장애와 UI 가용성을 분리 | main build·deploy 후 URL HTTP 확인 | 2026-07-26 `f227699`, run `30197236649`, HTTP 200 |
+| Notion API | Intro/Detail 읽기 전용 미러 | `notion-production` Environment Secret | 두 페이지 사전 GET, 부분 실패 집계, 원본 Git 링크 유지 | 요청 30초 timeout, 429·5xx·network 최대 4회 | 2026-07-26 `a5abec7`, run `30196804832`, 두 페이지 재조회 |
 
 ## 9. 데이터 보호와 보안
 
@@ -234,10 +233,11 @@ UI는 외부 JSON과 localStorage를 직접 파싱하지 않습니다. 입력은
 | 단위/저장소 테스트 | Vitest | 영수증, 공개 projection, 상품 탐색, 카탈로그, 장바구니, 정산 불변식 | 로컬 16개 파일·41개 테스트 통과; 이 중 일부 테스트·설정은 Git ignored |
 | E2E | Playwright | 공개 관측 상품 탐색 → 장바구니 → 새로고침 복원 | Chromium 시나리오 성공, runner 미종료로 명령 timeout |
 | production build | Next.js | static export | 통과 |
-| 문서 자동화 | Node test/validator | 템플릿, 링크, Notion 사전검증·재시도·멱등성 | validator 0 errors/0 warnings, publisher test 15건 통과 |
-| 운영 검증 | Supabase/GitHub Pages | 권한·비밀값·원격 배포 | 미검증 |
+| 문서 자동화 | Node test/validator | 템플릿, 링크, Notion 사전검증·재시도·멱등성 | validator 0 errors/0 warnings, 독립 배포본 테스트 22건 통과 |
+| GitHub Pages 운영 | GitHub Actions/HTTP | static export 배포와 URL 가용성 | `f227699` 배포 성공, HTTP 200 |
+| Supabase 운영 | Supabase | 권한·비밀값·원격 장애 흐름 | 미검증 |
 | 기존 문서 동기화 | GitHub Actions/Notion | Intro·Detail 두 페이지 교체 | 2026-07-25 사용자 확인 |
-| 개선 문서 동기화 | GitHub Actions/Notion | 사전검증 뒤 두 페이지 교체와 응답 검증 | 로컬 dry-run만 통과, 원격 미검증 |
+| 승인형 문서 동기화 | GitHub Actions/Notion | 사전검증 뒤 두 페이지 교체와 응답 검증 | `a5abec7`에서 승인·sync·재조회 검증 |
 
 ### 검증 이력
 
@@ -248,7 +248,9 @@ UI는 외부 JSON과 localStorage를 직접 파싱하지 않습니다. 입력은
 | 2026-07-26 | 동일 | `npm.cmd run test` | exit 0, 16 files / 41 tests | 현재 로컬 실행 로그 | 5개 테스트 파일과 일부 설정이 Git ignored |
 | 2026-07-26 | 동일 | `npm.cmd run build` | exit 0, static export | 현재 로컬 실행 로그 | 실제 Pages 배포 |
 | 2026-07-26 | 동일 | private server 미실행 + `npm.cmd run test:e2e` | 시나리오 1건 1.3초 성공 후 runner 미종료, 180초 timeout·exit 124 | 현재 로컬 실행 로그 | clean exit 원인, 모바일 실기기 |
-| 2026-07-26 | 동일 | docs validator 2종 / publisher test / dry-run | 0 errors·0 warnings / 15 tests / 성공 | 현재 로컬 실행 로그 | 개선 workflow의 GitHub Actions·Notion 실환경 |
+| 2026-07-26 | 동일 | docs validator / 독립 배포본 test / dry-run | 0 errors·0 warnings / 22 tests / 성공 | 현재 로컬 실행 로그 | GitHub Actions runner와 Notion 권한 |
+| 2026-07-26 | `a5abec7` | Actions [run 30196804832](https://github.com/Yeon-sik/PriceTrace/actions/runs/30196804832), `publish` + Environment 승인 | Intro 5,511자·Detail 14,814자 sync 성공; 두 페이지의 source commit·fingerprint 재조회 | GitHub Actions 로그와 Notion connector 조회 | 장기 드리프트·Notion UI별 시각 차이 |
+| 2026-07-26 | `f227699` | Actions [run 30197236636](https://github.com/Yeon-sik/PriceTrace/actions/runs/30197236636) / Pages [run 30197236649](https://github.com/Yeon-sik/PriceTrace/actions/runs/30197236649) / HTTP HEAD | 문서 validate 성공, Pages build·deploy 성공, URL HTTP 200, Action 런타임 경고 없음 | GitHub Actions와 배포 URL | 기능별 브라우저·모바일 smoke test |
 
 ## 11. 배포·운영·복구
 
@@ -269,9 +271,10 @@ Project_Intro/Project_Detail 변경
 ```
 
 - `deploy-pages.yml`은 `main` push 또는 수동 실행에서 static export를 배포하도록 구성돼 있습니다.
-- 기존 `sync-project-docs-to-notion.yml`의 자동 반영은 2026-07-25 사용자가 확인했으며, 2026-07-26 작업 트리에서 범용 설정 기반의 `project-docs-notion.yml`로 교체했습니다.
+- 기존 `sync-project-docs-to-notion.yml`의 자동 반영은 2026-07-25 사용자가 확인했으며, 2026-07-26 `a5abec7`에서 범용 설정 기반의 `project-docs-notion.yml`로 교체했습니다.
 - 새 workflow는 `main` push만으로 Notion을 수정하지 않습니다. `publish` 선택, 정확한 `PUBLISH` 입력, `notion-production` Environment 승인, canonical branch 검사를 모두 통과해야 합니다.
-- 현재 저장소 고정 런타임은 로컬 validator·단위 테스트·dry-run 검증 대상입니다. 커밋·push, GitHub Environment와 Secret 설정, 첫 Actions 발행 및 두 페이지 렌더링은 아직 운영 근거가 아닙니다.
+- 첫 승인형 발행은 2026-07-26 Actions [run 30196804832](https://github.com/Yeon-sik/PriceTrace/actions/runs/30196804832)에서 성공했고, Intro·Detail 미러를 별도 조회해 `a5abec7` 원본 링크와 fingerprint를 확인했습니다.
+- GitHub Pages는 `f227699`의 [run 30197236649](https://github.com/Yeon-sik/PriceTrace/actions/runs/30197236649)에서 build·deploy가 성공했고 배포 URL이 HTTP 200으로 응답했습니다.
 - 저장소 Markdown이 진실 원천이고 Notion 본문은 읽기 전용 미러입니다. 두 페이지 쓰기는 트랜잭션이 아니므로, 부분 실패 시 같은 커밋을 재실행해 수렴시킵니다.
 - 구체적인 Secret 마이그레이션과 첫 발행 절차는 `docs/PROJECT_DOCS_OPERATIONS.md`에 기록합니다.
 - 잘못된 정산 백업 import는 schema 검증 전에 기존 상태를 바꾸지 않도록 설계돼 있습니다. 다만 현재 UI에서 복원 흐름은 노출되지 않습니다.
@@ -293,7 +296,6 @@ Project_Intro/Project_Detail 변경
 | --- | --- | --- | --- |
 | P0 | 로컬 권위 문서의 정산 M1 범위와 현재 가격 탐색 제품 범위가 충돌 | 완료 기준과 우선순위 판정이 일관되지 않음 | `AGENTS.md`·Acceptance를 갱신할지 정산 UI를 복구할지 명시적으로 결정 |
 | P1 | E2E 시나리오 뒤 runner가 종료되지 않음 | CI gate가 성공 시에도 timeout될 수 있음 | Windows process tree와 Playwright webServer 종료 경로 재현·수정 |
-| P1 | 개선 Notion workflow 실환경 미검증 | 새 read capability·페이지 권한 문제를 아직 모름 | bundle을 함께 커밋한 뒤 main Actions 실행과 두 미러 렌더링 확인 |
 | P1 | Supabase 권한·장애 흐름 미검증 | 원격 관리자·동기화 신뢰성 불확실 | 테스트 프로젝트에서 RLS·관리자·실패 UX smoke test |
 | P1 | 상품 코드가 없는 ProductGroup이 정규화 이름에 의존 | 이름 변경·충돌 시 그룹 ID가 불안정 | 원본 관측 ID와 별도의 안정적 group ID 도입 |
 | P1 | 상품 규격·판매처 관측 데이터 부족 | 단위 가격 비교 범위 제한 | 검증된 규격과 관측 근거 축적 |

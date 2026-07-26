@@ -7,10 +7,10 @@
 | 개발 기간 | 2026-07 ~ 진행 중 |
 | 프로젝트 형태 | 개인 프로젝트 |
 | 담당 범위 | 제품 범위, 도메인 모델, 프론트엔드, 데이터 계층, 테스트, 배포 자동화 |
-| 현재 상태 | 상품 탐색·장바구니 로컬 MVP 구현 · 원격 운영 환경 미검증 |
-| 문서 기준 | 제품 코드 `5d6b8e1`; 게시 커밋은 Notion 미러 상단의 원본 링크로 추적 |
+| 현재 상태 | 상품 탐색·장바구니 로컬 MVP 구현 · GitHub Pages와 Notion 문서 발행 운영 검증 |
+| 문서 기준 | 제품 코드 `5d6b8e1`; 운영 검증 기준 `f227699`; 게시 커밋은 Notion 미러 상단에서 추적 |
 | 주요 기술 | Next.js 15, React 19, TypeScript, Zod, Zustand, Supabase |
-| Demo | [GitHub Pages URL](https://yeon-sik.github.io/PriceTrace/) — 현재 응답은 별도 확인 필요 |
+| Demo | [GitHub Pages URL](https://yeon-sik.github.io/PriceTrace/) — 2026-07-26 HTTP 200 확인 |
 | Repository | [GitHub](https://github.com/Yeon-sik/PriceTrace) |
 | 상세 문서 | [Project_Detail.md](./Project_Detail.md) |
 
@@ -43,8 +43,9 @@
 | 카탈로그·관리자 | 표준 상품·판매처 매핑·시장 관측가 입력 경계 제공 | Supabase 연결 코드와 마이그레이션 존재, 실환경 미검증 |
 | 공동 정산 | 배분·상태·백업 도메인과 store를 보존 | 단위 테스트 통과, 현재 공개 주 화면에는 연결되지 않음 |
 
-수치가 없는 제품 성과나 실제 운영 성공은 주장하지 않습니다. 현재 확인된 결과는
-소스, 자동 테스트, 로컬 production build 기준입니다.
+수치가 없는 제품 성과나 사용자 채택은 주장하지 않습니다. 현재 확인된 결과는
+소스·자동 테스트·로컬 production build와 GitHub Pages 배포, 승인형 Notion
+문서 발행의 명시된 실행 근거까지입니다.
 
 ## 4. 담당 범위와 기여
 
@@ -88,9 +89,10 @@
 | 단위 테스트 | 통과 | 2026-07-26 | `npm.cmd run test`: 16개 파일·41개 테스트 |
 | E2E | 실패 | 2026-07-26 | Chromium 시나리오 1건은 1.3초에 통과했으나 runner가 종료되지 않아 180초 timeout, exit 124 |
 | production build | 통과 | 2026-07-26 | `npm.cmd run build`: Next.js static export |
-| 문서 자동화 | 통과 | 2026-07-26 | 문서·템플릿 validator 0 errors/0 warnings, publisher 단위 테스트 15건, dry-run 통과 |
-| GitHub Pages·Supabase 실환경 | 미검증 | 2026-07-25 | 워크플로·코드는 존재하나 실제 배포/권한 smoke test 미실행 |
-| Notion 문서 동기화 | 사용자 확인 | 2026-07-25 | 기존 workflow의 두 페이지 반영 확인; 현재 개선 workflow의 원격 실행은 미검증 |
+| 문서 자동화 | 운영 검증 | 2026-07-26 | Actions [run 30196804832](https://github.com/Yeon-sik/PriceTrace/actions/runs/30196804832): 승인 후 Intro·Detail 동기화 성공; 독립 배포본 테스트 22건 통과 |
+| GitHub Pages | 운영 검증 | 2026-07-26 | commit `f227699`, Actions [run 30197236649](https://github.com/Yeon-sik/PriceTrace/actions/runs/30197236649) build·deploy 성공, 배포 URL HTTP 200 |
+| Notion 문서 동기화 | 운영 검증 | 2026-07-26 | commit `a5abec7`, Actions [run 30196804832](https://github.com/Yeon-sik/PriceTrace/actions/runs/30196804832); 두 미러의 원본 링크와 fingerprint 재조회 확인 |
+| Supabase 실환경 | 미검증 | 2026-07-26 | 스키마·RLS·연결 코드는 존재하나 실제 권한·장애 smoke test 미실행 |
 | Android 실기기 | 미검증 | 2026-07-25 | Capacitor 프로젝트만 존재 |
 
 ## 8. 현재 한계와 다음 단계
