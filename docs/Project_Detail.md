@@ -260,16 +260,20 @@ UI는 외부 JSON과 localStorage를 직접 파싱하지 않습니다. 입력은
   → GitHub Pages
 
 Project_Intro/Project_Detail 변경
-  → PR/main 문서·템플릿·publisher 검증
-  → main에서 Notion 두 페이지 GET preflight
+  → PR/push 문서 검증과 Notion 렌더링 dry-run
+  → main에서 수동 publish 요청 + PUBLISH 확인
+  → notion-production Environment 승인
+  → Notion 두 페이지 GET preflight
   → 서로 다른 두 페이지 replace_content
   → 응답 ID·완전성 검증과 Actions summary
 ```
 
 - `deploy-pages.yml`은 `main` push 또는 수동 실행에서 static export를 배포하도록 구성돼 있습니다.
-- 기존 `sync-project-docs-to-notion.yml`의 Secret 기반 Intro·Detail 반영은 2026-07-25 사용자가 확인했습니다.
-- 현재 개선 workflow는 로컬 validator·단위 테스트·dry-run만 통과했습니다. 같은 Skill bundle을 커밋·push한 뒤 첫 GitHub Actions 실행과 두 페이지 렌더링을 별도로 확인해야 합니다.
+- 기존 `sync-project-docs-to-notion.yml`의 자동 반영은 2026-07-25 사용자가 확인했으며, 2026-07-26 작업 트리에서 범용 설정 기반의 `project-docs-notion.yml`로 교체했습니다.
+- 새 workflow는 `main` push만으로 Notion을 수정하지 않습니다. `publish` 선택, 정확한 `PUBLISH` 입력, `notion-production` Environment 승인, canonical branch 검사를 모두 통과해야 합니다.
+- 현재 저장소 고정 런타임은 로컬 validator·단위 테스트·dry-run 검증 대상입니다. 커밋·push, GitHub Environment와 Secret 설정, 첫 Actions 발행 및 두 페이지 렌더링은 아직 운영 근거가 아닙니다.
 - 저장소 Markdown이 진실 원천이고 Notion 본문은 읽기 전용 미러입니다. 두 페이지 쓰기는 트랜잭션이 아니므로, 부분 실패 시 같은 커밋을 재실행해 수렴시킵니다.
+- 구체적인 Secret 마이그레이션과 첫 발행 절차는 `docs/PROJECT_DOCS_OPERATIONS.md`에 기록합니다.
 - 잘못된 정산 백업 import는 schema 검증 전에 기존 상태를 바꾸지 않도록 설계돼 있습니다. 다만 현재 UI에서 복원 흐름은 노출되지 않습니다.
 - 원격 데이터 복구는 Supabase Dashboard backup 확인이 런북에 기록돼 있으나, 복구 리허설은 미실행입니다.
 

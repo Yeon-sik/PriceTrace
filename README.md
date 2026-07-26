@@ -120,5 +120,8 @@ DB, 로그인, OCR, 지도, 실시간 가격 API는 현재 범위가 아니다.
 - `docs/ARCHITECTURE.md`: 구조와 기술 선택
 - `docs/DOMAIN_MODEL.md`: 도메인 개념과 불변식
 - `docs/DATA_POLICY.md`: 실제 데이터와 공개 데이터 분리
+- `docs/Project_Intro.md`: 포트폴리오용 프로젝트 소개 원본
+- `docs/Project_Detail.md`: 포트폴리오용 기술 상세 원본
+- `docs/PROJECT_DOCS_OPERATIONS.md`: Git Markdown 검증과 승인형 Notion 발행 절차
 - `CODEX_START_PROMPT.md`: Codex에 바로 전달할 구현 명령
 - `CODEX_REVIEW_PROMPT.md`: 구현 후 리뷰 명령

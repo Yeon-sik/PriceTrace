@@ -5,6 +5,11 @@ import { appendFileSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
+import {
+  DEFAULT_CONFIG_PATH,
+  loadProjectDocsConfig,
+} from "./project-docs-config.mjs";
+
 const NOTION_API_VERSION = "2026-03-11";
 const API_BASE_URL = "https://api.notion.com";
 const MAX_ATTEMPTS = 4;
@@ -82,34 +87,60 @@ function cleanPageId(rawPageId, label) {
   return pageId;
 }
 
-export function buildDocumentConfiguration(environment = process.env, rootDirectory = process.cwd()) {
-  const apiKey = environment.NOTION_API_KEY?.trim();
-  if (!apiKey) throw new Error("NOTION_API_KEY GitHub Secret is required.");
+function pageIdsFromEnvironment(environment, documents) {
+  const serialized = environment.NOTION_PAGE_IDS_JSON?.trim();
+  if (!serialized) {
+    throw new Error(
+      'NOTION_PAGE_IDS_JSON GitHub Secret is required, for example {"overview":"<page-id>"}.',
+    );
+  }
 
-  const introPageId = cleanPageId(environment.NOTION_INTRO_PAGE_ID || environment.NOTION_PAGE_ID, "Project Intro");
-  if (!environment.NOTION_INTRO_PAGE_ID && environment.NOTION_PAGE_ID) {
-    console.warn("Using legacy NOTION_PAGE_ID. Migrate it to NOTION_INTRO_PAGE_ID.");
+  let pageIds;
+  try {
+    pageIds = JSON.parse(serialized);
+  } catch (error) {
+    const reason = error instanceof Error ? error.message : String(error);
+    throw new Error(`NOTION_PAGE_IDS_JSON is not valid JSON: ${reason}`);
   }
-  const detailPageId = cleanPageId(environment.NOTION_DETAIL_PAGE_ID, "Project Detail");
-  if (normalizedPageId(introPageId) === normalizedPageId(detailPageId)) {
-    throw new Error("Project Intro and Project Detail must use different Notion page IDs.");
+  if (!pageIds || typeof pageIds !== "object" || Array.isArray(pageIds)) {
+    throw new Error("NOTION_PAGE_IDS_JSON must be a JSON object keyed by document key.");
   }
-  const documents = [
-    {
-      key: "intro",
-      label: "Project Intro",
-      file: path.resolve(rootDirectory, "docs/Project_Intro.md"),
-      repositoryPath: "docs/Project_Intro.md",
-      pageId: introPageId,
-    },
-    {
-      key: "detail",
-      label: "Project Detail",
-      file: path.resolve(rootDirectory, "docs/Project_Detail.md"),
-      repositoryPath: "docs/Project_Detail.md",
-      pageId: detailPageId,
-    },
-  ];
+
+  const knownKeys = new Set(documents.map((document) => document.key));
+  const unknownKeys = Object.keys(pageIds).filter((key) => !knownKeys.has(key));
+  if (unknownKeys.length > 0) {
+    throw new Error(`NOTION_PAGE_IDS_JSON contains unknown document key(s): ${unknownKeys.join(", ")}.`);
+  }
+
+  const normalizedIds = new Set();
+  return new Map(
+    documents.map((document) => {
+      const pageId = cleanPageId(pageIds[document.key], document.label);
+      const normalizedId = normalizedPageId(pageId);
+      if (normalizedIds.has(normalizedId)) {
+        throw new Error(`Notion page IDs must be unique; duplicate found for ${document.label}.`);
+      }
+      normalizedIds.add(normalizedId);
+      return [document.key, pageId];
+    }),
+  );
+}
+
+export function buildDocumentConfiguration(
+  environment = process.env,
+  rootDirectory = process.cwd(),
+  configPath = DEFAULT_CONFIG_PATH,
+) {
+  const apiKey = (environment.NOTION_TOKEN || environment.NOTION_API_KEY)?.trim();
+  if (!apiKey) throw new Error("NOTION_TOKEN GitHub Secret is required.");
+
+  const projectConfig = loadProjectDocsConfig({ rootDirectory, configPath });
+  const pageIds = pageIdsFromEnvironment(environment, projectConfig.documents);
+  const documents = projectConfig.documents.map((document) => ({
+    ...document,
+    file: path.resolve(projectConfig.rootDirectory, document.repositoryPath),
+    pageId: pageIds.get(document.key),
+  }));
 
   for (const document of documents) {
     readFileSync(document.file, "utf8");
@@ -118,8 +149,10 @@ export function buildDocumentConfiguration(environment = process.env, rootDirect
   return {
     apiKey,
     apiBaseUrl: API_BASE_URL,
+    canonicalBranch: projectConfig.canonicalBranch,
+    configPath: projectConfig.configPath,
     documents,
-    rootDirectory: path.resolve(rootDirectory),
+    rootDirectory: projectConfig.rootDirectory,
     repository: environment.GITHUB_REPOSITORY?.trim() || "",
     sourceSha: environment.GITHUB_SHA?.trim() || "",
     serverUrl: (environment.GITHUB_SERVER_URL || "https://github.com").replace(/\/+$/, ""),
@@ -351,9 +384,10 @@ function writeSummary(configuration, results, failures) {
 export async function syncProjectDocuments({
   environment = process.env,
   rootDirectory = process.cwd(),
+  configPath = DEFAULT_CONFIG_PATH,
   dryRun = false,
 } = {}) {
-  const configuration = buildDocumentConfiguration(environment, rootDirectory);
+  const configuration = buildDocumentConfiguration(environment, rootDirectory, configPath);
   const renderedDocuments = configuration.documents.map((document) => ({
     document,
     markdown: renderNotionMarkdown(document, configuration.documents, configuration),
@@ -447,27 +481,58 @@ export async function syncProjectDocuments({
 const isDirectExecution =
   process.argv[1] && fileURLToPath(import.meta.url) === path.resolve(process.argv[1]);
 
+function parseCliArguments(argv) {
+  const options = { apply: false, configPath: DEFAULT_CONFIG_PATH };
+  for (let index = 0; index < argv.length; index += 1) {
+    const argument = argv[index];
+    if (argument === "--apply") options.apply = true;
+    else if (argument === "--config") {
+      options.configPath = argv[index + 1];
+      if (!options.configPath) throw new Error("--config requires a path.");
+      index += 1;
+    } else {
+      throw new Error(`Unknown option: ${argument}`);
+    }
+  }
+  return options;
+}
+
 if (isDirectExecution) {
-  const apply = process.argv.includes("--apply");
-  const dryRun = !apply;
-  if (
-    apply &&
-    (process.env.GITHUB_ACTIONS !== "true" || process.env.GITHUB_REF !== "refs/heads/main")
-  ) {
-    console.error("--apply is allowed only in GitHub Actions on refs/heads/main.");
-    process.exitCode = 1;
-  } else {
+  try {
+    const { apply, configPath } = parseCliArguments(process.argv.slice(2));
+    const projectConfig = loadProjectDocsConfig({
+      rootDirectory: process.cwd(),
+      configPath,
+    });
+    const expectedRef = `refs/heads/${projectConfig.canonicalBranch}`;
+    if (
+      apply &&
+      (process.env.GITHUB_ACTIONS !== "true" ||
+        process.env.GITHUB_REF !== expectedRef ||
+        process.env.PROJECT_DOCS_PUBLISH_APPROVED !== "true")
+    ) {
+      throw new Error(
+        `--apply requires GitHub Actions on ${expectedRef} with PROJECT_DOCS_PUBLISH_APPROVED=true.`,
+      );
+    }
+
+    const dryRun = !apply;
+    const fakePageIds = Object.fromEntries(
+      projectConfig.documents.map((document, index) => [
+        document.key,
+        (index + 1).toString(16).padStart(32, "0"),
+      ]),
+    );
     const environment = dryRun
       ? {
           ...process.env,
-          NOTION_API_KEY: process.env.NOTION_API_KEY || "dry-run",
-          NOTION_INTRO_PAGE_ID:
-            process.env.NOTION_INTRO_PAGE_ID || "11111111111111111111111111111111",
-          NOTION_DETAIL_PAGE_ID:
-            process.env.NOTION_DETAIL_PAGE_ID || "22222222222222222222222222222222",
+          NOTION_TOKEN: process.env.NOTION_TOKEN || "dry-run",
+          NOTION_PAGE_IDS_JSON:
+            process.env.NOTION_PAGE_IDS_JSON || JSON.stringify(fakePageIds),
         }
       : process.env;
-    syncProjectDocuments({ environment, dryRun })
+
+    syncProjectDocuments({ environment, dryRun, configPath })
       .then((result) => {
         for (const document of result.documents) {
           console.log(
@@ -479,5 +544,8 @@ if (isDirectExecution) {
         console.error(error instanceof Error ? error.message : String(error));
         process.exitCode = 1;
       });
+  } catch (error) {
+    console.error(error instanceof Error ? error.message : String(error));
+    process.exitCode = 1;
   }
 }
