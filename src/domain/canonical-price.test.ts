@@ -18,6 +18,12 @@ describe("market price normalization", () => {
     expect(normalizeMarketPrice({ sellerName: "A", listedPriceKrw: 7_000, shippingFeeKrw: 1_000, minimumOrderQuantity: 1, observedAt: "2026-07-23T00:00:00.000Z", verificationStatus: "verified" }, specification)).toMatchObject({ effectivePriceKrw: 8_000, pricePerReferenceUnitKrw: 1_000, referenceLabel: "100g당" });
   });
 
+  it("uses the selected 10g or 1kg reference unit", () => {
+    const observation = { sellerName: "A", listedPriceKrw: 8_000, shippingFeeKrw: 0, minimumOrderQuantity: 1, observedAt: "2026-07-23T00:00:00.000Z", verificationStatus: "verified" as const };
+    expect(normalizeMarketPrice(observation, { ...specification, referenceUnit: 10 })).toMatchObject({ pricePerReferenceUnitKrw: 100, referenceLabel: "10g당" });
+    expect(normalizeMarketPrice(observation, { ...specification, referenceUnit: 1000 })).toMatchObject({ pricePerReferenceUnitKrw: 10_000, referenceLabel: "1kg당" });
+  });
+
   it("excludes pending and rejected offers from the tracked-seller minimum", () => {
     const lowest = lowestVerifiedMarketPrice([
       { sellerName: "pending", listedPriceKrw: 100, shippingFeeKrw: 0, minimumOrderQuantity: 1, observedAt: "2026-07-23T00:00:00.000Z", verificationStatus: "pending" as const },

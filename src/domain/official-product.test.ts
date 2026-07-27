@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { discoverOfficialProduct, mergeOfficialProductCandidates } from "./official-product";
+import { discoverOfficialProduct, mergeOfficialProductCandidates, resolveStandardProductMapping } from "./official-product";
 
 describe("official product discovery", () => {
   it("matches a verified PX catalog product code", () => {
@@ -33,5 +33,25 @@ describe("official product candidates", () => {
       { sourceProductCode: "P-1", productName: "상품 500ml", storeLabel: "PX A", catalogNamespace: "korean-military-px" },
       { sourceProductCode: "P-1", productName: "상품 1L", storeLabel: "PX B", catalogNamespace: "korean-military-px" },
     ])).toHaveLength(2);
+  });
+});
+
+describe("existing standard product mappings", () => {
+  const candidate = { sourceProductCode: "00123", productName: "상품", storeLabel: "판매처 미상", catalogNamespace: null };
+
+  it("keeps an existing mapping when the saved seller label differs only by whitespace or case", () => {
+    expect(resolveStandardProductMapping(candidate, [{ sourceLabel: " 판매처 미상 ", sourceProductCode: "00123", product: "햇반" }])).toBe("햇반");
+  });
+
+  it("uses a code-only fallback only when the source is unknown and the verified target is unique", () => {
+    expect(resolveStandardProductMapping(candidate, [{ sourceLabel: "PX", sourceProductCode: "00123", product: "햇반" }])).toBe("햇반");
+    expect(resolveStandardProductMapping(candidate, [
+      { sourceLabel: "PX", sourceProductCode: "00123", product: "햇반" },
+      { sourceLabel: "마트", sourceProductCode: "00123", product: "다른 상품" },
+    ])).toBeUndefined();
+  });
+
+  it("does not reuse a seller-owned code from another known seller", () => {
+    expect(resolveStandardProductMapping({ ...candidate, storeLabel: "일반 마트" }, [{ sourceLabel: "PX", sourceProductCode: "00123", product: "햇반" }])).toBeUndefined();
   });
 });

@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { summarizeSellerPrices } from "@/domain/seller-price-insights";
 import { formatKrw } from "@/domain/settlement";
 import { PriceTrendModal } from "./PriceTrendModal";
 import type { StandardProductGroup, StandardProductItem } from "./ProductBrowser";
@@ -8,6 +9,14 @@ import styles from "./page.module.css";
 
 export function StandardProductDetailModal({ standard, onClose, onOpenStore }: { standard: StandardProductGroup; onClose: () => void; onOpenStore: (store: string) => void }) {
   const [trendItem, setTrendItem] = useState<StandardProductItem | null>(null);
+  const sellerOffers = useMemo(() => summarizeSellerPrices(standard.items.map((item) => ({
+    sellerLabel: item.storeLabel,
+    observedAt: item.latest.observedAt,
+    priceKrw: item.unitPriceKrw,
+    confidence: item.latest.item.confidence,
+    source: item.latest.source ?? "receipt",
+  }))), [standard.items]);
+  const lowestItem = useMemo(() => [...standard.items].sort((left, right) => left.unitPriceKrw - right.unitPriceKrw || right.latest.observedAt.localeCompare(left.latest.observedAt))[0] ?? null, [standard.items]);
 
   useEffect(() => {
     if (trendItem) return;
@@ -23,20 +32,33 @@ export function StandardProductDetailModal({ standard, onClose, onOpenStore }: {
   return <div className={styles.modalBackdrop} role="presentation" onMouseDown={(event) => event.target === event.currentTarget && onClose()}>
     <section className={`${styles.authModal} ${styles.trendModal}`} role="dialog" aria-modal="true" aria-labelledby="standard-detail-title">
       <button type="button" className={styles.closeButton} onClick={onClose} aria-label="표준 상품 상세 닫기">×</button>
-      <p className={styles.kicker}>STANDARD PRODUCT</p>
       <h2 id="standard-detail-title">{standard.name}</h2>
       <p className={styles.storeInfo}>판매처 {standard.sellerCount}곳 · 하위 상품 {standard.items.length}개</p>
       <div className={styles.coupangPriceSection}>{standard.coupangPrice
-        ? <><span>쿠팡가</span><strong>개당 {formatKrw(standard.coupangPrice.unitPriceKrw)}</strong><small>{formatKrw(standard.coupangPrice.listedPriceKrw)} · {standard.coupangPrice.quantity}개</small><a href={standard.coupangPrice.productUrl} target="_blank" rel="noreferrer">쿠팡에서 보기</a></>
+        ? <><span>쿠팡 관측가</span>{standard.coupangPrice.referenceLabel && standard.coupangPrice.unitPriceKrw !== null ? <strong>{standard.coupangPrice.referenceLabel} {formatKrw(standard.coupangPrice.unitPriceKrw)}</strong> : <strong>기준 용량 미입력</strong>}<small>판매가 {formatKrw(standard.coupangPrice.listedPriceKrw)} · {standard.coupangPrice.quantity}개{standard.coupangPrice.contentAmount !== null && standard.coupangPrice.contentUnit !== null ? ` · 개당 ${standard.coupangPrice.contentAmount}${standard.coupangPrice.contentUnit === "each" ? "개" : standard.coupangPrice.contentUnit}` : ""} · {standard.coupangPrice.observedAt.slice(0, 10)} 관측</small><a href={standard.coupangPrice.productUrl} target="_blank" rel="noreferrer">쿠팡에서 보기</a></>
         : <><span>쿠팡가</span><small>아직 등록된 쿠팡 가격이 없습니다.</small></>}
-        {standard.cheapestVsCoupang && <p className={styles.cheaperThanCoupang}>쿠팡보다 <b>{standard.cheapestVsCoupang.storeLabel}</b>이(가) <b>{formatKrw(standard.cheapestVsCoupang.differenceKrw)}</b> 더 저렴해요</p>}</div>
+        {standard.cheapestVsCoupang && <p className={styles.cheaperThanCoupang}>{standard.unitPriceLabel} 기준 쿠팡보다 <b>{standard.cheapestVsCoupang.storeLabel}</b>가 <b>{formatKrw(standard.cheapestVsCoupang.differenceKrw)}</b> 저렴해요</p>}
+        {standard.coupangPrice && (!standard.coupangPrice.referenceLabel || standard.coupangPrice.referenceLabel !== standard.unitPriceLabel) && <p className={styles.comparisonCaution}>판매처와 쿠팡의 기준 단위가 같을 때만 자동 우열 비교합니다.</p>}
+      </div>
+      {sellerOffers.length > 0 && <section className={styles.standardSellerComparison} aria-labelledby="standard-seller-comparison-title">
+        <div className={styles.sectionHeading}>
+          <div><h3 id="standard-seller-comparison-title">판매처별 최근 단위가격</h3></div>
+        </div>
+        <div className={styles.cheapestSellerCallout}>
+          <span>기록상 최저 판매처</span>
+          <strong>{sellerOffers[0].sellerLabel}</strong>
+          <b>{standard.unitPriceLabel} {formatKrw(sellerOffers[0].latestPriceKrw)}</b>
+          {lowestItem && <small>판매가 {formatKrw(lowestItem.latestPriceKrw)} · {lowestItem.packageLabel}</small>}
+          <small>{sellerOffers[0].latestObservedAt} 관측</small>
+        </div>
+      </section>}
       <div className={styles.standardDetailList}>{standard.items.map((item) => <div className={styles.standardDetailRow} key={item.id}>
         <div><strong>{item.officialProduct?.officialName ?? item.productName}</strong><small>{item.storeLabel} · {item.packageLabel} · {item.unitPriceLabel} {formatKrw(item.unitPriceKrw)}</small></div>
         <strong className={styles.standardDetailPrice}>{formatKrw(item.latestPriceKrw)}</strong>
         <button type="button" className={styles.standardDetailButton} aria-label={`${item.productName} 가격 이력 보기`} onClick={() => setTrendItem(item)}>›</button>
       </div>)}</div>
       {standard.priceHistory.length > 0 && <div className={styles.priceHistorySection}>
-        <h3>시기별 최저가</h3>
+        <h3>시기별 기록상 최저 단위가</h3>
         <div className={styles.priceHistoryList}>{standard.priceHistory.map((point) => <div key={point.date}><span>{point.date}</span><div className={styles.priceHistoryPrices}><strong>{point.unitPriceLabel} {formatKrw(point.unitPriceKrw)}</strong><small>실제 가격 {formatKrw(point.actualPriceKrw)}</small></div><small>{point.storeLabel}</small></div>)}</div>
       </div>}
     </section>
