@@ -2,9 +2,9 @@
   "name": "receipt-settlement-mvp",
   "private": true,
   "scripts": {
-    "dev": "vite-node scripts/dev-private.ts",
+    "dev": "next dev",
+    "dev:public": "next dev",
     "dev:demo": "next dev",
-    "dev:private": "vite-node scripts/dev-private.ts",
     "build": "next build",
     "build:android:web": "set CAPACITOR_BUILD=true&& next build",
     "android:sync": "npm run build:android:web && npx cap sync android",
@@ -17,9 +17,10 @@
     "test:watch": "vitest",
     "test:e2e": "playwright test",
     "validate:private-receipts": "vite-node scripts/validate-private-receipts.ts",
-    "sync:public-observations": "vite-node scripts/sync-public-observations.ts",
-    "check:public-observations": "vite-node scripts/sync-public-observations.ts --check",
-    "private-receipts:serve": "vite-node scripts/private-receipt-server.ts"
+    "sync:public-receipts": "vite-node scripts/sync-public-receipts.ts",
+    "check:public-receipts": "vite-node scripts/sync-public-receipts.ts --check",
+    "sync:public-observations": "npm run sync:public-receipts",
+    "check:public-observations": "npm run check:public-receipts"
   },
   "dependencies": {
     "@capacitor/android": "^8.0.0",

@@ -1,82 +1,82 @@
 import { describe, expect, it } from "vitest";
-import type { Receipt } from "./types";
+import { createUniversalReceipt } from "./receipt.fixture";
 import {
+  assertPublicReceiptObservationLinks,
   buildPublicObservationBundle,
   PublicObservationBundleSchema,
   publicObservationListings,
 } from "./public-observation";
+import {
+  buildPublicReceiptFiles,
+  buildPublicReceiptIndex,
+  publicReceiptFilesToReceipts,
+} from "./public-receipt";
 
-const privateReceipt: Receipt = {
-  id: "private:receipt-123",
-  storeLabel: "민감한 실제 지점명",
-  storeAddress: "공개하면 안 되는 주소",
-  storePhone: "010-0000-0000",
-  retailChannel: "px",
-  catalogNamespace: "korean-military-px",
-  purchasedAt: "2026-07-14",
-  transactionNumber: "PRIVATE-TRANSACTION",
-  currency: "KRW",
-  totalPriceKrw: 21_000,
-  items: [{
-    id: "private:item-1",
-    receiptId: "private:receipt-123",
-    sourceLineReferences: ["37"],
-    productName: "테스트 상품",
-    sourceProductCode: "SKU-1",
-    unitPriceKrw: 3_000,
-    quantityValue: 7,
-    totalPriceKrw: 21_000,
-    confidence: "high",
-  }],
-};
+function createPublicData() {
+  const source = createUniversalReceipt("Linked Mart", "2026-07-22", "PRIVATE-TX", 3_000, "SKU-1");
+  source.merchant.branch_name = "Gangnam";
+  source.merchant.business_registration_number = "123-45-67890";
+  source.merchant.address = "Gangnam-gu, Seoul";
+  source.merchant.phone = "02-0000-0000";
+  const receiptFiles = buildPublicReceiptFiles([{ receiptId: "2026-07-22_001", source }]);
+  const receiptIndex = buildPublicReceiptIndex(receiptFiles);
+  const observations = buildPublicObservationBundle(
+    publicReceiptFilesToReceipts(receiptFiles),
+    receiptIndex.revision,
+  );
+  return { receiptFiles, receiptIndex, observations };
+}
 
-describe("public observation projection", () => {
-  it("keeps only the minimum public product observation fields", () => {
-    const bundle = buildPublicObservationBundle([privateReceipt]);
-    const serialized = JSON.stringify(bundle);
+describe("public receipt observation links", () => {
+  it("keeps exact public store, date, quantity, and receipt-item links", () => {
+    const { receiptFiles, receiptIndex, observations } = createPublicData();
+    const receipt = receiptFiles[0];
+    const line = receipt.lineItems[0];
 
-    expect(bundle.observations).toHaveLength(1);
-    expect(bundle.observations[0]).toMatchObject({
-      storeLabel: "PX",
-      observedMonth: "2026-07",
-      productName: "테스트 상품",
+    expect(observations.observations).toHaveLength(1);
+    expect(observations.observations[0]).toMatchObject({
+      receiptId: receipt.id,
+      receiptItemId: line.id,
+      storeId: receipt.merchant.id,
+      storeLabel: "Linked Mart Gangnam",
+      observedAt: "2026-07-22T00:00:00+09:00",
+      productName: "Test product",
       sourceProductCode: "SKU-1",
+      quantity: 1,
       unitPriceKrw: 3_000,
+      totalPriceKrw: 3_000,
     });
-    expect(serialized).not.toContain(privateReceipt.storeLabel);
-    expect(serialized).not.toContain(privateReceipt.storeAddress!);
-    expect(serialized).not.toContain(privateReceipt.storePhone!);
-    expect(serialized).not.toContain(privateReceipt.transactionNumber);
-    expect(serialized).not.toContain("quantityValue");
-    expect(serialized).not.toContain("totalPriceKrw");
-    expect(serialized).not.toContain("sourceLineReferences");
-    expect(serialized).not.toContain("2026-07-14");
+    expect(observations.receiptIndexRevision).toBe(receiptIndex.revision);
+    expect(() => assertPublicReceiptObservationLinks(receiptIndex, receiptFiles, observations)).not.toThrow();
   });
 
-  it("deduplicates identical observations and remains deterministic", () => {
-    const first = buildPublicObservationBundle([privateReceipt, privateReceipt]);
-    const second = buildPublicObservationBundle([privateReceipt]);
+  it("remains deterministic and converts linked observations to product listings", () => {
+    const first = createPublicData();
+    const second = createPublicData();
 
     expect(first).toEqual(second);
-    expect(first.observations).toHaveLength(1);
-  });
-
-  it("rejects unknown fields and converts public data to product listings", () => {
-    const bundle = buildPublicObservationBundle([privateReceipt]);
-    const invalid = structuredClone(bundle) as unknown as {
-      observations: Array<Record<string, unknown>>;
-    };
-    invalid.observations[0].transactionNumber = "leak";
-
-    expect(() => PublicObservationBundleSchema.parse(invalid)).toThrow();
-    expect(publicObservationListings(bundle)[0]).toMatchObject({
-      observedAt: "2026-07",
-      storeLabel: "PX",
+    expect(publicObservationListings(first.observations)[0]).toMatchObject({
+      id: first.observations.observations[0].id,
+      observedAt: "2026-07-22T00:00:00+09:00",
+      storeLabel: "Linked Mart Gangnam",
       source: "public",
       item: {
-        productName: "테스트 상품",
+        receiptId: first.receiptFiles[0].id,
+        productName: "Test product",
+        quantityValue: 1,
         unitPriceKrw: 3_000,
       },
     });
+  });
+
+  it("rejects observations that point at a stale receipt-file index", () => {
+    const { receiptFiles, receiptIndex, observations } = createPublicData();
+    const invalid = {
+      ...observations,
+      receiptIndexRevision: "0".repeat(16),
+    };
+
+    expect(() => PublicObservationBundleSchema.parse(invalid)).not.toThrow();
+    expect(() => assertPublicReceiptObservationLinks(receiptIndex, receiptFiles, invalid)).toThrow();
   });
 });

@@ -13,7 +13,8 @@ export type AdminReceiptItemRecord = {
 export type AdminReceiptRecord = {
   id: string;
   userId: string;
-  source: "database" | "local";
+  source: "database" | "local" | "public";
+  publicReceiptFileName?: string;
   storeLabel: string;
   purchasedAt: string;
   transactionNumber: string;
@@ -25,7 +26,8 @@ export function localReceiptsToAdminRecords(receipts: Receipt[]): AdminReceiptRe
   return receipts.map((receipt) => ({
     id: receipt.id,
     userId: "local-demo",
-    source: "local",
+    source: receipt.source === "public" ? "public" : "local",
+    publicReceiptFileName: receipt.publicReceiptFileName,
     storeLabel: receipt.storeLabel,
     purchasedAt: receipt.purchasedAt,
     transactionNumber: receipt.transactionNumber,

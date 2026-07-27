@@ -1,12 +1,10 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { groupProductObservations, listingsFromReceipts, PRODUCT_CATEGORIES, type MartType, type ProductCategory, type ProductGroup, type ProductSort } from "@/domain/product-browser";
-import { PrivateReceiptResponseSchema } from "@/domain/private-receipt-response";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { groupProductObservations, PRODUCT_CATEGORIES, type MartType, type ProductCategory, type ProductGroup, type ProductSort } from "@/domain/product-browser";
 import { formatKrw } from "@/domain/settlement";
-import type { Receipt } from "@/domain/types";
 import { useAdminAccess } from "@/hooks/use-admin-access";
-import { PublicObservationRepository } from "@/repositories/public-observation.repository";
+import { PublicReceiptRepository } from "@/repositories/public-receipt.repository";
 import { useCartStore } from "@/stores/cart.store";
 import { AdminPage } from "./AdminPage";
 import { AuthPanel } from "./AuthPanel";
@@ -17,15 +15,10 @@ import { ProductBrowser } from "./ProductBrowser";
 import { MarketBrowser } from "./MarketBrowser";
 import styles from "./page.module.css";
 
-const publicObservationListings = new PublicObservationRepository().loadAll();
-const privateReceiptMode = process.env.NEXT_PUBLIC_RECEIPT_DATA_MODE === "private";
-const privateReceiptUrl = process.env.NEXT_PUBLIC_PRIVATE_RECEIPT_URL ?? "http://127.0.0.1:3210/receipts";
+const publicReceiptData = new PublicReceiptRepository().loadAll();
 type Page = "home" | "products" | "markets" | "cart" | "admin";
 
 export default function Home() {
-  const [receipts, setReceipts] = useState<Receipt[]>([]);
-  const [receiptSourceMessage, setReceiptSourceMessage] = useState("");
-  const receiptRevision = useRef("");
   const [page, setPage] = useState<Page>("home");
   const [selectedMarket, setSelectedMarket] = useState<string | null>(null);
   const [category, setCategory] = useState<ProductCategory>("전체");
@@ -50,49 +43,12 @@ export default function Home() {
   const { isAdmin, loading: adminLoading } = useAdminAccess(authRevision);
   const handleAuthChange = useCallback(() => setAuthRevision((revision) => revision + 1), []);
 
-  const observationListings = useMemo(
-    () => receipts.length > 0 ? listingsFromReceipts(receipts) : publicObservationListings,
-    [receipts],
-  );
+  const receipts = publicReceiptData.receipts;
+  const observationListings = publicReceiptData.observations;
   const productGroups = useMemo(() => groupProductObservations(observationListings), [observationListings]);
 
   useEffect(() => { if (!hydrated) hydrateCart(); }, [hydrateCart, hydrated]);
   useEffect(() => { if (page === "admin" && !adminLoading && !isAdmin) setPage("home"); }, [adminLoading, isAdmin, page]);
-  useEffect(() => {
-    if (!privateReceiptMode) return;
-    let active = true;
-    const loadPrivateReceipts = async () => {
-      try {
-        const requestUrl = new URL(privateReceiptUrl);
-        if (receiptRevision.current) requestUrl.searchParams.set("revision", receiptRevision.current);
-        const response = await fetch(requestUrl, { cache: "no-store" });
-        if (response.status === 204) return;
-        if (!response.ok) throw new Error(`로컬 영수증 서버 응답 오류 (${response.status})`);
-        const result = PrivateReceiptResponseSchema.parse(await response.json());
-        if (!active) return;
-        if (receiptRevision.current !== result.revision) {
-          receiptRevision.current = result.revision;
-          setReceipts(result.receipts);
-        }
-        setReceiptSourceMessage(
-          result.warnings.length > 0
-            ? `일부 영수증을 제외했습니다: ${result.warnings.join(" / ")}`
-            : result.receipts.length === 0
-              ? "private 영수증이 없어 공개 관측 데이터를 표시합니다."
-              : "",
-        );
-      } catch (error) {
-        if (active) {
-          const detail = error instanceof Error ? error.message : "로컬 영수증을 불러오지 못했습니다.";
-          setReceiptSourceMessage(`${detail} 기존 화면 데이터는 유지됩니다.`);
-        }
-      }
-    };
-    void loadPrivateReceipts();
-    const timer = window.setInterval(() => void loadPrivateReceipts(), 5_000);
-    return () => { active = false; window.clearInterval(timer); };
-  }, []);
-
   const cartGroups = useMemo(() => productGroups.filter((group) => lines[group.id] > 0), [lines, productGroups]);
   const cartTotal = cartGroups.reduce((sum, group) => sum + group.latestPriceKrw * lines[group.id], 0);
   const cartQuantityTotal = cartGroups.reduce((sum, group) => sum + lines[group.id], 0);
@@ -137,7 +93,6 @@ export default function Home() {
     </header>
 
     <main className={styles.main}>
-      {receiptSourceMessage && <p className={styles.dataNotice} role="alert">{receiptSourceMessage}</p>}
       {page === "home" && <><section className={styles.hero}><p className={styles.kicker}>PRICE OBSERVATION PLATFORM</p><h1>상품 가격을<br /><span>관측 기록으로 비교하세요.</span></h1><p>판매처와 시점이 명확한 영수증 관측가를 비교하고<br />필요한 상품을 장바구니에 모을 수 있습니다.</p><button onClick={() => openProducts()}>상품 둘러보기 <span>→</span></button></section><section className={styles.homeGrid}><CategoryBox category={category} onSelect={openProducts} /><CartBox count={cartGroups.length} quantity={cartQuantityTotal} total={cartTotal} onOpen={() => setPage("cart")} /></section></>}
       {page === "products" && <ProductBrowser groups={productGroups} query={query} setQuery={setQuery} category={category} setCategory={setCategory} martType={martType} setMartType={setMartType} selectedStore={selectedStore} setSelectedStore={setSelectedStore} sort={sort} setSort={setSort} authRevision={authRevision} onAdd={openCartModal} onTrend={setTrendGroup} onOpenStore={(store) => { setSelectedMarket(store); setPage("markets"); }} />}
       {page === "markets" && <MarketBrowser receipts={receipts} observations={observationListings} selectedStore={selectedMarket} onSelectStore={setSelectedMarket} onOpenTrend={setTrendGroup} />}
@@ -146,6 +101,7 @@ export default function Home() {
     </main>
 
     <footer className={styles.footer}>가격 추적기 <span>영수증 관측가로 투명하게 비교하세요.</span></footer>
+    {page !== "cart" && <FloatingCartButton quantity={cartQuantityTotal} total={cartTotal} onOpen={() => setPage("cart")} />}
     <nav className={styles.mobileNav} aria-label="모바일 주요 메뉴">
       <button className={page === "home" ? styles.mobileNavActive : ""} aria-current={page === "home" ? "page" : undefined} onClick={() => setPage("home")}><span aria-hidden="true">⌂</span>홈</button>
       <button className={page === "products" ? styles.mobileNavActive : ""} aria-current={page === "products" ? "page" : undefined} onClick={() => setPage("products")}><span aria-hidden="true">⌕</span>상품 목록</button>
@@ -167,4 +123,21 @@ function CategoryBox({ category, onSelect }: { category: ProductCategory; onSele
 
 function CartBox({ count, quantity, total, onOpen }: { count: number; quantity: number; total: number; onOpen: () => void }) {
   return <section className={`${styles.panel} ${styles.cartBox}`}><div className={styles.panelTitle}><div><p className={styles.kicker}>YOUR PICKS</p><h2>장바구니</h2></div><span className={styles.cartBadge}>{quantity}</span></div><div className={styles.cartEmpty}>{count === 0 ? <><div className={styles.cartIllustration} aria-hidden="true">🛒</div><p>아직 담은 상품이 없습니다.</p><small>상품 목록에서 비교할 물건을 담아보세요.</small></> : <><strong>{count}개 상품 · 총 {quantity}개</strong><p>예상 합계 <b>{formatKrw(total)}</b></p></>}</div><button className={styles.outlineButton} onClick={onOpen}>장바구니 보기 <span>→</span></button></section>;
+}
+
+function FloatingCartButton({ quantity, total, onOpen }: { quantity: number; total: number; onOpen: () => void }) {
+  const totalLabel = formatKrw(total);
+  const accessibleLabel = quantity > 0
+    ? `장바구니 열기, 담긴 아이템 ${quantity}개, 총합 ${totalLabel}`
+    : "장바구니 열기, 담긴 아이템 0개";
+
+  return <button type="button" className={styles.floatingCart} onClick={onOpen} aria-label={accessibleLabel}>
+    {quantity > 0 && <span className={styles.floatingCartTotal} aria-hidden="true"><small>총합</small><strong>{totalLabel}</strong></span>}
+    <span className={styles.floatingCartIcon} aria-hidden="true">
+      <svg viewBox="0 0 24 24" focusable="false">
+        <path d="M3 4h2.2l1.9 9.1a2 2 0 0 0 2 1.6h7.8a2 2 0 0 0 1.9-1.4L20.5 7H6.1M9.5 19a.75.75 0 1 1-1.5 0 .75.75 0 0 1 1.5 0Zm8 0a.75.75 0 1 1-1.5 0 .75.75 0 0 1 1.5 0Z" />
+      </svg>
+      <span className={styles.floatingCartCount}>{quantity}</span>
+    </span>
+  </button>;
 }
