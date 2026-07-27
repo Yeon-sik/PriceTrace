@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "privacyPolicyVersion": 2,
-  "revision": "7a82dd31f24af0b7",
+  "revision": "2162c6e9c55b675f",
   "receipts": [
     {
       "id": "2026-05-08_001",
@@ -16,7 +16,7 @@
     {
       "id": "2026-06-12_001",
       "fileName": "2026-06-12_001.json",
-      "revision": "302415e63ada7e00"
+      "revision": "d3cbd893ef272065"
     },
     {
       "id": "2026-07-14_001",

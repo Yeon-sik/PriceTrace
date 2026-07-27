@@ -55,6 +55,7 @@ vitest.config.ts
 eslint.config.mjs
 src/**/*.test.ts
 !src/domain/official-product.test.ts
+!src/domain/standard-product-image.test.ts
 tsconfig.tsbuildinfo
 .env.example
 

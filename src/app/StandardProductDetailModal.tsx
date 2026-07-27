@@ -10,6 +10,7 @@ import styles from "./page.module.css";
 export function StandardProductDetailModal({ standard, onClose, onOpenStore }: { standard: StandardProductGroup; onClose: () => void; onOpenStore: (store: string) => void }) {
   const [trendItem, setTrendItem] = useState<StandardProductItem | null>(null);
   const sellerOffers = useMemo(() => summarizeSellerPrices(standard.items.map((item) => ({
+    sellerKey: item.sellerKey,
     sellerLabel: item.storeLabel,
     observedAt: item.latest.observedAt,
     priceKrw: item.unitPriceKrw,

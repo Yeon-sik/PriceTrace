@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { categoryForProduct, filterAndSortProductGroups, mergeOfficialProductGroups, PRODUCT_CATEGORIES, type MartType, type ProductCategory, type ProductGroup, type ProductSort } from "@/domain/product-browser";
+import { categoryForProduct, distinctSellerCount, filterAndSortProductGroups, latestSellerRows, mergeOfficialProductGroups, PRODUCT_CATEGORIES, type MartType, type ProductCategory, type ProductGroup, type ProductSort } from "@/domain/product-browser";
 import { buildPublicStandardCatalogIndex, PublicStandardCatalogRowsSchema, type PublicCoupangPrice } from "@/domain/public-standard-catalog";
 import { sellerPricePointsFromGroup, summarizeSellerPrices } from "@/domain/seller-price-insights";
 import { formatKrw } from "@/domain/settlement";
@@ -34,6 +34,7 @@ export type PriceHistoryPoint = { date: string; unitPriceKrw: number; unitPriceL
 export type StandardProductGroup = {
   id: string;
   name: string;
+  imageUrl?: string;
   category: ProductCategory;
   items: StandardProductItem[];
   lowestUnitPriceKrw: number;
@@ -102,6 +103,7 @@ export function ProductBrowser({ groups, query, setQuery, category, setCategory,
   const [exactStandardMappings, setExactStandardMappings] = useState<Map<string, string>>(new Map());
   const [catalogSpecs, setCatalogSpecs] = useState<Map<string, ProductSpecification & { standardProductId: string }>>(new Map());
   const [standardNames, setStandardNames] = useState<Map<string, string>>(new Map());
+  const [standardImages, setStandardImages] = useState<Map<string, string>>(new Map());
   const [coupangByStandard, setCoupangByStandard] = useState<Map<string, PublicCoupangPrice>>(new Map());
   const [catalogNotice, setCatalogNotice] = useState("");
   const [showStandardOnly, setShowStandardOnly] = useState(false);
@@ -123,6 +125,7 @@ export function ProductBrowser({ groups, query, setQuery, category, setCategory,
       const exactMappings = new Map<string, string>();
       let specs = new Map<string, ProductSpecification & { standardProductId: string }>();
       let names = new Map<string, string>();
+      let images = new Map<string, string>();
       let coupangPrices = new Map<string, PublicCoupangPrice>();
 
       const publicResult = await client.rpc("get_public_standard_product_catalog");
@@ -137,6 +140,11 @@ export function ProductBrowser({ groups, query, setQuery, category, setCategory,
           publicCatalogReady = true;
           coupangReady = true;
         }
+      }
+
+      const imageResult = await client.from("standard_product_images").select("standard_product_id,image_url");
+      if (!imageResult.error) {
+        images = new Map((imageResult.data ?? []).map((row) => [row.standard_product_id as string, row.image_url as string]));
       }
 
       const { data: authData } = await client.auth.getUser();
@@ -186,6 +194,7 @@ export function ProductBrowser({ groups, query, setQuery, category, setCategory,
       setExactStandardMappings(exactMappings);
       setCatalogSpecs(specs);
       setStandardNames(names);
+      setStandardImages(images);
       setCoupangByStandard(coupangPrices);
       setCatalogNotice(
         !publicCatalogReady && !signedInCatalogReady
@@ -237,6 +246,7 @@ export function ProductBrowser({ groups, query, setQuery, category, setCategory,
       return {
         id: `standard:${standardProductId}`,
         name,
+        imageUrl: standardImages.get(standardProductId),
         category: categoryForProduct(name),
         items: ordered,
         lowestUnitPriceKrw: lowest.unitPriceKrw,
@@ -245,7 +255,7 @@ export function ProductBrowser({ groups, query, setQuery, category, setCategory,
         lowestPriceKrw: lowest.latestPriceKrw,
         lowestSellerLabel: lowest.storeLabel,
         lowestSellerGroupLabel: sellerGroupLabel(lowest),
-        sellerCount: new Set(items.map((item) => item.storeLabel)).size,
+        sellerCount: distinctSellerCount(items.flatMap((item) => item.observations)),
         latestObservedAt: items.reduce((latest, item) => (item.latest.observedAt > latest ? item.latest.observedAt : latest), items[0].latest.observedAt),
         observationCount: items.reduce((sum, item) => sum + item.observations.length, 0),
         coupangPrice,
@@ -254,7 +264,7 @@ export function ProductBrowser({ groups, query, setQuery, category, setCategory,
       };
     });
     return { productGroups: regular, standardGroups: standards };
-  }, [groups, officialProducts, standardMappings, exactStandardMappings, catalogSpecs, standardNames, coupangByStandard]);
+  }, [groups, officialProducts, standardMappings, exactStandardMappings, catalogSpecs, standardNames, standardImages, coupangByStandard]);
 
   const stores = useMemo(() => [...new Set([
     ...productGroups.filter((group) => martType === "all" || group.martType === martType).map((group) => group.storeLabel),
@@ -283,7 +293,7 @@ export function ProductBrowser({ groups, query, setQuery, category, setCategory,
           lowestPriceKrw: lowest.latestPriceKrw,
           lowestSellerLabel: lowest.storeLabel,
           lowestSellerGroupLabel: sellerGroupLabel(lowest),
-          sellerCount: new Set(items.map((item) => item.storeLabel)).size,
+          sellerCount: distinctSellerCount(items.flatMap((item) => item.observations)),
           latestObservedAt: items.reduce((latest, item) => item.latest.observedAt > latest ? item.latest.observedAt : latest, items[0].latest.observedAt),
           observationCount: items.reduce((sum, item) => sum + item.observations.length, 0),
           coupangPrice,
@@ -313,7 +323,7 @@ export function ProductBrowser({ groups, query, setQuery, category, setCategory,
         ? Math.max(...latestOffers.map((offer) => offer.latestPriceKrw))
         : latestOffers[0]?.latestPriceKrw ?? entry.group.latestPriceKrw;
     };
-    const sellersOf = (entry: Entry) => entry.kind === "standard" ? entry.standard.sellerCount : new Set(entry.group.observations.map((observation) => observation.storeLabel)).size;
+    const sellersOf = (entry: Entry) => entry.kind === "standard" ? entry.standard.sellerCount : distinctSellerCount(entry.group.observations);
     const nameOf = (entry: Entry) => entry.kind === "standard" ? entry.standard.name : entry.group.productName;
     return entries.sort((a, b) => {
       if (sort === "sellers") return sellersOf(b) - sellersOf(a) || nameOf(a).localeCompare(nameOf(b));
@@ -339,8 +349,8 @@ export function ProductBrowser({ groups, query, setQuery, category, setCategory,
     <div className={styles.filters} aria-label="상품 카테고리">{PRODUCT_CATEGORIES.map((item) => <button aria-pressed={category === item} className={category === item ? styles.filterActive : ""} key={item} onClick={() => setCategory(item)}>{item}</button>)}</div>
     <div className={styles.resultBar}><p>상품 {gridEntries.length}개</p>{(query || category !== "전체" || martType !== "all" || selectedStore !== "all" || showStandardOnly) && <button onClick={() => { setQuery(""); setCategory("전체"); setMartType("all"); setSelectedStore("all"); setShowStandardOnly(false); }}>필터 초기화</button>}</div>
     <div className={styles.productGrid} aria-live="polite">{gridEntries.map((entry) => entry.kind === "standard"
-      ? <article className={styles.productCard} key={entry.standard.id}><div className={styles.productVisual}><ProductImage item={entry.standard.items[0].latest.item} category={entry.standard.category} /></div><div className={styles.productInfo}><h2>{entry.standard.name}</h2><StoreInfo sellerCount={entry.standard.sellerCount} onOpen={() => setStoreListTarget({ title: `${entry.standard.name} 판매처`, rows: entry.standard.items.map((item) => ({ storeLabel: item.storeLabel, observedAt: item.latest.observedAt })) })} /><div className={styles.standardPriceBlock}><strong>{formatKrw(entry.standard.lowestPriceKrw)} ~</strong><small>{entry.standard.unitPriceLabel} {formatKrw(entry.standard.lowestUnitPriceKrw)} ~ {formatKrw(entry.standard.highestUnitPriceKrw)}</small>{entry.standard.cheapestVsCoupang && <small className={styles.cheaperThanCoupang}>{entry.standard.unitPriceLabel} 기준 쿠팡보다 {entry.standard.lowestSellerGroupLabel}가 {formatKrw(entry.standard.cheapestVsCoupang.differenceKrw)} 저렴해요</small>}</div><button aria-label={`${entry.standard.name} 하위 상품 보기`} onClick={() => setOpenStandardId(entry.standard.id)}>판매처 가격 기준 비교 보기 ›</button></div></article>
-      : <article className={styles.productCard} key={entry.group.id}><div className={styles.productVisual}><ProductImage item={entry.group.latest.item} category={entry.group.category} /></div><div className={styles.productInfo}><h2>{entry.group.officialProduct?.officialName ?? entry.group.productName}</h2><StoreInfo sellerCount={new Set(entry.group.observations.map((observation) => observation.storeLabel)).size} onOpen={() => setStoreListTarget({ title: `${entry.group.productName} 판매처`, rows: entry.group.observations.map((observation) => ({ storeLabel: observation.storeLabel, observedAt: observation.observedAt })) })} /><RecordedPriceBlock group={entry.group} /><div className={styles.productActions}><button className={styles.trendButton} aria-label={`${entry.group.productName} 가격 이력 보기`} onClick={() => onTrend(entry.group)}>가격 이력</button><button aria-label={`${entry.group.productName} 장바구니에 담기`} onClick={() => onAdd(entry.group)}>+ 담기</button></div></div></article>)}</div>
+      ? <article className={styles.productCard} key={entry.standard.id}><div className={styles.productVisual} data-testid="product-image-slot"><ProductImage item={entry.standard.items[0].latest.item} category={entry.standard.category} imageUrl={entry.standard.imageUrl} /></div><div className={styles.productInfo}><h2>{entry.standard.name}</h2><StoreInfo sellerCount={entry.standard.sellerCount} onOpen={() => setStoreListTarget({ title: `${entry.standard.name} 판매처`, rows: latestSellerRows(entry.standard.items.flatMap((item) => item.observations)) })} /><div className={styles.standardPriceBlock}><strong>{formatKrw(entry.standard.lowestPriceKrw)} ~</strong><small>{entry.standard.unitPriceLabel} {formatKrw(entry.standard.lowestUnitPriceKrw)} ~ {formatKrw(entry.standard.highestUnitPriceKrw)}</small>{entry.standard.cheapestVsCoupang && <small className={styles.cheaperThanCoupang}>{entry.standard.unitPriceLabel} 기준 쿠팡보다 {entry.standard.lowestSellerGroupLabel}가 {formatKrw(entry.standard.cheapestVsCoupang.differenceKrw)} 저렴해요</small>}</div><button aria-label={`${entry.standard.name} 하위 상품 보기`} onClick={() => setOpenStandardId(entry.standard.id)}>판매처 가격 기준 비교 보기 ›</button></div></article>
+      : <article className={styles.productCard} key={entry.group.id}><div className={styles.productVisual} data-testid="product-image-slot"><ProductImage item={entry.group.latest.item} category={entry.group.category} imageUrl={entry.group.officialProduct?.imageUrl} /></div><div className={styles.productInfo}><h2>{entry.group.officialProduct?.officialName ?? entry.group.productName}</h2><StoreInfo sellerCount={distinctSellerCount(entry.group.observations)} onOpen={() => setStoreListTarget({ title: `${entry.group.productName} 판매처`, rows: latestSellerRows(entry.group.observations) })} /><RecordedPriceBlock group={entry.group} /><div className={styles.productActions}><button className={styles.trendButton} aria-label={`${entry.group.productName} 가격 이력 보기`} onClick={() => onTrend(entry.group)}>가격 이력</button><button aria-label={`${entry.group.productName} 장바구니에 담기`} onClick={() => onAdd(entry.group)}>+ 담기</button></div></div></article>)}</div>
     {gridEntries.length === 0 && <div className={styles.noResult}><strong>조건에 맞는 상품이 없습니다.</strong></div>}
     {openStandard && <StandardProductDetailModal standard={openStandard} onClose={() => setOpenStandardId(null)} onOpenStore={onOpenStore} />}
     {storeListTarget && <StoreListModal title={storeListTarget.title} rows={storeListTarget.rows} onClose={() => setStoreListTarget(null)} onOpenStore={onOpenStore} />}

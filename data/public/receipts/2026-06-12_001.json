@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "privacyPolicyVersion": 2,
-  "revision": "302415e63ada7e00",
+  "revision": "d3cbd893ef272065",
   "id": "2026-06-12_001",
   "fileName": "2026-06-12_001.json",
   "merchant": {
@@ -85,7 +85,7 @@
     {
       "id": "line_a433c207491b1a0d",
       "type": "product",
-      "description": "금녕삼겹살",
+      "description": "급냉삼겹살",
       "sourceLineReferences": [
         "003"
       ],

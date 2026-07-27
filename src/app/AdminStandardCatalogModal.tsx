@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { formatKrw } from "@/domain/settlement";
 import styles from "./page.module.css";
 
-export type AdminCatalogVariant = { id: string; canonicalName: string; specLabel: string; listingReferenceUrl: string | null };
+export type AdminCatalogVariant = { id: string; canonicalName: string; specLabel: string; isPlaceholder: boolean; listingReferenceUrl: string | null };
 export type AdminCoupangPrice = {
   unitPriceKrw: number | null;
   referenceLabel: string | null;
@@ -71,7 +71,7 @@ export function AdminStandardCatalogModal({ name, variants, coupangPrice, onClos
         {message && <p role="status" className={styles.muted}>{message}</p>}
       </div>
       <div className={styles.standardDetailList}>{variants.map((variant) => <div className={styles.standardDetailRow} key={variant.id}>
-        <div><strong>{variant.canonicalName}</strong><small>{variant.specLabel}</small></div>
+        <div><strong>{variant.canonicalName}</strong><small>{variant.specLabel}</small>{variant.isPlaceholder && <span className={styles.specificationBadge}>단위가격 계산 제외</span>}</div>
         <span />
         {variant.listingReferenceUrl ? <a className={styles.standardDetailButton} href={variant.listingReferenceUrl} target="_blank" rel="noreferrer" aria-label={`${variant.canonicalName} 확인 URL`}>↗</a> : <span />}
       </div>)}</div>

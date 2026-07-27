@@ -1,9 +1,10 @@
-import type { ProductGroup, ProductObservationListing } from "./product-browser";
+import { sellerIdentityKey, type ProductGroup, type ProductObservationListing } from "./product-browser";
 import type { Confidence } from "./types";
 
 export type PricePointSource = "receipt" | "public" | "stored";
 
 export type SellerPricePoint = {
+  sellerKey?: string;
   sellerLabel: string;
   observedAt: string;
   priceKrw: number;
@@ -56,12 +57,14 @@ export function summarizeSellerPrices(points: SellerPricePoint[]): SellerPriceSu
   const bySeller = new Map<string, SellerPricePoint[]>();
   for (const point of points) {
     if (!point.sellerLabel.trim() || !Number.isInteger(point.priceKrw) || point.priceKrw < 0) continue;
-    bySeller.set(point.sellerLabel, [...(bySeller.get(point.sellerLabel) ?? []), point]);
+    const key = sellerIdentityKey({ sellerKey: point.sellerKey, storeLabel: point.sellerLabel });
+    bySeller.set(key, [...(bySeller.get(key) ?? []), point]);
   }
 
-  return [...bySeller.entries()].map(([sellerLabel, sellerPoints]) => {
+  return [...bySeller.values()].map((sellerPoints) => {
     const snapshots = snapshotsForSeller(sellerPoints);
     const latest = snapshots.at(-1)!;
+    const sellerLabel = latest.sellerLabel.trim();
     const previous = snapshots.at(-2) ?? null;
     const previousPriceKrw = previous?.priceKrw ?? null;
     const changeKrw = previousPriceKrw === null ? null : latest.priceKrw - previousPriceKrw;
@@ -93,6 +96,7 @@ export function summarizeSellerPrices(points: SellerPricePoint[]): SellerPriceSu
 
 export function sellerPricePointsFromObservations(observations: ProductObservationListing[]): SellerPricePoint[] {
   return observations.map((observation) => ({
+    sellerKey: observation.sellerKey,
     sellerLabel: observation.storeLabel,
     observedAt: observation.observedAt,
     priceKrw: observation.item.unitPriceKrw,
