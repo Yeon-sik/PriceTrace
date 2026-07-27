@@ -1,8 +1,8 @@
 {
   "schemaVersion": 3,
   "privacyPolicyVersion": 2,
-  "receiptIndexRevision": "7a82dd31f24af0b7",
-  "revision": "2768dfc2605a0b2c",
+  "receiptIndexRevision": "2162c6e9c55b675f",
+  "revision": "6ee8b49fb9d22189",
   "observations": [
     {
       "id": "9f3022229e6111ae",
@@ -93,7 +93,7 @@
       "retailChannel": "unknown",
       "catalogNamespace": null,
       "observedAt": "2026-06-12",
-      "productName": "금녕삼겹살",
+      "productName": "급냉삼겹살",
       "sourceProductCode": "250532",
       "quantity": 1,
       "unitPriceKrw": 10740,

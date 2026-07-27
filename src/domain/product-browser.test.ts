@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { filterAndSortProductGroups, groupProductObservations, martTypeFor, mergeOfficialProductGroups, type ProductObservationListing } from "./product-browser";
+import { distinctSellerCount, filterAndSortProductGroups, groupProductObservations, latestSellerRows, martTypeFor, mergeOfficialProductGroups, normalizeSellerLabel, type ProductObservationListing } from "./product-browser";
 import type { ReceiptItem } from "./types";
 import { createUniversalReceipt } from "./receipt.fixture";
 import { mapReceipt } from "./receipt";
@@ -18,6 +18,17 @@ describe("product browser domain", () => {
   it("keeps same-name products with different product codes separate", () => {
     const groups = groupProductObservations([listing("2026-07-01", 1200, "A1"), listing("2026-07-02", 900, "B2")]);
     expect(groups).toHaveLength(2);
+  });
+
+  it("counts visually identical seller labels once across standard product variants", () => {
+    const observations = [
+      listing("2026-07-01", 1200, "A1", "product 100g", null, "Same Mart"),
+      listing("2026-07-02", 2100, "B2", "product 200g", null, "  Same\u200B   Mart  "),
+    ];
+
+    expect(normalizeSellerLabel(observations[0].storeLabel)).toBe(normalizeSellerLabel(observations[1].storeLabel));
+    expect(distinctSellerCount(observations)).toBe(1);
+    expect(latestSellerRows(observations)).toEqual([{ storeLabel: "Same Mart", observedAt: "2026-07-02" }]);
   });
 
   it("falls back to the existing store-and-name grouping when product codes are absent", () => {

@@ -10,6 +10,7 @@ export type ProductObservationListing = {
   id: string;
   item: ReceiptItem;
   storeLabel: string;
+  sellerKey?: string;
   catalogNamespace: string | null;
   observedAt: string;
   martType: Exclude<MartType, "all">;
@@ -21,6 +22,7 @@ export type ProductGroup = {
   sourceProductCode: string;
   productName: string;
   storeLabel: string;
+  sellerKey: string;
   catalogNamespace: string | null;
   martType: Exclude<MartType, "all">;
   category: ProductCategory;
@@ -36,6 +38,57 @@ export type ProductGroup = {
 
 export function normalizeReceiptProductName(value: string) {
   return value.toLocaleLowerCase("ko-KR").replace(/\([^)]*\)|\[[^\]]*\]/g, " ").replace(/\s+/g, " ").trim();
+}
+
+export function normalizeSellerLabel(value: string) {
+  return normalizedSellerDisplayLabel(value)
+    .toLocaleLowerCase("ko-KR");
+}
+
+export function normalizedSellerDisplayLabel(value: string) {
+  return value
+    .normalize("NFKC")
+    .replace(/[\u200B-\u200D\uFEFF]/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+export function sellerIdentityKeyForReceipt(receipt: Pick<Receipt, "storeMerchantId" | "storeBusinessRegistrationNumber" | "storeId" | "storeLabel">) {
+  const merchantId = normalizedSellerDisplayLabel(receipt.storeMerchantId ?? "").toLocaleLowerCase("ko-KR");
+  if (merchantId) return `merchant:${merchantId}`;
+  const businessRegistrationNumber = (receipt.storeBusinessRegistrationNumber ?? "").replace(/\D/g, "");
+  if (businessRegistrationNumber) return `business:${businessRegistrationNumber}:${normalizeSellerLabel(receipt.storeLabel)}`;
+  if (receipt.storeId?.trim()) return `store:${receipt.storeId.trim()}`;
+  return `label:${normalizeSellerLabel(receipt.storeLabel)}`;
+}
+
+export function sellerIdentityKey(seller: { sellerKey?: string; storeLabel: string }) {
+  return seller.sellerKey?.trim() || `label:${normalizeSellerLabel(seller.storeLabel)}`;
+}
+
+export function distinctSellerCount(sellers: readonly { sellerKey?: string; storeLabel: string }[]) {
+  return new Set(sellers.map(sellerIdentityKey)).size;
+}
+
+export function latestSellerRows(
+  observations: readonly Pick<ProductObservationListing, "sellerKey" | "storeLabel" | "observedAt">[],
+) {
+  const latestBySeller = new Map<string, { storeLabel: string; observedAt: string }>();
+  for (const observation of observations) {
+    const key = sellerIdentityKey(observation);
+    const current = latestBySeller.get(key);
+    if (!current || observation.observedAt > current.observedAt) {
+      latestBySeller.set(key, {
+        storeLabel: normalizedSellerDisplayLabel(observation.storeLabel),
+        observedAt: observation.observedAt,
+      });
+    }
+  }
+  return [...latestBySeller.values()].sort(
+    (left, right) =>
+      left.storeLabel.localeCompare(right.storeLabel, "ko-KR")
+      || right.observedAt.localeCompare(left.observedAt),
+  );
 }
 
 export function martTypeFor(receipt: Receipt): Exclude<MartType, "all"> {
@@ -60,6 +113,7 @@ export function listingsFromReceipts(receipts: Receipt[]): ProductObservationLis
     id: `${receipt.id}:${item.id}`,
     item,
     storeLabel: receipt.storeLabel,
+    sellerKey: sellerIdentityKeyForReceipt(receipt),
     catalogNamespace: receipt.catalogNamespace,
     observedAt: receipt.purchasedAt,
     martType: martTypeFor(receipt),
@@ -83,6 +137,7 @@ export function groupProductObservations(listings: ProductObservationListing[]):
       sourceProductCode: latest.item.sourceProductCode,
       productName: latest.item.productName,
       storeLabel: latest.storeLabel,
+      sellerKey: sellerIdentityKey(latest),
       catalogNamespace: latest.catalogNamespace,
       martType: latest.martType,
       category: categoryForProduct(latest.item.productName),
@@ -104,9 +159,9 @@ export function mergeOfficialProductGroups(groups: ProductGroup[]): ProductGroup
     const existing = merged.get(key);
     if (!existing) { merged.set(key, { ...group, sourceStoreLabel: group.storeLabel, sharedCatalogProduct: Boolean(sharedCatalogKey) }); continue; }
     const observations = [...existing.observations, ...group.observations].sort((left, right) => right.observedAt.localeCompare(left.observedAt));
-    const sellers = [...new Set([...existing.storeLabel.split(", "), group.storeLabel])];
     const latest = observations[0];
-    merged.set(key, { ...existing, id: key, storeLabel: sellers.join(", "), observations, latest, latestPriceKrw: latest.item.unitPriceKrw, minimumPriceKrw: Math.min(...observations.map((observation) => observation.item.unitPriceKrw)), sharedCatalogProduct: existing.sharedCatalogProduct || Boolean(sharedCatalogKey) });
+    const sellers = latestSellerRows(observations).map((seller) => seller.storeLabel);
+    merged.set(key, { ...existing, id: key, storeLabel: sellers.join(", "), sellerKey: sellerIdentityKey(latest), observations, latest, latestPriceKrw: latest.item.unitPriceKrw, minimumPriceKrw: Math.min(...observations.map((observation) => observation.item.unitPriceKrw)), sharedCatalogProduct: existing.sharedCatalogProduct || Boolean(sharedCatalogKey) });
   }
   return [...merged.values()];
 }
@@ -125,7 +180,7 @@ export function filterAndSortProductGroups(groups: ProductGroup[], options: {
     .filter((group) => options.category === "전체" || group.category === options.category)
     .filter((group) => !normalizedQuery || `${group.productName} ${group.sourceProductCode} ${group.storeLabel}`.toLowerCase().includes(normalizedQuery))
     .sort((a, b) => {
-      const sellerCount = (group: ProductGroup) => new Set(group.observations.map((observation) => observation.storeLabel)).size;
+      const sellerCount = (group: ProductGroup) => distinctSellerCount(group.observations);
       if (options.sort === "expensive") return b.latestPriceKrw - a.latestPriceKrw || a.productName.localeCompare(b.productName);
       if (options.sort === "sellers") return sellerCount(b) - sellerCount(a) || a.productName.localeCompare(b.productName);
       return a.minimumPriceKrw - b.minimumPriceKrw || a.productName.localeCompare(b.productName);

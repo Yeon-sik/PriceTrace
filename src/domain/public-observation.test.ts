@@ -53,12 +53,14 @@ describe("public receipt observation links", () => {
   it("remains deterministic and converts linked observations to product listings", () => {
     const first = createPublicData();
     const second = createPublicData();
+    const receipts = publicReceiptFilesToReceipts(first.receiptFiles);
 
     expect(first).toEqual(second);
     expect(publicObservationListings(first.observations)[0]).toMatchObject({
       id: first.observations.observations[0].id,
       observedAt: "2026-07-22T00:00:00+09:00",
       storeLabel: "Linked Mart Gangnam",
+      sellerKey: "label:linked mart gangnam",
       source: "public",
       item: {
         receiptId: first.receiptFiles[0].id,
@@ -67,6 +69,7 @@ describe("public receipt observation links", () => {
         unitPriceKrw: 3_000,
       },
     });
+    expect(publicObservationListings(first.observations, receipts)[0].sellerKey).toBe("business:1234567890:linked mart gangnam");
   });
 
   it("rejects observations that point at a stale receipt-file index", () => {

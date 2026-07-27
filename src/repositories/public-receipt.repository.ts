@@ -21,10 +21,11 @@ export class PublicReceiptRepository {
     assertNoForbiddenPublicReceiptKeys(collection.receipts);
     assertNoForbiddenSourceValues(collection.receipts, []);
     assertPublicReceiptObservationLinks(collection.index, collection.receipts, observationBundle);
+    const receipts = publicReceiptFilesToReceipts(collection.receipts);
     return {
       revision: collection.index.revision,
-      receipts: publicReceiptFilesToReceipts(collection.receipts),
-      observations: publicObservationListings(observationBundle),
+      receipts,
+      observations: publicObservationListings(observationBundle, receipts),
     };
   }
 }

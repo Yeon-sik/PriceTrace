@@ -1,5 +1,5 @@
 import { z } from "zod";
-import type { ProductObservationListing } from "./product-browser";
+import { normalizeSellerLabel, sellerIdentityKeyForReceipt, type ProductObservationListing } from "./product-browser";
 import {
   assertPublicReceiptCollection,
   PublicReceiptIndexSchema,
@@ -141,7 +141,10 @@ export function buildPublicObservationBundle(receipts: Receipt[], receiptIndexRe
   });
 }
 
-export function publicObservationListings(bundle: PublicObservationBundle): ProductObservationListing[] {
+export function publicObservationListings(bundle: PublicObservationBundle, receipts: Receipt[] = []): ProductObservationListing[] {
+  const sellerKeysByReceiptId = new Map(
+    receipts.map((receipt) => [receipt.id, sellerIdentityKeyForReceipt(receipt)]),
+  );
   return bundle.observations.map((observation) => ({
     id: observation.id,
     item: {
@@ -156,6 +159,7 @@ export function publicObservationListings(bundle: PublicObservationBundle): Prod
       confidence: observation.confidence,
     },
     storeLabel: observation.storeLabel,
+    sellerKey: sellerKeysByReceiptId.get(observation.receiptId) ?? `label:${normalizeSellerLabel(observation.storeLabel)}`,
     catalogNamespace: observation.catalogNamespace,
     observedAt: observation.observedAt,
     martType: observation.retailChannel === "px" ? "px" : "regular",
