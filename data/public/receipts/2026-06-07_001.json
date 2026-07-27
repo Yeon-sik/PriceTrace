@@ -1,0 +1,201 @@
+{
+  "schemaVersion": 1,
+  "privacyPolicyVersion": 2,
+  "revision": "59c07d1bf439f243",
+  "id": "2026-06-07_001",
+  "fileName": "2026-06-07_001.json",
+  "merchant": {
+    "id": "store_9921086315c902a1",
+    "name": "emart everyday",
+    "branchName": "영등포구청점",
+    "businessKind": "unknown",
+    "retailChannel": "unknown",
+    "catalogNamespace": null,
+    "merchantId": null,
+    "businessRegistrationNumber": "208-86-50913",
+    "address": "서울특별시 영등포구 당산로 83",
+    "phone": "02-380-5060"
+  },
+  "document": {
+    "type": "receipt",
+    "status": "unknown",
+    "issuedOn": "2026-06-07",
+    "issuedAt": null,
+    "currency": "KRW",
+    "captureMethod": "ocr",
+    "transcriptionStatus": "parsed",
+    "notes": [
+      "사업자등록번호는 사용자 확인값을 반영함"
+    ]
+  },
+  "lineItems": [
+    {
+      "id": "line_98f48fffc1bb88c7",
+      "type": "product",
+      "description": "재사용봉투20L",
+      "sourceLineReferences": [
+        "01"
+      ],
+      "identifiers": [
+        {
+          "scheme": "merchant_sku",
+          "value": "1000002012048"
+        }
+      ],
+      "quantity": {
+        "value": 1,
+        "unit": "each"
+      },
+      "unitPriceAmountMinor": 490,
+      "grossAmountMinor": 490,
+      "discountAmountMinor": 0,
+      "taxAmountMinor": 0,
+      "netAmountMinor": 490,
+      "confidence": "high",
+      "taxRatePercent": null
+    },
+    {
+      "id": "line_30ab6b569173b250",
+      "type": "product",
+      "description": "표고버섯(팩)",
+      "sourceLineReferences": [
+        "02"
+      ],
+      "identifiers": [
+        {
+          "scheme": "merchant_sku",
+          "value": "2500000042126"
+        }
+      ],
+      "quantity": {
+        "value": 1,
+        "unit": "each"
+      },
+      "unitPriceAmountMinor": 3980,
+      "grossAmountMinor": 3980,
+      "discountAmountMinor": 0,
+      "taxAmountMinor": 0,
+      "netAmountMinor": 3980,
+      "confidence": "high",
+      "taxRatePercent": null
+    },
+    {
+      "id": "line_c3cefcfd072619fd",
+      "type": "product",
+      "description": "영덕시금치(팩)",
+      "sourceLineReferences": [
+        "03"
+      ],
+      "identifiers": [
+        {
+          "scheme": "merchant_sku",
+          "value": "2500000173660"
+        }
+      ],
+      "quantity": {
+        "value": 1,
+        "unit": "each"
+      },
+      "unitPriceAmountMinor": 1980,
+      "grossAmountMinor": 1980,
+      "discountAmountMinor": 0,
+      "taxAmountMinor": 0,
+      "netAmountMinor": 1980,
+      "confidence": "high",
+      "taxRatePercent": null
+    },
+    {
+      "id": "line_524a2a3c7eff95ce",
+      "type": "product",
+      "description": "손질바지락500g/팩",
+      "sourceLineReferences": [
+        "04"
+      ],
+      "identifiers": [
+        {
+          "scheme": "merchant_sku",
+          "value": "2507281037674"
+        }
+      ],
+      "quantity": {
+        "value": 1,
+        "unit": "each"
+      },
+      "unitPriceAmountMinor": 2990,
+      "grossAmountMinor": 2990,
+      "discountAmountMinor": 0,
+      "taxAmountMinor": 0,
+      "netAmountMinor": 2990,
+      "confidence": "high",
+      "taxRatePercent": null
+    },
+    {
+      "id": "line_e5f804ebf4b1fd7b",
+      "type": "discount",
+      "description": "S포인트회원 할인",
+      "sourceLineReferences": [
+        "04"
+      ],
+      "identifiers": [],
+      "quantity": null,
+      "unitPriceAmountMinor": null,
+      "grossAmountMinor": 0,
+      "discountAmountMinor": 600,
+      "taxAmountMinor": 0,
+      "netAmountMinor": -600,
+      "confidence": "high",
+      "taxRatePercent": null
+    },
+    {
+      "id": "line_7d110f829653bc04",
+      "type": "product",
+      "description": "손질바지락500g/팩",
+      "sourceLineReferences": [
+        "05"
+      ],
+      "identifiers": [
+        {
+          "scheme": "merchant_sku",
+          "value": "2507281037674"
+        }
+      ],
+      "quantity": {
+        "value": 1,
+        "unit": "each"
+      },
+      "unitPriceAmountMinor": 2990,
+      "grossAmountMinor": 2990,
+      "discountAmountMinor": 0,
+      "taxAmountMinor": 0,
+      "netAmountMinor": 2990,
+      "confidence": "high",
+      "taxRatePercent": null
+    },
+    {
+      "id": "line_0f953d69086d2af1",
+      "type": "discount",
+      "description": "S포인트회원 할인",
+      "sourceLineReferences": [
+        "05"
+      ],
+      "identifiers": [],
+      "quantity": null,
+      "unitPriceAmountMinor": null,
+      "grossAmountMinor": 0,
+      "discountAmountMinor": 600,
+      "taxAmountMinor": 0,
+      "netAmountMinor": -600,
+      "confidence": "high",
+      "taxRatePercent": null
+    }
+  ],
+  "totals": {
+    "itemsGrossAmountMinor": 12430,
+    "discountAmountMinor": 1200,
+    "taxAmountMinor": null,
+    "feeAmountMinor": null,
+    "tipAmountMinor": null,
+    "roundingAmountMinor": null,
+    "grandTotalAmountMinor": 11230
+  }
+}

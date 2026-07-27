@@ -94,7 +94,24 @@ export function mapReceipt(input: unknown): Receipt {
     if (line.type !== "product" || line.description === null || line.quantity?.unit !== "each" || !Number.isInteger(line.quantity.value) || line.quantity.value <= 0 || line.net_amount_minor === null || line.net_amount_minor < 0 || line.net_amount_minor % line.quantity.value !== 0) return [];
     return [{ id: receiptItemId(receiptId, line.id), receiptId, sourceLineReferences: line.source_line_references, productName: line.description, sourceProductCode: sourceProductCode(line), unitPriceKrw: line.net_amount_minor / line.quantity.value, quantityValue: line.quantity.value, totalPriceKrw: line.net_amount_minor, confidence: line.confidence }];
   });
-  const receipt = { id: receiptId, storeLabel: data.merchant.branch_name ? `${data.merchant.name} ${data.merchant.branch_name}` : data.merchant.name, storeAddress: data.merchant.address, storePhone: data.merchant.phone, retailChannel: data.merchant.retail_channel, catalogNamespace: data.merchant.catalog_namespace, purchasedAt, transactionNumber: data.document.source.original_document_id ?? "", currency: "KRW" as const, totalPriceKrw: data.totals.grand_total_amount_minor, items };
+  const receipt = {
+    id: receiptId,
+    storeName: data.merchant.name,
+    storeBranchName: data.merchant.branch_name,
+    storeLabel: data.merchant.branch_name ? `${data.merchant.name} ${data.merchant.branch_name}` : data.merchant.name,
+    storeBusinessKind: data.merchant.business_kind,
+    storeMerchantId: data.merchant.merchant_id,
+    storeBusinessRegistrationNumber: data.merchant.business_registration_number,
+    storeAddress: data.merchant.address,
+    storePhone: data.merchant.phone,
+    retailChannel: data.merchant.retail_channel,
+    catalogNamespace: data.merchant.catalog_namespace,
+    purchasedAt,
+    transactionNumber: data.document.source.original_document_id ?? "",
+    currency: "KRW" as const,
+    totalPriceKrw: data.totals.grand_total_amount_minor,
+    items,
+  };
   auditReceipt(receipt, data);
   return receipt;
 }

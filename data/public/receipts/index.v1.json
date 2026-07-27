@@ -1,0 +1,27 @@
+{
+  "schemaVersion": 1,
+  "privacyPolicyVersion": 2,
+  "revision": "7a82dd31f24af0b7",
+  "receipts": [
+    {
+      "id": "2026-05-08_001",
+      "fileName": "2026-05-08_001.json",
+      "revision": "5102cb11aa80ce77"
+    },
+    {
+      "id": "2026-06-07_001",
+      "fileName": "2026-06-07_001.json",
+      "revision": "59c07d1bf439f243"
+    },
+    {
+      "id": "2026-06-12_001",
+      "fileName": "2026-06-12_001.json",
+      "revision": "302415e63ada7e00"
+    },
+    {
+      "id": "2026-07-14_001",
+      "fileName": "2026-07-14_001.json",
+      "revision": "89c3a3b216d05e82"
+    }
+  ]
+}

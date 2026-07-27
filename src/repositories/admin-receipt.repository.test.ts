@@ -21,4 +21,22 @@ describe("localReceiptsToAdminRecords", () => {
       items: [{ id: "item-1", productName: "테스트 상품", sourceProductCode: "P-1", quantity: 2, unitPriceKrw: 1_000, totalPriceKrw: 2_000 }],
     }]);
   });
+
+  it("keeps the public receipt key and JSON filename visible for administrator tracing", () => {
+    const publicReceipt: Receipt = {
+      ...receipt,
+      id: "2026-07-22_001",
+      source: "public",
+      publicReceiptFileName: "2026-07-22_001.json",
+      transactionNumber: "",
+      items: [{ ...receipt.items[0], receiptId: "2026-07-22_001" }],
+    };
+
+    expect(localReceiptsToAdminRecords([publicReceipt])[0]).toMatchObject({
+      id: "2026-07-22_001",
+      source: "public",
+      publicReceiptFileName: "2026-07-22_001.json",
+      transactionNumber: "",
+    });
+  });
 });

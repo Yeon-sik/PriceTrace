@@ -20,7 +20,7 @@
 
 - **문제**: 실제 구매 가격은 영수증 안에 남지만, 나중에 상품·판매처·시점별로 다시 찾고 비교하기 어렵습니다.
 - **해결**: 영수증을 Zod로 검증해 상품 관측값으로 변환하고, 검색·필터·정렬·마트 탐색·장바구니 흐름으로 연결합니다.
-- **핵심 결과**: 검증된 private 원본에서 생성한 비식별 공개 관측 188건을 Git으로 추적하고, private 파일이 없는 정적 환경에서도 상품 탐색과 localStorage 장바구니를 사용할 수 있습니다.
+- **핵심 결과**: 검증된 private 원본 4건에서 금지 필드만 제거한 공개 영수증을 건당 `YYYY-MM-DD_NNN.json` 파일로 Git 추적하고, 영수증 품목에 연결된 관측 223건을 정적 환경에서도 판매처·영수증·상품 탐색과 localStorage 장바구니로 사용할 수 있습니다.
 - **기술적 차별점**: 원본 항목 ID와 비교용 상품 그룹을 분리하고, 판매처 간 통합 비교는 검토된 카탈로그 매핑 뒤에서만 수행합니다.
 
 ## 2. 문제와 해결
@@ -30,13 +30,13 @@
 | 영수증 속 실제 구매가를 다시 찾기 어렵다 | 판매처·관측일·상품 코드와 함께 관측가를 구조화 | 가격의 출처와 시점을 잃지 않음 |
 | 이름이 비슷하지만 규격이 다른 상품이 섞일 수 있다 | 상품 코드·카탈로그 namespace·검토 상태를 보존 | 거짓 최저가와 잘못된 추이를 줄임 |
 | 장보기 후보의 합계를 매번 계산해야 한다 | 상품별 수량 장바구니와 예상 합계를 제공 | 비교할 품목과 비용을 한 화면에서 확인 |
-| 실제 영수증을 공개하면 개인정보가 노출될 수 있다 | private 원본과 월·판매 채널 단위 공개 관측 projection을 분리 | 공개 검증과 개인 데이터 보호를 함께 유지 |
+| 원본 영수증을 그대로 공개하면 거래·결제 정보가 노출될 수 있다 | private 원본과 strict allowlist 기반 공개 영수증 projection을 분리 | 판매처·상품 정보의 투명성과 금지 정보 차단을 함께 유지 |
 
 ## 3. 핵심 기능과 결과
 
 | 영역 | 구현 결과 | 근거와 상태 |
 | --- | --- | --- |
-| 공개 관측 로드 | 금지 필드를 제외한 JSON 188건을 Zod 검증 후 상품 목록으로 변환 | `PublicObservationRepository`, projection 테스트 통과 |
+| 공개 영수증 로드 | 금지 필드를 제외한 공개 영수증 4건을 건당 JSON과 인덱스로 Zod 검증한 뒤 연결 관측 223건과 함께 판매처·상품 화면으로 변환 | `PublicReceiptRepository`, 공개 영수증·연결 회귀 테스트 통과 |
 | 상품 탐색 | 카테고리·판매처·마트 유형·검색어·가격 기준으로 탐색 | `ProductBrowser`, 현재 빌드 통과 |
 | 관측가 비교 | 상품 그룹의 최신 관측가와 판매처별 이력을 표시 | `PriceTrendModal`, `MarketBrowser`; 운영 관측 데이터는 미검증 |
 | 장바구니 | 수량 선택, 예상 합계, 새로고침 후 localStorage 복원 | `cart.store`, 저장소 테스트와 핵심 Playwright E2E 통과 |
@@ -58,8 +58,8 @@
 ## 5. 핵심 사용자 흐름
 
 ```text
-공개 관측 JSON 또는 로컬 private 영수증 로드
-  → Zod 검증과 상품 관측값 변환
+Git 추적 공개 영수증 JSON(건당 `YYYY-MM-DD_NNN.json`) 로드
+  → strict Zod 검증과 receipt index·receiptId·receiptItemId 연결 검사
   → 상품 검색·필터·판매처/마트 탐색
   → 관측가와 가격 이력 확인
   → 상품·수량을 장바구니에 추가
@@ -84,11 +84,12 @@
 
 | 검증 항목 | 상태 | 마지막 확인 | 근거 |
 | --- | --- | --- | --- |
-| ESLint | 통과 | 2026-07-26 | `npm.cmd run lint` |
-| TypeScript strict | 통과 | 2026-07-26 | `npm.cmd run typecheck` |
-| 단위 테스트 | 통과 | 2026-07-26 | `npm.cmd run test`: 16개 파일·41개 테스트 |
-| E2E | 실패 | 2026-07-26 | Chromium 시나리오 1건은 1.3초에 통과했으나 runner가 종료되지 않아 180초 timeout, exit 124 |
-| production build | 통과 | 2026-07-26 | `npm.cmd run build`: Next.js static export |
+| 공개 데이터 연결 검사 | 통과 | 2026-07-27 | `npm.cmd run check:public-receipts`: 개별 영수증 JSON 4건·관측 223건·index revision/link 검증 |
+| ESLint | 통과 | 2026-07-27 | `npm.cmd run lint` |
+| TypeScript strict | 통과 | 2026-07-27 | `npm.cmd run typecheck` |
+| 단위 테스트 | 통과 | 2026-07-27 | `npm.cmd run test`: 19개 파일·57개 테스트 |
+| E2E | 부분 통과 | 2026-07-27 | Chromium 3개 시나리오는 모두 통과했으나 종료 단계에서 180초 timeout, exit 124 |
+| production build | 통과 | 2026-07-27 | `npm.cmd run build`: Next.js static export |
 | 문서 자동화 | 운영 검증 | 2026-07-26 | `main` 병합 자동 발행 [run 30198781222](https://github.com/Yeon-sik/PriceTrace/actions/runs/30198781222) 성공; 독립 배포본 테스트 23건 통과 |
 | GitHub Pages | 운영 검증 | 2026-07-26 | commit `f86ec4b`, Actions [run 30198781229](https://github.com/Yeon-sik/PriceTrace/actions/runs/30198781229) build·deploy 성공 |
 | Notion 문서 동기화 | 운영 검증 | 2026-07-26 | commit `f86ec4b`, Actions [run 30198781222](https://github.com/Yeon-sik/PriceTrace/actions/runs/30198781222); 승인 대기 없는 자동 sync 후 두 미러의 원본 링크와 fingerprint 재조회 확인 |
@@ -97,9 +98,10 @@
 
 ## 8. 현재 한계와 다음 단계
 
-- **현재 한계**: 공개 projection은 판매처를 채널 단위, 날짜를 월 단위로 축약하므로 지점별·일별 가격 분석에는 사용할 수 없습니다.
+- **현재 한계**: 공개 영수증의 판매처명·주소·전화번호·사업자등록번호·정확한 발행일은 영수증별 정적 JSON으로 누구나 내려받을 수 있으므로, 공개 정책 변경은 새 policy version과 재검토가 필요합니다.
+- **입력 절차**: 새 원본은 `private-data/`에서 수동 검증한 뒤 `sync:public-receipts`로 공개 JSON·인덱스·연결 관측을 함께 갱신합니다. 앱 런타임은 private 원본을 읽지 않습니다.
 - **현재 한계**: 배분·정산·백업 코드는 존재하지만, 현재 상품 탐색 중심 UI에서는 사용자가 접근할 수 없습니다.
-- **다음 한 단계**: 과거 Git 이력에 남은 민감 영수증 파일의 이력 정리 여부를 별도 승인 후 결정합니다.
+- **다음 한 단계**: 변경을 배포한 뒤 GitHub Pages에서 판매처 상세와 영수증·상품 연결을 브라우저로 smoke test합니다.
 - **하지 않는 것**: OCR 자동 추출, 실시간 재고·현재가 보장, 검증 전 자동 상품 연결은 구현 범위에 넣지 않습니다.
 
 ## 9. 관련 문서

@@ -37,51 +37,46 @@ GitHub 저장소의 `Settings → Pages`에서 `Source`를 `GitHub Actions`로 �
 
 ## 데이터 경계
 
-- Git 추적 공개 관측: `data/public/product-observations.v1.json`
+- Git 추적 공개 영수증: `data/public/receipts/YYYY-MM-DD_NNN.json` (영수증 건당 JSON 1개)
+- 공개 영수증 인덱스: `data/public/receipts/index.v1.json` (파일명·개별 revision만 보관)
+- 영수증 품목 연결 관측: `data/public/product-observations.v3.json`
 - 정산 테스트용 합성 fixture: `data/demo/receipt.sample.json`
-- 실제 로컬 데이터: `private-data/` (Git 및 번들 제외)
+- 원본 이미지와 원본 JSON: `private-data/` (Git 및 번들 제외)
 - 앱의 변경 가능한 상태(수령자, 배분, 전달/입금 상태)는 localStorage에만 저장됩니다.
 - JSON 복원은 전체 Zod 검증을 통과한 경우에만 상태를 바꿉니다.
-- 공개 관측에는 판매 채널, 관측 월, 상품명, 상품코드, 관측가, 신뢰도만 저장합니다.
-- 주소, 전화번호, 사업자번호, 거래·결제 정보, 구매 수량, 영수증 총액, 원본 참조는 공개 관측에 저장하지 않습니다.
+- 공개 영수증에는 실제 판매처명·지점명·주소·전화번호·사업자등록번호·발행일·품목·수량·금액·합계를 저장합니다.
+- 공개 영수증의 ID와 파일명은 `YYYY-MM-DD_NNN` 및 `YYYY-MM-DD_NNN.json` 형식입니다. `YYYY-MM-DD`는 발행일, `NNN`은 해당 날짜의 영수증 순번이며 관리자 화면에서도 같은 키와 파일명을 표시합니다.
+- 각 공개 상품 관측은 `receiptId`와 `receiptItemId`로 검증된 공개 영수증 품목에 연결됩니다.
+- 거래번호, 결제·승인 정보, 고객 식별정보, OCR 원문, 원본 이미지 경로·파일명은 공개 JSON에 저장하지 않습니다. 검수 메모는 금지 값과 로컬 경로가 없을 때만 공개합니다.
 
-공개 관측을 갱신하고 검증하는 명령:
-
-```powershell
-npm.cmd run sync:public-observations
-npm.cmd run check:public-observations
-```
-
-`sync:public-observations`는 private 원본을 수정하지 않으며, 공개 내용이 같으면 파일을 다시 쓰지 않습니다. 생성 후에는 반드시 Git diff를 검토하고 의도한 파일만 선택해 커밋합니다.
-
-### private 영수증 자동 인식
-
-로컬 개발은 기본적으로 private 영수증 모드로 실행합니다.
+공개 영수증과 연결 관측을 갱신하고 검증하는 명령:
 
 ```powershell
-npm.cmd run dev
+npm.cmd run sync:public-receipts
+npm.cmd run check:public-receipts
 ```
 
-- `npm.cmd run dev:private`도 동일하게 사용할 수 있습니다.
-- `private-data/`의 `receipt_*.json` 파일을 5초마다 다시 확인합니다.
-- 파일 수정 시각과 크기가 바뀌지 않았다면 검증 결과를 재사용해 JSON을 반복 파싱하지 않습니다.
-- `(1)`, `(2)`처럼 같은 파일의 수정본이 여러 개면 수정 시각이 가장 최신인 파일만 사용합니다.
-- 사업자번호와 주소가 동일한 영수증은 같은 매장으로 묶되 원본 영수증 기록은 날짜별로 유지합니다.
-- 최신 파일이 `ReceiptJsonSchema` 검증에 실패하면 이전 파일로 자동 복귀하지 않고 앱에 경고를 표시합니다.
-- 앱에는 마트명, 발행일, 상품명, 상품코드, 수량, 관측가와 합계만 전달합니다.
-- 주소, 전화번호, 거래번호, 결제정보, OCR 원문과 원본 이미지명은 전달하지 않습니다.
-- private 서버나 파일을 사용할 수 없으면 앱은 Git에 추적된 공개 관측 데이터로 자동 대체합니다.
-- 공개 데이터만 확인하려면 `npm.cmd run dev:demo`를 사용합니다. production build도 공개 관측 데이터만 사용합니다.
+`sync:public-receipts`는 private 원본을 수정하지 않습니다. private 파일명은 `receipt_YYYY-MM-DD_NNN.json` 형식이어야 하며, strict Zod 검증, 금지 필드 검사, 개별 영수증·인덱스 revision과 상품 관측 연결 검사를 모두 통과한 경우에만 공개 파일을 생성합니다. 생성 후에는 반드시 Git diff를 검토하고 의도한 파일만 선택해 커밋합니다.
 
-사전 검증만 실행하려면 다음 명령을 사용합니다.
+### private 원본을 공개 영수증으로 반영
+
+앱과 production build는 **항상 Git 추적 공개 영수증만 읽습니다**. `private-data/`는 화면에서 탐색하지 않으며, 새 공개 영수증을 수동 생성하는 로컬 입력 원천일 뿐입니다.
+
+1. 기존 `receipt.v2` 템플릿으로 `private-data/receipt_YYYY-MM-DD_NNN.json`을 작성합니다.
+2. 아래 검증 명령으로 원본의 스키마·KRW·총액·수량을 확인합니다. 이 명령은 원본과 공개 파일을 변경하지 않습니다.
 
 ```powershell
 npm.cmd run validate:private-receipts -- receipt_YYYY-MM-DD_NNN.json
 ```
 
+3. 검증이 끝나면 `npm.cmd run sync:public-receipts`를 실행합니다. 이 명령이 공개 영수증 JSON, 인덱스, 연결 관측을 함께 생성합니다.
+4. `npm.cmd run check:public-receipts`로 생성 결과를 다시 검증하고 Git diff를 검토합니다.
+
+`sync:public-receipts`는 private 원본에 경고가 하나라도 있으면 공개 파일을 갱신하지 않습니다. `(1)`, `(2)` 수정본이 있으면 같은 논리 파일명 중 가장 최근 파일만 반영합니다.
+
 ## 수동 확인
 
-1. private 서버 없이 상품 목록과 마트별 공개 관측 기록이 표시되는지 확인합니다.
+1. private 서버 없이 공개 영수증 기반 상품 목록과 마트별 관측 기록이 표시되는지 확인합니다.
 2. 수령자를 추가한 뒤 상품 행에서 수령자·양의 정수 수량을 선택해 담습니다.
 3. 구매 수량보다 크게 입력하거나 0/소수를 입력했을 때 오류가 표시되는지 확인합니다.
 4. 정산 카드에서 전달·입금 상태와 카카오톡 메시지 복사를 확인합니다.

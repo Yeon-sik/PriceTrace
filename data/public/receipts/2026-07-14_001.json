@@ -1,0 +1,2453 @@
+{
+  "schemaVersion": 1,
+  "privacyPolicyVersion": 2,
+  "revision": "89c3a3b216d05e82",
+  "id": "2026-07-14_001",
+  "fileName": "2026-07-14_001.json",
+  "merchant": {
+    "id": "store_cae558d8aea8ae4c",
+    "name": "와마트",
+    "branchName": "일산점",
+    "businessKind": "retail",
+    "retailChannel": "px",
+    "catalogNamespace": "korean-military-px",
+    "merchantId": null,
+    "businessRegistrationNumber": null,
+    "address": "고양시 일산동구 고양대로 927",
+    "phone": null
+  },
+  "document": {
+    "type": "receipt",
+    "status": "final",
+    "issuedOn": "2026-07-14",
+    "issuedAt": null,
+    "currency": "KRW",
+    "captureMethod": "manual_transcription",
+    "transcriptionStatus": "user_verified",
+    "notes": [
+      "사용자가 지정한 상품명을 반영함.",
+      "동일 상품명·물품번호·개당 가격의 항목은 수량과 총금액을 합산함.",
+      "purchase_numbers 배열로 병합 전 구매번호를 보존함.",
+      "구매번호 75번의 단가를 3,100원, 수량을 2개, 총액을 6,200원으로 수정함.",
+      "품목 합계와 영수증 최종 합계 737,790원이 일치함.",
+      "구형 데이터 병합 규칙: product_name + store_product_code + unit_price_krw가 모두 동일한 항목 병합",
+      "구형 125개 행을 95개 품목으로 보존함."
+    ]
+  },
+  "lineItems": [
+    {
+      "id": "line_54e4387ea8e0e230",
+      "type": "product",
+      "description": "(영외)5가지 재료로만 만든 부침",
+      "sourceLineReferences": [
+        "1"
+      ],
+      "identifiers": [
+        {
+          "scheme": "merchant_sku",
+          "value": "240024"
+        }
+      ],
+      "quantity": {
+        "value": 1,
+        "unit": "each"
+      },
+      "unitPriceAmountMinor": 2750,
+      "grossAmountMinor": 2750,
+      "discountAmountMinor": 0,
+      "taxAmountMinor": 0,
+      "netAmountMinor": 2750,
+      "confidence": "high",
+      "taxRatePercent": null
+    },
+    {
+      "id": "line_be68fea7073f23a7",
+      "type": "product",
+      "description": "56시간 저온숙성 속 탕종숙식빵",
+      "sourceLineReferences": [
+        "2"
+      ],
+      "identifiers": [
+        {
+          "scheme": "merchant_sku",
+          "value": "230229"
+        }
+      ],
+      "quantity": {
+        "value": 1,
+        "unit": "each"
+      },
+      "unitPriceAmountMinor": 1930,
+      "grossAmountMinor": 1930,
+      "discountAmountMinor": 0,
+      "taxAmountMinor": 0,
+      "netAmountMinor": 1930,
+      "confidence": "medium",
+      "taxRatePercent": null
+    },
+    {
+      "id": "line_2b5a87b89525b4ba",
+      "type": "product",
+      "description": "대일시프쿨파스",
+      "sourceLineReferences": [
+        "3"
+      ],
+      "identifiers": [
+        {
+          "scheme": "merchant_sku",
+          "value": "200301"
+        }
+      ],
+      "quantity": {
+        "value": 10,
+        "unit": "each"
+      },
+      "unitPriceAmountMinor": 2530,
+      "grossAmountMinor": 25300,
+      "discountAmountMinor": 0,
+      "taxAmountMinor": 0,
+      "netAmountMinor": 25300,
+      "confidence": "medium",
+      "taxRatePercent": null
+    },
+    {
+      "id": "line_350b3f1183392251",
+      "type": "product",
+      "description": "황금발말포크&스크램블 2인",
+      "sourceLineReferences": [
+        "4",
+        "11",
+        "15"
+      ],
+      "identifiers": [
+        {
+          "scheme": "merchant_sku",
+          "value": "210157"
+        }
+      ],
+      "quantity": {
+        "value": 5,
+        "unit": "each"
+      },
+      "unitPriceAmountMinor": 3440,
+      "grossAmountMinor": 17200,
+      "discountAmountMinor": 0,
+      "taxAmountMinor": 0,
+      "netAmountMinor": 17200,
+      "confidence": "medium",
+      "taxRatePercent": null
+    },
+    {
+      "id": "line_a149dcaadbd756e4",
+      "type": "product",
+      "description": "씨푸드믹스",
+      "sourceLineReferences": [
+        "5"
+      ],
+      "identifiers": [
+        {
+          "scheme": "merchant_sku",
+          "value": "260519"
+        }
+      ],
+      "quantity": {
+        "value": 1,
+        "unit": "each"
+      },
+      "unitPriceAmountMinor": 12940,
+      "grossAmountMinor": 12940,
+      "discountAmountMinor": 0,
+      "taxAmountMinor": 0,
+      "netAmountMinor": 12940,
+      "confidence": "user_verified",
+      "taxRatePercent": null
+    },
+    {
+      "id": "line_0a2f3f133a35985b",
+      "type": "product",
+      "description": "주부9단 비엔나소시지",
+      "sourceLineReferences": [
+        "6",
+        "21"
+      ],
+      "identifiers": [
+        {
+          "scheme": "merchant_sku",
+          "value": "250311"
+        }
+      ],
+      "quantity": {
+        "value": 3,
+        "unit": "each"
+      },
+      "unitPriceAmountMinor": 2040,
+      "grossAmountMinor": 6120,
+      "discountAmountMinor": 0,
+      "taxAmountMinor": 0,
+      "netAmountMinor": 6120,
+      "confidence": "high",
+      "taxRatePercent": null
+    },
+    {
+      "id": "line_77be98e4966cc5ae",
+      "type": "product",
+      "description": "(영외)호밍스 해물누룽지탕(670)",
+      "sourceLineReferences": [
+        "7",
+        "10"
+      ],
+      "identifiers": [
+        {
+          "scheme": "merchant_sku",
+          "value": "250073"
+        }
+      ],
+      "quantity": {
+        "value": 3,
+        "unit": "each"
+      },
+      "unitPriceAmountMinor": 9060,
+      "grossAmountMinor": 27180,
+      "discountAmountMinor": 0,
+      "taxAmountMinor": 0,
+      "netAmountMinor": 27180,
+      "confidence": "high",
+      "taxRatePercent": null
+    },
+    {
+      "id": "line_4f3c81cd84803345",
+      "type": "product",
+      "description": "(260366)RainOK 메탈",
+      "sourceLineReferences": [
+        "8"
+      ],
+      "identifiers": [
+        {
+          "scheme": "merchant_sku",
+          "value": "260621"
+        }
+      ],
+      "quantity": {
+        "value": 1,
+        "unit": "each"
+      },
+      "unitPriceAmountMinor": 9600,
+      "grossAmountMinor": 9600,
+      "discountAmountMinor": 0,
+      "taxAmountMinor": 0,
+      "netAmountMinor": 9600,
+      "confidence": "medium",
+      "taxRatePercent": null
+    },
+    {
+      "id": "line_bcb853e61266c458",
+      "type": "product",
+      "description": "오뚜기 순후추 팝콘",
+      "sourceLineReferences": [
+        "9",
+        "12"
+      ],
+      "identifiers": [
+        {
+          "scheme": "merchant_sku",
+          "value": "260249"
+        }
+      ],
+      "quantity": {
+        "value": 2,
+        "unit": "each"
+      },
+      "unitPriceAmountMinor": 810,
+      "grossAmountMinor": 1620,
+      "discountAmountMinor": 0,
+      "taxAmountMinor": 0,
+      "netAmountMinor": 1620,
+      "confidence": "high",
+      "taxRatePercent": null
+    },
+    {
+      "id": "line_015d12285e572aac",
+      "type": "product",
+      "description": "새우깡",
+      "sourceLineReferences": [
+        "13",
+        "27",
+        "37"
+      ],
+      "identifiers": [
+        {
+          "scheme": "merchant_sku",
+          "value": "120987"
+        }
+      ],
+      "quantity": {
+        "value": 3,
+        "unit": "each"
+      },
+      "unitPriceAmountMinor": 930,
+      "grossAmountMinor": 2790,
+      "discountAmountMinor": 0,
+      "taxAmountMinor": 0,
+      "netAmountMinor": 2790,
+      "confidence": "high",
+      "taxRatePercent": null
+    },
+    {
+      "id": "line_950aecd7021ffd59",
+      "type": "product",
+      "description": "베리베리스트로베리큐브",
+      "sourceLineReferences": [
+        "14"
+      ],
+      "identifiers": [
+        {
+          "scheme": "merchant_sku",
+          "value": "250428"
+        }
+      ],
+      "quantity": {
+        "value": 5,
+        "unit": "each"
+      },
+      "unitPriceAmountMinor": 1080,
+      "grossAmountMinor": 5400,
+      "discountAmountMinor": 0,
+      "taxAmountMinor": 0,
+      "netAmountMinor": 5400,
+      "confidence": "medium",
+      "taxRatePercent": null
+    },
+    {
+      "id": "line_2b8626ae1553a0b6",
+      "type": "product",
+      "description": "오동통 모둠어묵",
+      "sourceLineReferences": [
+        "16"
+      ],
+      "identifiers": [
+        {
+          "scheme": "merchant_sku",
+          "value": "250490"
+        }
+      ],
+      "quantity": {
+        "value": 1,
+        "unit": "each"
+      },
+      "unitPriceAmountMinor": 6020,
+      "grossAmountMinor": 6020,
+      "discountAmountMinor": 0,
+      "taxAmountMinor": 0,
+      "netAmountMinor": 6020,
+      "confidence": "high",
+      "taxRatePercent": null
+    },
+    {
+      "id": "line_bea9b855b91c7363",
+      "type": "product",
+      "description": "(영외)용두동 할매 쭈꾸미",
+      "sourceLineReferences": [
+        "17"
+      ],
+      "identifiers": [
+        {
+          "scheme": "merchant_sku",
+          "value": "240451"
+        }
+      ],
+      "quantity": {
+        "value": 2,
+        "unit": "each"
+      },
+      "unitPriceAmountMinor": 7190,
+      "grossAmountMinor": 14380,
+      "discountAmountMinor": 0,
+      "taxAmountMinor": 0,
+      "netAmountMinor": 14380,
+      "confidence": "high",
+      "taxRatePercent": null
+    },
+    {
+      "id": "line_4e60871427c7bd38",
+      "type": "product",
+      "description": "멸치맛쌀국수",
+      "sourceLineReferences": [
+        "18"
+      ],
+      "identifiers": [
+        {
+          "scheme": "merchant_sku",
+          "value": "150151"
+        }
+      ],
+      "quantity": {
+        "value": 3,
+        "unit": "each"
+      },
+      "unitPriceAmountMinor": 1070,
+      "grossAmountMinor": 3210,
+      "discountAmountMinor": 0,
+      "taxAmountMinor": 0,
+      "netAmountMinor": 3210,
+      "confidence": "high",
+      "taxRatePercent": null
+    },
+    {
+      "id": "line_e1709103cf2988a5",
+      "type": "product",
+      "description": "포카칩오리지널",
+      "sourceLineReferences": [
+        "19",
+        "36"
+      ],
+      "identifiers": [
+        {
+          "scheme": "merchant_sku",
+          "value": "121416"
+        }
+      ],
+      "quantity": {
+        "value": 3,
+        "unit": "each"
+      },
+      "unitPriceAmountMinor": 1070,
+      "grossAmountMinor": 3210,
+      "discountAmountMinor": 0,
+      "taxAmountMinor": 0,
+      "netAmountMinor": 3210,
+      "confidence": "high",
+      "taxRatePercent": null
+    },
+    {
+      "id": "line_77ebcada140c8fc2",
+      "type": "product",
+      "description": "순살바3종 1세트",
+      "sourceLineReferences": [
+        "20"
+      ],
+      "identifiers": [
+        {
+          "scheme": "merchant_sku",
+          "value": "260453"
+        }
+      ],
+      "quantity": {
+        "value": 1,
+        "unit": "each"
+      },
+      "unitPriceAmountMinor": 4700,
+      "grossAmountMinor": 4700,
+      "discountAmountMinor": 0,
+      "taxAmountMinor": 0,
+      "netAmountMinor": 4700,
+      "confidence": "medium",
+      "taxRatePercent": null
+    },
+    {
+      "id": "line_0b0dc9818625feaf",
+      "type": "product",
+      "description": "떡붕어싸만코",
+      "sourceLineReferences": [
+        "22"
+      ],
+      "identifiers": [
+        {
+          "scheme": "merchant_sku",
+          "value": "250205"
+        }
+      ],
+      "quantity": {
+        "value": 3,
+        "unit": "each"
+      },
+      "unitPriceAmountMinor": 680,
+      "grossAmountMinor": 2040,
+      "discountAmountMinor": 0,
+      "taxAmountMinor": 0,
+      "netAmountMinor": 2040,
+      "confidence": "user_verified",
+      "taxRatePercent": null
+    },
+    {
+      "id": "line_68935cd02680ac44",
+      "type": "product",
+      "description": "요맘때 딸기 콘",
+      "sourceLineReferences": [
+        "23",
+        "41"
+      ],
+      "identifiers": [
+        {
+          "scheme": "merchant_sku",
+          "value": "250207"
+        }
+      ],
+      "quantity": {
+        "value": 5,
+        "unit": "each"
+      },
+      "unitPriceAmountMinor": 810,
+      "grossAmountMinor": 4050,
+      "discountAmountMinor": 0,
+      "taxAmountMinor": 0,
+      "netAmountMinor": 4050,
+      "confidence": "high",
+      "taxRatePercent": null
+    },
+    {
+      "id": "line_fba1d3bf989a1b31",
+      "type": "product",
+      "description": "더위사냥 커피",
+      "sourceLineReferences": [
+        "24"
+      ],
+      "identifiers": [
+        {
+          "scheme": "merchant_sku",
+          "value": "250202"
+        }
+      ],
+      "quantity": {
+        "value": 3,
+        "unit": "each"
+      },
+      "unitPriceAmountMinor": 520,
+      "grossAmountMinor": 1560,
+      "discountAmountMinor": 0,
+      "taxAmountMinor": 0,
+      "netAmountMinor": 1560,
+      "confidence": "high",
+      "taxRatePercent": null
+    },
+    {
+      "id": "line_1ea9661b10453b6f",
+      "type": "product",
+      "description": "슈팅스타 프리팩",
+      "sourceLineReferences": [
+        "25",
+        "42",
+        "54"
+      ],
+      "identifiers": [
+        {
+          "scheme": "merchant_sku",
+          "value": "260399"
+        }
+      ],
+      "quantity": {
+        "value": 4,
+        "unit": "each"
+      },
+      "unitPriceAmountMinor": 1650,
+      "grossAmountMinor": 6600,
+      "discountAmountMinor": 0,
+      "taxAmountMinor": 0,
+      "netAmountMinor": 6600,
+      "confidence": "user_verified",
+      "taxRatePercent": null
+    },
+    {
+      "id": "line_8c38bfec9e2bcc82",
+      "type": "product",
+      "description": "냉동새우살(흰다리새우)",
+      "sourceLineReferences": [
+        "26"
+      ],
+      "identifiers": [
+        {
+          "scheme": "merchant_sku",
+          "value": "260159"
+        }
+      ],
+      "quantity": {
+        "value": 1,
+        "unit": "each"
+      },
+      "unitPriceAmountMinor": 9600,
+      "grossAmountMinor": 9600,
+      "discountAmountMinor": 0,
+      "taxAmountMinor": 0,
+      "netAmountMinor": 9600,
+      "confidence": "high",
+      "taxRatePercent": null
+    },
+    {
+      "id": "line_4983d319875f3065",
+      "type": "product",
+      "description": "(영외)사계절쌈장",
+      "sourceLineReferences": [
+        "28",
+        "71"
+      ],
+      "identifiers": [
+        {
+          "scheme": "merchant_sku",
+          "value": "170162"
+        }
+      ],
+      "quantity": {
+        "value": 2,
+        "unit": "each"
+      },
+      "unitPriceAmountMinor": 2560,
+      "grossAmountMinor": 5120,
+      "discountAmountMinor": 0,
+      "taxAmountMinor": 0,
+      "netAmountMinor": 5120,
+      "confidence": "high",
+      "taxRatePercent": null
+    },
+    {
+      "id": "line_b6604172dffd64f8",
+      "type": "product",
+      "description": "녹차초코릿바",
+      "sourceLineReferences": [
+        "29",
+        "39"
+      ],
+      "identifiers": [
+        {
+          "scheme": "merchant_sku",
+          "value": "250277"
+        }
+      ],
+      "quantity": {
+        "value": 3,
+        "unit": "each"
+      },
+      "unitPriceAmountMinor": 1540,
+      "grossAmountMinor": 4620,
+      "discountAmountMinor": 0,
+      "taxAmountMinor": 0,
+      "netAmountMinor": 4620,
+      "confidence": "high",
+      "taxRatePercent": null
+    },
+    {
+      "id": "line_d243c1ef433bb023",
+      "type": "product",
+      "description": "(영외)국산콩 순두부",
+      "sourceLineReferences": [
+        "30"
+      ],
+      "identifiers": [
+        {
+          "scheme": "merchant_sku",
+          "value": "260018"
+        }
+      ],
+      "quantity": {
+        "value": 2,
+        "unit": "each"
+      },
+      "unitPriceAmountMinor": 1400,
+      "grossAmountMinor": 2800,
+      "discountAmountMinor": 0,
+      "taxAmountMinor": 0,
+      "netAmountMinor": 2800,
+      "confidence": "high",
+      "taxRatePercent": null
+    },
+    {
+      "id": "line_3fd31bc0cd894876",
+      "type": "product",
+      "description": "(영외)다담 우렁 강된장비빔양념",
+      "sourceLineReferences": [
+        "31",
+        "35"
+      ],
+      "identifiers": [
+        {
+          "scheme": "merchant_sku",
+          "value": "250021"
+        }
+      ],
+      "quantity": {
+        "value": 3,
+        "unit": "each"
+      },
+      "unitPriceAmountMinor": 1130,
+      "grossAmountMinor": 3390,
+      "discountAmountMinor": 0,
+      "taxAmountMinor": 0,
+      "netAmountMinor": 3390,
+      "confidence": "high",
+      "taxRatePercent": null
+    },
+    {
+      "id": "line_fd1fc1ed8c3f3a19",
+      "type": "product",
+      "description": "코주부 CLASSIC육포mild",
+      "sourceLineReferences": [
+        "32",
+        "34"
+      ],
+      "identifiers": [
+        {
+          "scheme": "merchant_sku",
+          "value": "160066"
+        }
+      ],
+      "quantity": {
+        "value": 3,
+        "unit": "each"
+      },
+      "unitPriceAmountMinor": 8030,
+      "grossAmountMinor": 24090,
+      "discountAmountMinor": 0,
+      "taxAmountMinor": 0,
+      "netAmountMinor": 24090,
+      "confidence": "user_verified",
+      "taxRatePercent": null
+    },
+    {
+      "id": "line_695ccc86168cd26c",
+      "type": "product",
+      "description": "일품통심육포",
+      "sourceLineReferences": [
+        "33"
+      ],
+      "identifiers": [
+        {
+          "scheme": "merchant_sku",
+          "value": "260141"
+        }
+      ],
+      "quantity": {
+        "value": 1,
+        "unit": "each"
+      },
+      "unitPriceAmountMinor": 5700,
+      "grossAmountMinor": 5700,
+      "discountAmountMinor": 0,
+      "taxAmountMinor": 0,
+      "netAmountMinor": 5700,
+      "confidence": "medium",
+      "taxRatePercent": null
+    },
+    {
+      "id": "line_b8127f33dc07b5c7",
+      "type": "product",
+      "description": "자연산골뱅이 300g 원터치",
+      "sourceLineReferences": [
+        "38"
+      ],
+      "identifiers": [
+        {
+          "scheme": "merchant_sku",
+          "value": "220265"
+        }
+      ],
+      "quantity": {
+        "value": 1,
+        "unit": "each"
+      },
+      "unitPriceAmountMinor": 4960,
+      "grossAmountMinor": 4960,
+      "discountAmountMinor": 0,
+      "taxAmountMinor": 0,
+      "netAmountMinor": 4960,
+      "confidence": "high",
+      "taxRatePercent": null
+    },
+    {
+      "id": "line_2464a48434a5ea5a",
+      "type": "product",
+      "description": "(영외)풀무원국산콩두부단단한부침용",
+      "sourceLineReferences": [
+        "40",
+        "51"
+      ],
+      "identifiers": [
+        {
+          "scheme": "merchant_sku",
+          "value": "250436"
+        }
+      ],
+      "quantity": {
+        "value": 2,
+        "unit": "each"
+      },
+      "unitPriceAmountMinor": 2800,
+      "grossAmountMinor": 5600,
+      "discountAmountMinor": 0,
+      "taxAmountMinor": 0,
+      "netAmountMinor": 5600,
+      "confidence": "high",
+      "taxRatePercent": null
+    },
+    {
+      "id": "line_3ffebab630b3f61e",
+      "type": "product",
+      "description": "레인보우샤베트 프리팩",
+      "sourceLineReferences": [
+        "43",
+        "55"
+      ],
+      "identifiers": [
+        {
+          "scheme": "merchant_sku",
+          "value": "260400"
+        }
+      ],
+      "quantity": {
+        "value": 3,
+        "unit": "each"
+      },
+      "unitPriceAmountMinor": 1650,
+      "grossAmountMinor": 4950,
+      "discountAmountMinor": 0,
+      "taxAmountMinor": 0,
+      "netAmountMinor": 4950,
+      "confidence": "high",
+      "taxRatePercent": null
+    },
+    {
+      "id": "line_d3224c5da2cd650b",
+      "type": "product",
+      "description": "하겐다즈 미니컵 스트로베리",
+      "sourceLineReferences": [
+        "44",
+        "59"
+      ],
+      "identifiers": [
+        {
+          "scheme": "merchant_sku",
+          "value": "210059"
+        }
+      ],
+      "quantity": {
+        "value": 2,
+        "unit": "each"
+      },
+      "unitPriceAmountMinor": 2030,
+      "grossAmountMinor": 4060,
+      "discountAmountMinor": 0,
+      "taxAmountMinor": 0,
+      "netAmountMinor": 4060,
+      "confidence": "high",
+      "taxRatePercent": null
+    },
+    {
+      "id": "line_167509f0446f2394",
+      "type": "product",
+      "description": "엄마는외계인 프리팩",
+      "sourceLineReferences": [
+        "45",
+        "58"
+      ],
+      "identifiers": [
+        {
+          "scheme": "merchant_sku",
+          "value": "260401"
+        }
+      ],
+      "quantity": {
+        "value": 2,
+        "unit": "each"
+      },
+      "unitPriceAmountMinor": 1650,
+      "grossAmountMinor": 3300,
+      "discountAmountMinor": 0,
+      "taxAmountMinor": 0,
+      "netAmountMinor": 3300,
+      "confidence": "high",
+      "taxRatePercent": null
+    },
+    {
+      "id": "line_a98380dfba218b41",
+      "type": "product",
+      "description": "체리쥬빌레 PREPACK",
+      "sourceLineReferences": [
+        "46",
+        "48"
+      ],
+      "identifiers": [
+        {
+          "scheme": "merchant_sku",
+          "value": "230377"
+        }
+      ],
+      "quantity": {
+        "value": 2,
+        "unit": "each"
+      },
+      "unitPriceAmountMinor": 1540,
+      "grossAmountMinor": 3080,
+      "discountAmountMinor": 0,
+      "taxAmountMinor": 0,
+      "netAmountMinor": 3080,
+      "confidence": "high",
+      "taxRatePercent": null
+    },
+    {
+      "id": "line_8c645ee2fa2488aa",
+      "type": "product",
+      "description": "아몬드 봉봉 PREPACK",
+      "sourceLineReferences": [
+        "47",
+        "56"
+      ],
+      "identifiers": [
+        {
+          "scheme": "merchant_sku",
+          "value": "230378"
+        }
+      ],
+      "quantity": {
+        "value": 2,
+        "unit": "each"
+      },
+      "unitPriceAmountMinor": 1540,
+      "grossAmountMinor": 3080,
+      "discountAmountMinor": 0,
+      "taxAmountMinor": 0,
+      "netAmountMinor": 3080,
+      "confidence": "high",
+      "taxRatePercent": null
+    },
+    {
+      "id": "line_2025c149736fe917",
+      "type": "product",
+      "description": "박카스에프액 120ml",
+      "sourceLineReferences": [
+        "49"
+      ],
+      "identifiers": [
+        {
+          "scheme": "merchant_sku",
+          "value": "170088"
+        }
+      ],
+      "quantity": {
+        "value": 10,
+        "unit": "each"
+      },
+      "unitPriceAmountMinor": 570,
+      "grossAmountMinor": 5700,
+      "discountAmountMinor": 0,
+      "taxAmountMinor": 0,
+      "netAmountMinor": 5700,
+      "confidence": "high",
+      "taxRatePercent": null
+    },
+    {
+      "id": "line_62daae1c432812a0",
+      "type": "product",
+      "description": "주부9단 프랑크소시지",
+      "sourceLineReferences": [
+        "50"
+      ],
+      "identifiers": [
+        {
+          "scheme": "merchant_sku",
+          "value": "230292"
+        }
+      ],
+      "quantity": {
+        "value": 3,
+        "unit": "each"
+      },
+      "unitPriceAmountMinor": 2120,
+      "grossAmountMinor": 6360,
+      "discountAmountMinor": 0,
+      "taxAmountMinor": 0,
+      "netAmountMinor": 6360,
+      "confidence": "high",
+      "taxRatePercent": null
+    },
+    {
+      "id": "line_f54b544bb541818d",
+      "type": "product",
+      "description": "헬리코박터 프로젝트 윌 오리지널",
+      "sourceLineReferences": [
+        "52"
+      ],
+      "identifiers": [
+        {
+          "scheme": "merchant_sku",
+          "value": "250096"
+        }
+      ],
+      "quantity": {
+        "value": 1,
+        "unit": "each"
+      },
+      "unitPriceAmountMinor": 2490,
+      "grossAmountMinor": 2490,
+      "discountAmountMinor": 0,
+      "taxAmountMinor": 0,
+      "netAmountMinor": 2490,
+      "confidence": "high",
+      "taxRatePercent": null
+    },
+    {
+      "id": "line_d967d3ce64f17bc6",
+      "type": "product",
+      "description": "하겐다즈 미니컵 벨지안초코릿",
+      "sourceLineReferences": [
+        "53",
+        "60"
+      ],
+      "identifiers": [
+        {
+          "scheme": "merchant_sku",
+          "value": "200183"
+        }
+      ],
+      "quantity": {
+        "value": 2,
+        "unit": "each"
+      },
+      "unitPriceAmountMinor": 2130,
+      "grossAmountMinor": 4260,
+      "discountAmountMinor": 0,
+      "taxAmountMinor": 0,
+      "netAmountMinor": 4260,
+      "confidence": "high",
+      "taxRatePercent": null
+    },
+    {
+      "id": "line_6c8b65750c534733",
+      "type": "product",
+      "description": "제로 미니바이트 밀크 초코",
+      "sourceLineReferences": [
+        "57"
+      ],
+      "identifiers": [
+        {
+          "scheme": "merchant_sku",
+          "value": "250282"
+        }
+      ],
+      "quantity": {
+        "value": 1,
+        "unit": "each"
+      },
+      "unitPriceAmountMinor": 4100,
+      "grossAmountMinor": 4100,
+      "discountAmountMinor": 0,
+      "taxAmountMinor": 0,
+      "netAmountMinor": 4100,
+      "confidence": "medium",
+      "taxRatePercent": null
+    },
+    {
+      "id": "line_2971884972573301",
+      "type": "product",
+      "description": "미니스 여행용세트",
+      "sourceLineReferences": [
+        "61",
+        "63"
+      ],
+      "identifiers": [
+        {
+          "scheme": "merchant_sku",
+          "value": "161528"
+        }
+      ],
+      "quantity": {
+        "value": 2,
+        "unit": "each"
+      },
+      "unitPriceAmountMinor": 5520,
+      "grossAmountMinor": 11040,
+      "discountAmountMinor": 0,
+      "taxAmountMinor": 0,
+      "netAmountMinor": 11040,
+      "confidence": "high",
+      "taxRatePercent": null
+    },
+    {
+      "id": "line_95b025e2fca4cb54",
+      "type": "product",
+      "description": "규격(240046) 자외선차단쿨토시",
+      "sourceLineReferences": [
+        "62"
+      ],
+      "identifiers": [
+        {
+          "scheme": "merchant_sku",
+          "value": "240543"
+        }
+      ],
+      "quantity": {
+        "value": 1,
+        "unit": "each"
+      },
+      "unitPriceAmountMinor": 2970,
+      "grossAmountMinor": 2970,
+      "discountAmountMinor": 0,
+      "taxAmountMinor": 0,
+      "netAmountMinor": 2970,
+      "confidence": "user_verified",
+      "taxRatePercent": null
+    },
+    {
+      "id": "line_fe971b4b2ceca1cb",
+      "type": "product",
+      "description": "닥터지 모이스처 인 바디 5.0 바",
+      "sourceLineReferences": [
+        "64"
+      ],
+      "identifiers": [
+        {
+          "scheme": "merchant_sku",
+          "value": "240309"
+        }
+      ],
+      "quantity": {
+        "value": 1,
+        "unit": "each"
+      },
+      "unitPriceAmountMinor": 6960,
+      "grossAmountMinor": 6960,
+      "discountAmountMinor": 0,
+      "taxAmountMinor": 0,
+      "netAmountMinor": 6960,
+      "confidence": "medium",
+      "taxRatePercent": null
+    },
+    {
+      "id": "line_6c26751cbad332de",
+      "type": "product",
+      "description": "부케가르니 글로우 퍼퓸드 샴푸 화",
+      "sourceLineReferences": [
+        "65"
+      ],
+      "identifiers": [
+        {
+          "scheme": "merchant_sku",
+          "value": "250258"
+        }
+      ],
+      "quantity": {
+        "value": 1,
+        "unit": "each"
+      },
+      "unitPriceAmountMinor": 5190,
+      "grossAmountMinor": 5190,
+      "discountAmountMinor": 0,
+      "taxAmountMinor": 0,
+      "netAmountMinor": 5190,
+      "confidence": "low",
+      "taxRatePercent": null
+    },
+    {
+      "id": "line_dc6e135d3f60be4d",
+      "type": "product",
+      "description": "비욘드에코네이처 릴렉싱 바디워시",
+      "sourceLineReferences": [
+        "66"
+      ],
+      "identifiers": [
+        {
+          "scheme": "merchant_sku",
+          "value": "210261"
+        }
+      ],
+      "quantity": {
+        "value": 1,
+        "unit": "each"
+      },
+      "unitPriceAmountMinor": 4510,
+      "grossAmountMinor": 4510,
+      "discountAmountMinor": 0,
+      "taxAmountMinor": 0,
+      "netAmountMinor": 4510,
+      "confidence": "high",
+      "taxRatePercent": null
+    },
+    {
+      "id": "line_494a81b6cd474f60",
+      "type": "product",
+      "description": "부케가르니 나드 샴푸 시그니처",
+      "sourceLineReferences": [
+        "67"
+      ],
+      "identifiers": [
+        {
+          "scheme": "merchant_sku",
+          "value": "250260"
+        }
+      ],
+      "quantity": {
+        "value": 1,
+        "unit": "each"
+      },
+      "unitPriceAmountMinor": 4900,
+      "grossAmountMinor": 4900,
+      "discountAmountMinor": 0,
+      "taxAmountMinor": 0,
+      "netAmountMinor": 4900,
+      "confidence": "high",
+      "taxRatePercent": null
+    },
+    {
+      "id": "line_b2cf47df2ba590d7",
+      "type": "product",
+      "description": "하림 닭가슴살림닭가슴살",
+      "sourceLineReferences": [
+        "68"
+      ],
+      "identifiers": [
+        {
+          "scheme": "merchant_sku",
+          "value": "200054"
+        }
+      ],
+      "quantity": {
+        "value": 2,
+        "unit": "each"
+      },
+      "unitPriceAmountMinor": 1920,
+      "grossAmountMinor": 3840,
+      "discountAmountMinor": 0,
+      "taxAmountMinor": 0,
+      "netAmountMinor": 3840,
+      "confidence": "low",
+      "taxRatePercent": null
+    },
+    {
+      "id": "line_1fc0d0f08443c56a",
+      "type": "product",
+      "description": "안심닭가슴살",
+      "sourceLineReferences": [
+        "69"
+      ],
+      "identifiers": [
+        {
+          "scheme": "merchant_sku",
+          "value": "160123"
+        }
+      ],
+      "quantity": {
+        "value": 2,
+        "unit": "each"
+      },
+      "unitPriceAmountMinor": 1770,
+      "grossAmountMinor": 3540,
+      "discountAmountMinor": 0,
+      "taxAmountMinor": 0,
+      "netAmountMinor": 3540,
+      "confidence": "high",
+      "taxRatePercent": null
+    },
+    {
+      "id": "line_c23cd0a1d8441c69",
+      "type": "product",
+      "description": "토마토케찹500g",
+      "sourceLineReferences": [
+        "70"
+      ],
+      "identifiers": [
+        {
+          "scheme": "merchant_sku",
+          "value": "121955"
+        }
+      ],
+      "quantity": {
+        "value": 1,
+        "unit": "each"
+      },
+      "unitPriceAmountMinor": 2530,
+      "grossAmountMinor": 2530,
+      "discountAmountMinor": 0,
+      "taxAmountMinor": 0,
+      "netAmountMinor": 2530,
+      "confidence": "high",
+      "taxRatePercent": null
+    },
+    {
+      "id": "line_2f193efa662aad7c",
+      "type": "product",
+      "description": "햇반",
+      "sourceLineReferences": [
+        "72"
+      ],
+      "identifiers": [
+        {
+          "scheme": "merchant_sku",
+          "value": "003609"
+        }
+      ],
+      "quantity": {
+        "value": 8,
+        "unit": "each"
+      },
+      "unitPriceAmountMinor": 1130,
+      "grossAmountMinor": 9040,
+      "discountAmountMinor": 0,
+      "taxAmountMinor": 0,
+      "netAmountMinor": 9040,
+      "confidence": "high",
+      "taxRatePercent": null
+    },
+    {
+      "id": "line_b582a50c611689f0",
+      "type": "product",
+      "description": "햇반",
+      "sourceLineReferences": [
+        "73",
+        "94",
+        "103"
+      ],
+      "identifiers": [
+        {
+          "scheme": "merchant_sku",
+          "value": "190370"
+        }
+      ],
+      "quantity": {
+        "value": 3,
+        "unit": "each"
+      },
+      "unitPriceAmountMinor": 640,
+      "grossAmountMinor": 1920,
+      "discountAmountMinor": 0,
+      "taxAmountMinor": 0,
+      "netAmountMinor": 1920,
+      "confidence": "high",
+      "taxRatePercent": null
+    },
+    {
+      "id": "line_49307fbbd6c8f19d",
+      "type": "product",
+      "description": "오리지널 글레이즈드 3개입",
+      "sourceLineReferences": [
+        "74"
+      ],
+      "identifiers": [
+        {
+          "scheme": "merchant_sku",
+          "value": "260035"
+        }
+      ],
+      "quantity": {
+        "value": 2,
+        "unit": "each"
+      },
+      "unitPriceAmountMinor": 4050,
+      "grossAmountMinor": 8100,
+      "discountAmountMinor": 0,
+      "taxAmountMinor": 0,
+      "netAmountMinor": 8100,
+      "confidence": "user_verified",
+      "taxRatePercent": null
+    },
+    {
+      "id": "line_dfabb9924d5b5c7a",
+      "type": "product",
+      "description": "(영외)데체코 링귀니 파스타면 500g",
+      "sourceLineReferences": [
+        "75"
+      ],
+      "identifiers": [
+        {
+          "scheme": "merchant_sku",
+          "value": "260498"
+        }
+      ],
+      "quantity": {
+        "value": 2,
+        "unit": "each"
+      },
+      "unitPriceAmountMinor": 3100,
+      "grossAmountMinor": 6200,
+      "discountAmountMinor": 0,
+      "taxAmountMinor": 0,
+      "netAmountMinor": 6200,
+      "confidence": "user_verified",
+      "taxRatePercent": null
+    },
+    {
+      "id": "line_72cdb839bf74cb67",
+      "type": "product",
+      "description": "대천김 곱창김(캔김)",
+      "sourceLineReferences": [
+        "76"
+      ],
+      "identifiers": [
+        {
+          "scheme": "merchant_sku",
+          "value": "220332"
+        }
+      ],
+      "quantity": {
+        "value": 5,
+        "unit": "each"
+      },
+      "unitPriceAmountMinor": 3200,
+      "grossAmountMinor": 16000,
+      "discountAmountMinor": 0,
+      "taxAmountMinor": 0,
+      "netAmountMinor": 16000,
+      "confidence": "user_verified",
+      "taxRatePercent": null
+    },
+    {
+      "id": "line_691d00e0940cfea4",
+      "type": "product",
+      "description": "그릭콤포트 블루베리",
+      "sourceLineReferences": [
+        "77",
+        "97"
+      ],
+      "identifiers": [
+        {
+          "scheme": "merchant_sku",
+          "value": "260483"
+        }
+      ],
+      "quantity": {
+        "value": 2,
+        "unit": "each"
+      },
+      "unitPriceAmountMinor": 2020,
+      "grossAmountMinor": 4040,
+      "discountAmountMinor": 0,
+      "taxAmountMinor": 0,
+      "netAmountMinor": 4040,
+      "confidence": "high",
+      "taxRatePercent": null
+    },
+    {
+      "id": "line_fccadb8f3b6eca11",
+      "type": "product",
+      "description": "한돈 고추장불고기",
+      "sourceLineReferences": [
+        "78"
+      ],
+      "identifiers": [
+        {
+          "scheme": "merchant_sku",
+          "value": "260183"
+        }
+      ],
+      "quantity": {
+        "value": 1,
+        "unit": "each"
+      },
+      "unitPriceAmountMinor": 9390,
+      "grossAmountMinor": 9390,
+      "discountAmountMinor": 0,
+      "taxAmountMinor": 0,
+      "netAmountMinor": 9390,
+      "confidence": "user_verified",
+      "taxRatePercent": null
+    },
+    {
+      "id": "line_93e3e6264ea26d6e",
+      "type": "product",
+      "description": "한돈 간장불고기",
+      "sourceLineReferences": [
+        "79"
+      ],
+      "identifiers": [
+        {
+          "scheme": "merchant_sku",
+          "value": "260174"
+        }
+      ],
+      "quantity": {
+        "value": 1,
+        "unit": "each"
+      },
+      "unitPriceAmountMinor": 9090,
+      "grossAmountMinor": 9090,
+      "discountAmountMinor": 0,
+      "taxAmountMinor": 0,
+      "netAmountMinor": 9090,
+      "confidence": "user_verified",
+      "taxRatePercent": null
+    },
+    {
+      "id": "line_2669a70dc454d51b",
+      "type": "product",
+      "description": "쉬림프 스파이시 투움바 파스타",
+      "sourceLineReferences": [
+        "80"
+      ],
+      "identifiers": [
+        {
+          "scheme": "merchant_sku",
+          "value": "260207"
+        }
+      ],
+      "quantity": {
+        "value": 2,
+        "unit": "each"
+      },
+      "unitPriceAmountMinor": 4440,
+      "grossAmountMinor": 8880,
+      "discountAmountMinor": 0,
+      "taxAmountMinor": 0,
+      "netAmountMinor": 8880,
+      "confidence": "high",
+      "taxRatePercent": null
+    },
+    {
+      "id": "line_4eebbe24ca9c6c18",
+      "type": "product",
+      "description": "고추짜장면",
+      "sourceLineReferences": [
+        "81"
+      ],
+      "identifiers": [
+        {
+          "scheme": "merchant_sku",
+          "value": "260138"
+        }
+      ],
+      "quantity": {
+        "value": 3,
+        "unit": "each"
+      },
+      "unitPriceAmountMinor": 3180,
+      "grossAmountMinor": 9540,
+      "discountAmountMinor": 0,
+      "taxAmountMinor": 0,
+      "netAmountMinor": 9540,
+      "confidence": "high",
+      "taxRatePercent": null
+    },
+    {
+      "id": "line_e15c64533cb5db05",
+      "type": "product",
+      "description": "크림우동",
+      "sourceLineReferences": [
+        "82"
+      ],
+      "identifiers": [
+        {
+          "scheme": "merchant_sku",
+          "value": "110528"
+        }
+      ],
+      "quantity": {
+        "value": 3,
+        "unit": "each"
+      },
+      "unitPriceAmountMinor": 2420,
+      "grossAmountMinor": 7260,
+      "discountAmountMinor": 0,
+      "taxAmountMinor": 0,
+      "netAmountMinor": 7260,
+      "confidence": "high",
+      "taxRatePercent": null
+    },
+    {
+      "id": "line_d2cef8ff64092493",
+      "type": "product",
+      "description": "듀이트리 픽 앤 퀵 카밍플 마스크",
+      "sourceLineReferences": [
+        "83"
+      ],
+      "identifiers": [
+        {
+          "scheme": "merchant_sku",
+          "value": "260361"
+        }
+      ],
+      "quantity": {
+        "value": 2,
+        "unit": "each"
+      },
+      "unitPriceAmountMinor": 7900,
+      "grossAmountMinor": 15800,
+      "discountAmountMinor": 0,
+      "taxAmountMinor": 0,
+      "netAmountMinor": 15800,
+      "confidence": "user_verified",
+      "taxRatePercent": null
+    },
+    {
+      "id": "line_3fbeef10f1efb5a6",
+      "type": "product",
+      "description": "아몬드초코볼 (대)",
+      "sourceLineReferences": [
+        "84"
+      ],
+      "identifiers": [
+        {
+          "scheme": "merchant_sku",
+          "value": "240271"
+        }
+      ],
+      "quantity": {
+        "value": 7,
+        "unit": "each"
+      },
+      "unitPriceAmountMinor": 1440,
+      "grossAmountMinor": 10080,
+      "discountAmountMinor": 0,
+      "taxAmountMinor": 0,
+      "netAmountMinor": 10080,
+      "confidence": "high",
+      "taxRatePercent": null
+    },
+    {
+      "id": "line_fda965fdad0cae89",
+      "type": "product",
+      "description": "(프로블레이드)질레트 프로쉴드 옐",
+      "sourceLineReferences": [
+        "85"
+      ],
+      "identifiers": [
+        {
+          "scheme": "merchant_sku",
+          "value": "250393"
+        }
+      ],
+      "quantity": {
+        "value": 2,
+        "unit": "each"
+      },
+      "unitPriceAmountMinor": 14700,
+      "grossAmountMinor": 29400,
+      "discountAmountMinor": 0,
+      "taxAmountMinor": 0,
+      "netAmountMinor": 29400,
+      "confidence": "low",
+      "taxRatePercent": null
+    },
+    {
+      "id": "line_6a85d45605aae31c",
+      "type": "product",
+      "description": "(557.1프로블레이드)질레트프로",
+      "sourceLineReferences": [
+        "86"
+      ],
+      "identifiers": [
+        {
+          "scheme": "merchant_sku",
+          "value": "250392"
+        }
+      ],
+      "quantity": {
+        "value": 1,
+        "unit": "each"
+      },
+      "unitPriceAmountMinor": 11780,
+      "grossAmountMinor": 11780,
+      "discountAmountMinor": 0,
+      "taxAmountMinor": 0,
+      "netAmountMinor": 11780,
+      "confidence": "low",
+      "taxRatePercent": null
+    },
+    {
+      "id": "line_1fd26deb34aba89f",
+      "type": "product",
+      "description": "더단백 크런치바 초코",
+      "sourceLineReferences": [
+        "87"
+      ],
+      "identifiers": [
+        {
+          "scheme": "merchant_sku",
+          "value": "260150"
+        }
+      ],
+      "quantity": {
+        "value": 27,
+        "unit": "each"
+      },
+      "unitPriceAmountMinor": 1400,
+      "grossAmountMinor": 37800,
+      "discountAmountMinor": 0,
+      "taxAmountMinor": 0,
+      "netAmountMinor": 37800,
+      "confidence": "high",
+      "taxRatePercent": null
+    },
+    {
+      "id": "line_8c24933cbef940f2",
+      "type": "product",
+      "description": "짜왕",
+      "sourceLineReferences": [
+        "88"
+      ],
+      "identifiers": [
+        {
+          "scheme": "merchant_sku",
+          "value": "260112"
+        }
+      ],
+      "quantity": {
+        "value": 2,
+        "unit": "each"
+      },
+      "unitPriceAmountMinor": 3530,
+      "grossAmountMinor": 7060,
+      "discountAmountMinor": 0,
+      "taxAmountMinor": 0,
+      "netAmountMinor": 7060,
+      "confidence": "user_verified",
+      "taxRatePercent": null
+    },
+    {
+      "id": "line_496fa669767d4115",
+      "type": "product",
+      "description": "니베아맨센스티브쉐이빙",
+      "sourceLineReferences": [
+        "89"
+      ],
+      "identifiers": [
+        {
+          "scheme": "merchant_sku",
+          "value": "106955"
+        }
+      ],
+      "quantity": {
+        "value": 1,
+        "unit": "each"
+      },
+      "unitPriceAmountMinor": 3590,
+      "grossAmountMinor": 3590,
+      "discountAmountMinor": 0,
+      "taxAmountMinor": 0,
+      "netAmountMinor": 3590,
+      "confidence": "user_verified",
+      "taxRatePercent": null
+    },
+    {
+      "id": "line_b6eb78820463d228",
+      "type": "product",
+      "description": "빕스 오리지널 바비큐폭립",
+      "sourceLineReferences": [
+        "90"
+      ],
+      "identifiers": [
+        {
+          "scheme": "merchant_sku",
+          "value": "260437"
+        }
+      ],
+      "quantity": {
+        "value": 2,
+        "unit": "each"
+      },
+      "unitPriceAmountMinor": 13000,
+      "grossAmountMinor": 26000,
+      "discountAmountMinor": 0,
+      "taxAmountMinor": 0,
+      "netAmountMinor": 26000,
+      "confidence": "high",
+      "taxRatePercent": null
+    },
+    {
+      "id": "line_6c38121701b533eb",
+      "type": "product",
+      "description": "아비브 어성초 스팟패드 카밍터치",
+      "sourceLineReferences": [
+        "91"
+      ],
+      "identifiers": [
+        {
+          "scheme": "merchant_sku",
+          "value": "250404"
+        }
+      ],
+      "quantity": {
+        "value": 2,
+        "unit": "each"
+      },
+      "unitPriceAmountMinor": 13180,
+      "grossAmountMinor": 26360,
+      "discountAmountMinor": 0,
+      "taxAmountMinor": 0,
+      "netAmountMinor": 26360,
+      "confidence": "high",
+      "taxRatePercent": null
+    },
+    {
+      "id": "line_d88a37688869d37e",
+      "type": "product",
+      "description": "포테이토 마데카소사이드 수딩 패드",
+      "sourceLineReferences": [
+        "92"
+      ],
+      "identifiers": [
+        {
+          "scheme": "merchant_sku",
+          "value": "260148"
+        }
+      ],
+      "quantity": {
+        "value": 1,
+        "unit": "each"
+      },
+      "unitPriceAmountMinor": 7800,
+      "grossAmountMinor": 7800,
+      "discountAmountMinor": 0,
+      "taxAmountMinor": 0,
+      "netAmountMinor": 7800,
+      "confidence": "high",
+      "taxRatePercent": null
+    },
+    {
+      "id": "line_57ec19ba56617442",
+      "type": "product",
+      "description": "진라면매운맛(용기)",
+      "sourceLineReferences": [
+        "93"
+      ],
+      "identifiers": [
+        {
+          "scheme": "merchant_sku",
+          "value": "200082"
+        }
+      ],
+      "quantity": {
+        "value": 1,
+        "unit": "each"
+      },
+      "unitPriceAmountMinor": 670,
+      "grossAmountMinor": 670,
+      "discountAmountMinor": 0,
+      "taxAmountMinor": 0,
+      "netAmountMinor": 670,
+      "confidence": "high",
+      "taxRatePercent": null
+    },
+    {
+      "id": "line_eb0fab61c87ae32f",
+      "type": "product",
+      "description": "신라면큰사발",
+      "sourceLineReferences": [
+        "95"
+      ],
+      "identifiers": [
+        {
+          "scheme": "merchant_sku",
+          "value": "150029"
+        }
+      ],
+      "quantity": {
+        "value": 2,
+        "unit": "each"
+      },
+      "unitPriceAmountMinor": 870,
+      "grossAmountMinor": 1740,
+      "discountAmountMinor": 0,
+      "taxAmountMinor": 0,
+      "netAmountMinor": 1740,
+      "confidence": "high",
+      "taxRatePercent": null
+    },
+    {
+      "id": "line_2d2534746a1ca1b8",
+      "type": "product",
+      "description": "큰컵 까르보불닭볶음면",
+      "sourceLineReferences": [
+        "96",
+        "115"
+      ],
+      "identifiers": [
+        {
+          "scheme": "merchant_sku",
+          "value": "190347"
+        }
+      ],
+      "quantity": {
+        "value": 3,
+        "unit": "each"
+      },
+      "unitPriceAmountMinor": 1060,
+      "grossAmountMinor": 3180,
+      "discountAmountMinor": 0,
+      "taxAmountMinor": 0,
+      "netAmountMinor": 3180,
+      "confidence": "high",
+      "taxRatePercent": null
+    },
+    {
+      "id": "line_c0353e63117e6d25",
+      "type": "product",
+      "description": "샤인머스켓",
+      "sourceLineReferences": [
+        "98"
+      ],
+      "identifiers": [
+        {
+          "scheme": "merchant_sku",
+          "value": "230170"
+        }
+      ],
+      "quantity": {
+        "value": 2,
+        "unit": "each"
+      },
+      "unitPriceAmountMinor": 500,
+      "grossAmountMinor": 1000,
+      "discountAmountMinor": 0,
+      "taxAmountMinor": 0,
+      "netAmountMinor": 1000,
+      "confidence": "high",
+      "taxRatePercent": null
+    },
+    {
+      "id": "line_0b88088e57a88536",
+      "type": "product",
+      "description": "한입자색찐고구마",
+      "sourceLineReferences": [
+        "99",
+        "106"
+      ],
+      "identifiers": [
+        {
+          "scheme": "merchant_sku",
+          "value": "160121"
+        }
+      ],
+      "quantity": {
+        "value": 2,
+        "unit": "each"
+      },
+      "unitPriceAmountMinor": 1340,
+      "grossAmountMinor": 2680,
+      "discountAmountMinor": 0,
+      "taxAmountMinor": 0,
+      "netAmountMinor": 2680,
+      "confidence": "high",
+      "taxRatePercent": null
+    },
+    {
+      "id": "line_9eaa0735fb7157e3",
+      "type": "product",
+      "description": "규격(110099) 스포츠런닝 110",
+      "sourceLineReferences": [
+        "100"
+      ],
+      "identifiers": [
+        {
+          "scheme": "merchant_sku",
+          "value": "240586"
+        }
+      ],
+      "quantity": {
+        "value": 1,
+        "unit": "each"
+      },
+      "unitPriceAmountMinor": 7480,
+      "grossAmountMinor": 7480,
+      "discountAmountMinor": 0,
+      "taxAmountMinor": 0,
+      "netAmountMinor": 7480,
+      "confidence": "user_verified",
+      "taxRatePercent": null
+    },
+    {
+      "id": "line_e15ef408a0ac0f2c",
+      "type": "product",
+      "description": "규격(170339) 네파 페넥스남드로우",
+      "sourceLineReferences": [
+        "101"
+      ],
+      "identifiers": [
+        {
+          "scheme": "merchant_sku",
+          "value": "170398"
+        }
+      ],
+      "quantity": {
+        "value": 1,
+        "unit": "each"
+      },
+      "unitPriceAmountMinor": 8390,
+      "grossAmountMinor": 8390,
+      "discountAmountMinor": 0,
+      "taxAmountMinor": 0,
+      "netAmountMinor": 8390,
+      "confidence": "user_verified",
+      "taxRatePercent": null
+    },
+    {
+      "id": "line_73cf9a374474e1d9",
+      "type": "product",
+      "description": "코주부 CLASSIC 육포 Hot",
+      "sourceLineReferences": [
+        "102"
+      ],
+      "identifiers": [
+        {
+          "scheme": "merchant_sku",
+          "value": "190208"
+        }
+      ],
+      "quantity": {
+        "value": 1,
+        "unit": "each"
+      },
+      "unitPriceAmountMinor": 6800,
+      "grossAmountMinor": 6800,
+      "discountAmountMinor": 0,
+      "taxAmountMinor": 0,
+      "netAmountMinor": 6800,
+      "confidence": "user_verified",
+      "taxRatePercent": null
+    },
+    {
+      "id": "line_be8300a2ecdb921a",
+      "type": "product",
+      "description": "테이크핏 맥스 고소한맛",
+      "sourceLineReferences": [
+        "104",
+        "113"
+      ],
+      "identifiers": [
+        {
+          "scheme": "merchant_sku",
+          "value": "240301"
+        }
+      ],
+      "quantity": {
+        "value": 3,
+        "unit": "each"
+      },
+      "unitPriceAmountMinor": 1130,
+      "grossAmountMinor": 3390,
+      "discountAmountMinor": 0,
+      "taxAmountMinor": 0,
+      "netAmountMinor": 3390,
+      "confidence": "high",
+      "taxRatePercent": null
+    },
+    {
+      "id": "line_5245f609943d5d87",
+      "type": "product",
+      "description": "테이크핏 맥스 초코맛",
+      "sourceLineReferences": [
+        "105"
+      ],
+      "identifiers": [
+        {
+          "scheme": "merchant_sku",
+          "value": "250301"
+        }
+      ],
+      "quantity": {
+        "value": 3,
+        "unit": "each"
+      },
+      "unitPriceAmountMinor": 1130,
+      "grossAmountMinor": 3390,
+      "discountAmountMinor": 0,
+      "taxAmountMinor": 0,
+      "netAmountMinor": 3390,
+      "confidence": "high",
+      "taxRatePercent": null
+    },
+    {
+      "id": "line_dd971b2d243cd775",
+      "type": "product",
+      "description": "팔도 도시락",
+      "sourceLineReferences": [
+        "107"
+      ],
+      "identifiers": [
+        {
+          "scheme": "merchant_sku",
+          "value": "260432"
+        }
+      ],
+      "quantity": {
+        "value": 2,
+        "unit": "each"
+      },
+      "unitPriceAmountMinor": 670,
+      "grossAmountMinor": 1340,
+      "discountAmountMinor": 0,
+      "taxAmountMinor": 0,
+      "netAmountMinor": 1340,
+      "confidence": "high",
+      "taxRatePercent": null
+    },
+    {
+      "id": "line_49d5b8c67cdb0c08",
+      "type": "product",
+      "description": "(250550)네파 반바지(105",
+      "sourceLineReferences": [
+        "108"
+      ],
+      "identifiers": [
+        {
+          "scheme": "merchant_sku",
+          "value": "250621"
+        }
+      ],
+      "quantity": {
+        "value": 1,
+        "unit": "each"
+      },
+      "unitPriceAmountMinor": 15360,
+      "grossAmountMinor": 15360,
+      "discountAmountMinor": 0,
+      "taxAmountMinor": 0,
+      "netAmountMinor": 15360,
+      "confidence": "low",
+      "taxRatePercent": null
+    },
+    {
+      "id": "line_b2bcae2fdb394d7f",
+      "type": "product",
+      "description": "닭가슴살단백질바베리",
+      "sourceLineReferences": [
+        "109"
+      ],
+      "identifiers": [
+        {
+          "scheme": "merchant_sku",
+          "value": "240427"
+        }
+      ],
+      "quantity": {
+        "value": 8,
+        "unit": "each"
+      },
+      "unitPriceAmountMinor": 1110,
+      "grossAmountMinor": 8880,
+      "discountAmountMinor": 0,
+      "taxAmountMinor": 0,
+      "netAmountMinor": 8880,
+      "confidence": "medium",
+      "taxRatePercent": null
+    },
+    {
+      "id": "line_204a75006586e5d2",
+      "type": "product",
+      "description": "삼각 로스트비프 40g",
+      "sourceLineReferences": [
+        "110"
+      ],
+      "identifiers": [
+        {
+          "scheme": "merchant_sku",
+          "value": "190068"
+        }
+      ],
+      "quantity": {
+        "value": 2,
+        "unit": "each"
+      },
+      "unitPriceAmountMinor": 2210,
+      "grossAmountMinor": 4420,
+      "discountAmountMinor": 0,
+      "taxAmountMinor": 0,
+      "netAmountMinor": 4420,
+      "confidence": "high",
+      "taxRatePercent": null
+    },
+    {
+      "id": "line_29fcbf59539a5369",
+      "type": "product",
+      "description": "오뚜기 참깨라면",
+      "sourceLineReferences": [
+        "111"
+      ],
+      "identifiers": [
+        {
+          "scheme": "merchant_sku",
+          "value": "140139"
+        }
+      ],
+      "quantity": {
+        "value": 2,
+        "unit": "each"
+      },
+      "unitPriceAmountMinor": 1030,
+      "grossAmountMinor": 2060,
+      "discountAmountMinor": 0,
+      "taxAmountMinor": 0,
+      "netAmountMinor": 2060,
+      "confidence": "high",
+      "taxRatePercent": null
+    },
+    {
+      "id": "line_96d92db2e180e47c",
+      "type": "product",
+      "description": "컵누들 매콤한맛 용기 큰컵",
+      "sourceLineReferences": [
+        "112"
+      ],
+      "identifiers": [
+        {
+          "scheme": "merchant_sku",
+          "value": "260235"
+        }
+      ],
+      "quantity": {
+        "value": 2,
+        "unit": "each"
+      },
+      "unitPriceAmountMinor": 1160,
+      "grossAmountMinor": 2320,
+      "discountAmountMinor": 0,
+      "taxAmountMinor": 0,
+      "netAmountMinor": 2320,
+      "confidence": "user_verified",
+      "taxRatePercent": null
+    },
+    {
+      "id": "line_ff20bf5b11c8baf3",
+      "type": "product",
+      "description": "Dr.G 레드-블레미쉬클리어크림_7",
+      "sourceLineReferences": [
+        "114"
+      ],
+      "identifiers": [
+        {
+          "scheme": "merchant_sku",
+          "value": "160372"
+        }
+      ],
+      "quantity": {
+        "value": 1,
+        "unit": "each"
+      },
+      "unitPriceAmountMinor": 6930,
+      "grossAmountMinor": 6930,
+      "discountAmountMinor": 0,
+      "taxAmountMinor": 0,
+      "netAmountMinor": 6930,
+      "confidence": "medium",
+      "taxRatePercent": null
+    },
+    {
+      "id": "line_6cb0192c6a66ef86",
+      "type": "product",
+      "description": "복숭아에이드",
+      "sourceLineReferences": [
+        "116"
+      ],
+      "identifiers": [
+        {
+          "scheme": "merchant_sku",
+          "value": "230171"
+        }
+      ],
+      "quantity": {
+        "value": 2,
+        "unit": "each"
+      },
+      "unitPriceAmountMinor": 470,
+      "grossAmountMinor": 940,
+      "discountAmountMinor": 0,
+      "taxAmountMinor": 0,
+      "netAmountMinor": 940,
+      "confidence": "high",
+      "taxRatePercent": null
+    },
+    {
+      "id": "line_75c2ffc5bab6f54d",
+      "type": "product",
+      "description": "애플망고",
+      "sourceLineReferences": [
+        "117"
+      ],
+      "identifiers": [
+        {
+          "scheme": "merchant_sku",
+          "value": "240157"
+        }
+      ],
+      "quantity": {
+        "value": 2,
+        "unit": "each"
+      },
+      "unitPriceAmountMinor": 570,
+      "grossAmountMinor": 1140,
+      "discountAmountMinor": 0,
+      "taxAmountMinor": 0,
+      "netAmountMinor": 1140,
+      "confidence": "high",
+      "taxRatePercent": null
+    },
+    {
+      "id": "line_e33ed1de489d8660",
+      "type": "product",
+      "description": "라운드랩 1025 독도 로션",
+      "sourceLineReferences": [
+        "118"
+      ],
+      "identifiers": [
+        {
+          "scheme": "merchant_sku",
+          "value": "230510"
+        }
+      ],
+      "quantity": {
+        "value": 1,
+        "unit": "each"
+      },
+      "unitPriceAmountMinor": 13980,
+      "grossAmountMinor": 13980,
+      "discountAmountMinor": 0,
+      "taxAmountMinor": 0,
+      "netAmountMinor": 13980,
+      "confidence": "high",
+      "taxRatePercent": null
+    },
+    {
+      "id": "line_f6ec63300f6335a4",
+      "type": "product",
+      "description": "셀퓨젼씨 포스트 알파 센테카솔연고",
+      "sourceLineReferences": [
+        "119",
+        "122"
+      ],
+      "identifiers": [
+        {
+          "scheme": "merchant_sku",
+          "value": "230293"
+        }
+      ],
+      "quantity": {
+        "value": 2,
+        "unit": "each"
+      },
+      "unitPriceAmountMinor": 8910,
+      "grossAmountMinor": 17820,
+      "discountAmountMinor": 0,
+      "taxAmountMinor": 0,
+      "netAmountMinor": 17820,
+      "confidence": "user_verified",
+      "taxRatePercent": null
+    },
+    {
+      "id": "line_89fc6d1fb6c50111",
+      "type": "product",
+      "description": "닥터지 로얄 블랙스네일 크림 기획",
+      "sourceLineReferences": [
+        "120"
+      ],
+      "identifiers": [
+        {
+          "scheme": "merchant_sku",
+          "value": "240312"
+        }
+      ],
+      "quantity": {
+        "value": 2,
+        "unit": "each"
+      },
+      "unitPriceAmountMinor": 10320,
+      "grossAmountMinor": 20640,
+      "discountAmountMinor": 0,
+      "taxAmountMinor": 0,
+      "netAmountMinor": 20640,
+      "confidence": "high",
+      "taxRatePercent": null
+    },
+    {
+      "id": "line_2077a6f6c9f8a46e",
+      "type": "product",
+      "description": "더단백 워터 프로틴 복숭아",
+      "sourceLineReferences": [
+        "121"
+      ],
+      "identifiers": [
+        {
+          "scheme": "merchant_sku",
+          "value": "260193"
+        }
+      ],
+      "quantity": {
+        "value": 1,
+        "unit": "each"
+      },
+      "unitPriceAmountMinor": 1230,
+      "grossAmountMinor": 1230,
+      "discountAmountMinor": 0,
+      "taxAmountMinor": 0,
+      "netAmountMinor": 1230,
+      "confidence": "high",
+      "taxRatePercent": null
+    },
+    {
+      "id": "line_b399a59d3fab0c1b",
+      "type": "product",
+      "description": "라운드랩 자작나무 수분 크림 대용",
+      "sourceLineReferences": [
+        "123"
+      ],
+      "identifiers": [
+        {
+          "scheme": "merchant_sku",
+          "value": "240509"
+        }
+      ],
+      "quantity": {
+        "value": 1,
+        "unit": "each"
+      },
+      "unitPriceAmountMinor": 10750,
+      "grossAmountMinor": 10750,
+      "discountAmountMinor": 0,
+      "taxAmountMinor": 0,
+      "netAmountMinor": 10750,
+      "confidence": "medium",
+      "taxRatePercent": null
+    },
+    {
+      "id": "line_4352075cdc6cc0f0",
+      "type": "product",
+      "description": "테아닌과 밀크씨슬 활력솔루션",
+      "sourceLineReferences": [
+        "124"
+      ],
+      "identifiers": [
+        {
+          "scheme": "merchant_sku",
+          "value": "190077"
+        }
+      ],
+      "quantity": {
+        "value": 1,
+        "unit": "each"
+      },
+      "unitPriceAmountMinor": 13210,
+      "grossAmountMinor": 13210,
+      "discountAmountMinor": 0,
+      "taxAmountMinor": 0,
+      "netAmountMinor": 13210,
+      "confidence": "user_verified",
+      "taxRatePercent": null
+    },
+    {
+      "id": "line_d5c2ad8b521f289d",
+      "type": "product",
+      "description": "(영외)백설허브맛솔트오리지널",
+      "sourceLineReferences": [
+        "125"
+      ],
+      "identifiers": [
+        {
+          "scheme": "merchant_sku",
+          "value": "170166"
+        }
+      ],
+      "quantity": {
+        "value": 1,
+        "unit": "each"
+      },
+      "unitPriceAmountMinor": 1580,
+      "grossAmountMinor": 1580,
+      "discountAmountMinor": 0,
+      "taxAmountMinor": 0,
+      "netAmountMinor": 1580,
+      "confidence": "high",
+      "taxRatePercent": null
+    }
+  ],
+  "totals": {
+    "itemsGrossAmountMinor": 737790,
+    "discountAmountMinor": 0,
+    "taxAmountMinor": 0,
+    "feeAmountMinor": 0,
+    "tipAmountMinor": 0,
+    "roundingAmountMinor": 0,
+    "grandTotalAmountMinor": 737790
+  }
+}

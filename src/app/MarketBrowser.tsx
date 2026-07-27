@@ -8,7 +8,11 @@ import { formatKrw } from "@/domain/settlement";
 import styles from "./page.module.css";
 
 type Market = {
+  id: string | null;
   name: string;
+  businessKind: string | null;
+  merchantId: string | null;
+  businessRegistrationNumber: string | null;
   address: string | null;
   phone: string | null;
   receipts: Receipt[];
@@ -46,7 +50,11 @@ export function MarketBrowser({ receipts, observations, selectedStore, onSelectS
     return [...storeNames].map((name): Market => {
       const storeReceipts = receiptsByStore.get(name) ?? [];
       return {
+        id: storeReceipts.find((receipt) => receipt.storeId)?.storeId ?? null,
         name,
+        businessKind: storeReceipts.find((receipt) => receipt.storeBusinessKind)?.storeBusinessKind ?? null,
+        merchantId: storeReceipts.find((receipt) => receipt.storeMerchantId)?.storeMerchantId ?? null,
+        businessRegistrationNumber: storeReceipts.find((receipt) => receipt.storeBusinessRegistrationNumber)?.storeBusinessRegistrationNumber ?? null,
         address: storeReceipts.find((receipt) => receipt.storeAddress)?.storeAddress ?? null,
         phone: storeReceipts.find((receipt) => receipt.storePhone)?.storePhone ?? null,
         receipts: storeReceipts,
@@ -68,28 +76,29 @@ export function MarketBrowser({ receipts, observations, selectedStore, onSelectS
         <div>
           <p className={styles.kicker}>MARKETS</p>
           <h1>판매처 기록</h1>
-          <p>영수증에 기록된 판매처별 상품 수와 가격 이력 범위를 확인합니다. 공개 환경에서는 비식별 판매 채널만 표시합니다.</p>
+          <p>검증된 공개 영수증을 기준으로 판매처 정보, 영수증 기록, 상품 가격 이력을 함께 확인합니다.</p>
         </div>
       </div>
       <div className={styles.marketList}>
         {markets.map((entry) => {
           const groups = groupProductObservations(entry.observations);
           const trackedCount = groups.filter((group) => summarizeSellerPrices(sellerPricePointsFromGroup(group))[0]?.snapshotCount > 1).length;
-          const publicOnly = entry.receipts.length === 0;
+          const verifiedPublic = entry.receipts.some((receipt) => receipt.source === "public");
           const latestObservedAt = entry.observations.reduce((latest, observation) => observation.observedAt > latest ? observation.observedAt : latest, "");
           return <button key={entry.name} className={styles.marketCard} onClick={() => onSelectStore(entry.name)}>
-            <span className={styles.marketCardEyebrow}>{publicOnly ? "공개 판매 채널" : "영수증 판매처"}</span>
+            <span className={styles.marketCardEyebrow}>{verifiedPublic ? "검증 공개 영수증" : "로컬 영수증"}</span>
             <strong>{entry.name}</strong>
-            <small>{publicOnly ? `관측 ${entry.observations.length}건` : `영수증 ${entry.receipts.length}건`} · 상품 {groups.length}개 · 변동 추적 {trackedCount}개</small>
-            <span>{publicOnly ? "판매처 상세 비공개" : entry.address ?? "주소 정보 없음"}</span>
-            <span>최근 관측 {latestObservedAt || "정보 없음"} · {publicOnly ? "월 단위 공개 데이터" : entry.phone ?? "연락처 정보 없음"}</span>
+            <small>영수증 {entry.receipts.length}건 · 상품 {groups.length}개 · 변동 추적 {trackedCount}개</small>
+            <span>{entry.address ?? "주소 정보 없음"}</span>
+            <span>최근 관측 {latestObservedAt || "정보 없음"} · {entry.phone ?? "연락처 정보 없음"}</span>
           </button>;
         })}
       </div>
     </section>;
   }
 
-  const publicOnly = market.receipts.length === 0;
+  const observationOnly = market.receipts.length === 0;
+  const verifiedPublic = market.receipts.some((receipt) => receipt.source === "public");
   const receiptHistory = [...market.receipts].sort((left, right) => right.purchasedAt.localeCompare(left.purchasedAt));
   const marketObservations = [...market.observations].sort((left, right) => right.observedAt.localeCompare(left.observedAt) || left.item.productName.localeCompare(right.item.productName, "ko-KR"));
   const productInsights = groupProductObservations(market.observations)
@@ -115,7 +124,7 @@ export function MarketBrowser({ receipts, observations, selectedStore, onSelectS
       <div>
         <p className={styles.kicker}>MARKET PRICE HISTORY</p>
         <h1>{market.name}</h1>
-        <p>{publicOnly ? "개인 구매 내역을 제외한 월 단위 상품 관측 기록입니다." : "같은 판매처의 영수증 기록을 날짜별로 유지하고 상품 가격 변화를 계산합니다."}</p>
+        <p>{verifiedPublic ? "검증된 공개 영수증과 연결된 판매처 정보 및 상품 가격 기록입니다." : "같은 판매처의 영수증 기록을 날짜별로 유지하고 상품 가격 변화를 계산합니다."}</p>
       </div>
       <button className={styles.outlineButton} onClick={() => onSelectStore(null)}>판매처 목록</button>
     </div>
@@ -128,13 +137,17 @@ export function MarketBrowser({ receipts, observations, selectedStore, onSelectS
     </section>
 
     <section className={styles.marketInfo}>
-      <strong>판매 채널: {market.name}</strong>
-      <span>{publicOnly ? "매장 상세: 공개 데이터에서 제외" : `마트 주소: ${market.address ?? "정보 없음"}`}</span>
-      <span>{publicOnly ? "관측 정밀도: 월" : `마트 연락처: ${market.phone ?? "정보 없음"}`}</span>
+      <strong>{verifiedPublic ? "검증 공개 판매처" : "판매처"}: {market.name}</strong>
+      <span>마트 주소: {market.address ?? "정보 없음"}</span>
+      <span>마트 연락처: {market.phone ?? "정보 없음"}</span>
+      <span>사업자등록번호: {market.businessRegistrationNumber ?? "정보 없음"}</span>
+      <span>업종: {formatBusinessKind(market.businessKind)}</span>
+      <span>공개 판매처 ID: {market.id ?? "정보 없음"}</span>
+      {market.merchantId && <span>판매처 표기 ID: {market.merchantId}</span>}
       <small>표시 가격은 영수증·공개 기록의 관측가이며 실시간 판매가는 아닙니다.</small>
     </section>
 
-    {publicOnly ? <section className={styles.marketReceiptHistory} aria-labelledby="market-observation-history-title">
+    {observationOnly ? <section className={styles.marketReceiptHistory} aria-labelledby="market-observation-history-title">
       <h2 id="market-observation-history-title">공개 관측 요약</h2>
       <div>
         {[...new Set(marketObservations.map((observation) => observation.observedAt))].map((month) => {
@@ -149,7 +162,7 @@ export function MarketBrowser({ receipts, observations, selectedStore, onSelectS
       <h2 id="market-receipt-history-title">영수증 기록</h2>
       <div>
         {receiptHistory.map((receipt) => <article key={receipt.id}>
-          <span><strong>{receipt.purchasedAt}</strong><small>{receipt.items.length}개 품목</small></span>
+          <span><strong>{receipt.purchasedAt}</strong><small>공개 ID {receipt.id} · {receipt.items.length}개 품목</small></span>
           <b>{formatKrw(receipt.totalPriceKrw)}</b>
         </article>)}
       </div>
@@ -193,4 +206,22 @@ function formatMarketChange(summary: SellerPriceSummary) {
 
 function formatConfidenceCoverage(ratio: number | null) {
   return ratio === null ? "신뢰도 미분류" : `고신뢰 관측 ${Math.round(ratio * 100)}%`;
+}
+
+function formatBusinessKind(value: string | null) {
+  const labels: Record<string, string> = {
+    retail: "소매",
+    food_service: "음식점",
+    transport: "교통",
+    accommodation: "숙박",
+    healthcare: "의료",
+    professional_service: "전문 서비스",
+    utility: "공공요금",
+    government: "정부·공공기관",
+    financial: "금융",
+    marketplace: "마켓플레이스",
+    other: "기타",
+    unknown: "정보 없음",
+  };
+  return labels[value ?? "unknown"] ?? value ?? "정보 없음";
 }
