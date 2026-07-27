@@ -9,7 +9,11 @@ export type ProductSpecification = {
   contentAmount: number;
   contentUnit: "g" | "ml" | "each";
   packageCount: number;
+  /** Defaults to the historic 100g/ml basis when older records omit it. */
+  referenceUnit?: ReferenceUnit;
 };
+
+export type ReferenceUnit = 10 | 100 | 1000;
 
 export type MarketPriceObservation = {
   sellerName: string;
@@ -28,14 +32,18 @@ export type NormalizedMarketPrice = MarketPriceObservation & {
 
 export function normalizeMarketPrice(observation: MarketPriceObservation, specification: ProductSpecification): NormalizedMarketPrice {
   if (!Number.isFinite(specification.contentAmount) || specification.contentAmount <= 0 || !Number.isInteger(specification.packageCount) || specification.packageCount <= 0) throw new Error("상품 규격이 올바르지 않습니다.");
-  const referenceQuantity = specification.contentUnit === "each" ? 1 : 100;
+  const referenceQuantity = specification.contentUnit === "each" ? 1 : specification.referenceUnit ?? 100;
   const totalContent = specification.contentAmount * specification.packageCount;
   const effectivePriceKrw = observation.listedPriceKrw + observation.shippingFeeKrw;
   return {
     ...observation,
     effectivePriceKrw,
     pricePerReferenceUnitKrw: Math.round((effectivePriceKrw * referenceQuantity) / totalContent),
-    referenceLabel: specification.contentUnit === "each" ? "1개당" : `100${specification.contentUnit}당`,
+    referenceLabel: specification.contentUnit === "each"
+      ? "1개당"
+      : referenceQuantity === 1000
+        ? `1${specification.contentUnit === "g" ? "kg" : "L"}당`
+        : `${referenceQuantity}${specification.contentUnit}당`,
   };
 }
 

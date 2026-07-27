@@ -1,22 +1,23 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { discoverOfficialProduct, mergeOfficialProductCandidates, officialProductCandidateKey, officialSearchUrl, type OfficialProductCandidate } from "@/domain/official-product";
+import { discoverOfficialProduct, mergeOfficialProductCandidates, officialProductCandidateKey, officialSearchUrl, resolveStandardProductMapping, type OfficialProductCandidate, type StandardProductMapping } from "@/domain/official-product";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import { OfficialProductRepository } from "@/repositories/official-product.repository";
+import type { ReferenceUnit } from "@/domain/canonical-price";
 import styles from "./page.module.css";
 
 type StandardProduct = { id: string; canonical_name: string; brand: string | null; product_reference_url: string | null };
 type Variant = { id: string; standard_product_id: string; canonical_name: string; content_amount: number | null; content_unit: string | null; package_count: number; listing_reference_url: string | null };
 const legacyRepository = new OfficialProductRepository();
 const sellers = (candidate: OfficialProductCandidate) => candidate.storeLabels?.length ? candidate.storeLabels : [candidate.storeLabel];
-const mappingKey = (sourceLabel: string, sourceProductCode: string) => `${sourceLabel}:${sourceProductCode}`;
 
 export function StandardProductWorkspace({ candidates, revision }: { candidates: OfficialProductCandidate[]; revision: number }) {
   const client = getSupabaseBrowserClient();
   const [userId, setUserId] = useState<string | null>(null);
   const [standards, setStandards] = useState<StandardProduct[]>([]);
-  const [variantBySource, setVariantBySource] = useState<Record<string, Variant>>({});
+  const [variants, setVariants] = useState<Variant[]>([]);
+  const [variantMappings, setVariantMappings] = useState<StandardProductMapping<Variant>[]>([]);
   const [legacy, setLegacy] = useState(() => legacyRepository.loadAll());
   const [selected, setSelected] = useState<OfficialProductCandidate | null>(null);
   const [message, setMessage] = useState("");
@@ -32,11 +33,13 @@ export function StandardProductWorkspace({ candidates, revision }: { candidates:
     if (standardError || variantError || mappingError) { setMessage(standardError?.message ?? variantError?.message ?? mappingError?.message ?? "표준 상품을 불러오지 못했습니다."); return; }
     const byId = new Map((variantData ?? []).map((variant) => [variant.id, variant as Variant]));
     setStandards((standardData ?? []) as StandardProduct[]);
-    setVariantBySource(Object.fromEntries((mappingData ?? []).flatMap((mapping) => {
+    setVariants((variantData ?? []) as Variant[]);
+    setVariantMappings((mappingData ?? []).flatMap((mapping) => {
       const variant = byId.get(mapping.catalog_product_id);
-      return variant ? [[mappingKey(mapping.source_label, mapping.source_product_code), variant]] : [];
-    })));
+      return variant ? [{ sourceLabel: mapping.source_label, sourceProductCode: mapping.source_product_code, product: variant }] : [];
+    }));
     setLegacy(legacyRepository.loadAll());
+    setMessage("");
   }, [client]);
 
   useEffect(() => { if (client) void client.auth.getUser().then(({ data }) => setUserId(data.user?.id ?? null)); }, [client]);
@@ -44,11 +47,11 @@ export function StandardProductWorkspace({ candidates, revision }: { candidates:
 
   const standardById = useMemo(() => new Map(standards.map((standard) => [standard.id, standard])), [standards]);
   const states = useMemo(() => mergeOfficialProductCandidates(candidates).map((candidate) => {
-    const variant = sellers(candidate).map((seller) => variantBySource[mappingKey(seller, candidate.sourceProductCode)]).find(Boolean);
+    const variant = resolveStandardProductMapping(candidate, variantMappings);
     const browserRecord = legacy[officialProductCandidateKey(candidate)];
     const discovered = discoverOfficialProduct(candidate);
     return { candidate, variant, standard: variant ? standardById.get(variant.standard_product_id) : undefined, legacy: browserRecord ?? (discovered.status === "matched" ? discovered.record : undefined), fromBrowserStorage: Boolean(browserRecord) };
-  }), [candidates, variantBySource, standardById, legacy]);
+  }), [candidates, variantMappings, standardById, legacy]);
   const linked = states.filter((state) => state.variant && state.standard);
   const unlinked = states.filter((state) => !state.variant);
   const matchesSearch = useCallback((state: (typeof states)[number]) => {
@@ -56,8 +59,14 @@ export function StandardProductWorkspace({ candidates, revision }: { candidates:
     if (!query) return true;
     return `${state.candidate.productName} ${state.candidate.sourceProductCode} ${sellers(state.candidate).join(" ")} ${state.standard?.canonical_name ?? ""} ${state.variant?.canonical_name ?? ""}`.toLocaleLowerCase("ko-KR").includes(query);
   }, [searchQuery]);
-  const visibleLinked = linked.filter(matchesSearch);
   const visibleUnlinked = unlinked.filter(matchesSearch);
+  const visibleCatalogVariants = useMemo(() => variants
+    .map((variant) => ({ variant, standard: standardById.get(variant.standard_product_id) }))
+    .filter((entry): entry is { variant: Variant; standard: StandardProduct } => Boolean(entry.standard))
+    .filter(({ variant, standard }) => {
+      const query = searchQuery.trim().toLocaleLowerCase("ko-KR");
+      return !query || `${standard.canonical_name} ${variant.canonical_name} ${variant.content_amount ?? ""}${variant.content_unit ?? ""}`.toLocaleLowerCase("ko-KR").includes(query);
+    }), [variants, standardById, searchQuery]);
   const selectedState = selected ? states.find((state) => officialProductCandidateKey(state.candidate) === officialProductCandidateKey(selected)) : undefined;
 
   if (!client || !userId) return null;
@@ -65,8 +74,8 @@ export function StandardProductWorkspace({ candidates, revision }: { candidates:
     <div className={styles.browserHead}><div><p className={styles.kicker}>STANDARD PRODUCT MAPPING</p><h1>표준 상품 연결</h1><p>표준 상품은 햇반 같은 상품군입니다. 영수증 품목은 실제 판매 규격(예: 210g × 3)으로 등록해 표준 상품 아래에 보관합니다.</p></div></div>
     {message && <p className={styles.error} role="alert">{message}</p>}
     <label className={styles.mappingSearch}><span className={styles.srOnly}>표준 상품 연결 검색</span><input type="search" value={searchQuery} onChange={(event) => setSearchQuery(event.target.value)} placeholder="상품명, 판매처, 상품 코드로 검색" /></label>
-    <div className={styles.officialSummary}><span><b>{linked.length}</b>개 판매 기록 연결</span><span><b>{unlinked.length}</b>개 연결 필요</span></div>
-    <section className={styles.officialSection}><h2>연결된 표준 상품 기록</h2>{visibleLinked.length ? <div className={styles.officialGrid}>{visibleLinked.map(({ candidate, standard, variant }) => <article key={officialProductCandidateKey(candidate)}><div><span>표준 상품 · {standard!.canonical_name}</span><h3>{variant!.canonical_name}</h3><p>영수증 표기: {candidate.productName}</p><small>판매처 {sellers(candidate).join(", ")} · 코드 {candidate.sourceProductCode}</small><small>{variant!.content_amount ? `규격 ${variant!.content_amount}${variant!.content_unit} × ${variant!.package_count}` : "규격 미입력"}</small></div></article>)}</div> : <p>검색 조건에 맞는 연결 기록이 없습니다.</p>}</section>
+    <div className={styles.officialSummary}><span><b>{variants.length}</b>개 판매 규격 등록</span><span><b>{linked.length}</b>개 영수증 판매 기록 매핑</span><span><b>{unlinked.length}</b>개 연결 필요</span></div>
+    <section className={styles.officialSection}><h2>연결된 표준 상품 기록</h2><p className={styles.manualHint}>이미 등록한 표준 상품과 하위 판매 규격을 모두 표시합니다. 영수증 판매 기록 매핑 수와는 별도입니다.</p>{visibleCatalogVariants.length ? <div className={styles.officialGrid}>{visibleCatalogVariants.map(({ standard, variant }) => <article key={variant.id}><div><span>표준 상품 · {standard.canonical_name}</span><h3>{variant.canonical_name}</h3><small>{variant.content_amount ? `규격 ${variant.content_amount}${variant.content_unit} × ${variant.package_count}` : "규격 미입력"}</small></div></article>)}</div> : <p>검색 조건에 맞는 표준 상품 규격이 없습니다.</p>}</section>
     <section className={styles.officialSection}><h2>표준 상품 연결 대기열</h2><p className={styles.manualHint}>기존 연결은 표준 상품과 하위 판매 규격으로 한 번 가져옵니다. 규격을 모르면 연결하지 말고 확인 후 등록하세요.</p><div className={styles.manualQueue}>{visibleUnlinked.map(({ candidate, legacy: legacyRecord, fromBrowserStorage }) => <article key={officialProductCandidateKey(candidate)}><div><strong>{legacyRecord?.officialName ?? candidate.productName}</strong><small>판매처 {sellers(candidate).join(", ")} · 코드 {candidate.sourceProductCode}</small>{legacyRecord && <small>{fromBrowserStorage ? "기존 브라우저 저장 연결" : "기존 시드 연결"}을 가져올 수 있습니다.</small>}</div><div className={styles.queueActions}><a href={legacyRecord?.officialUrl ?? officialSearchUrl(candidate)} target="_blank" rel="noreferrer">상품 정보 찾기</a><button onClick={() => setSelected(candidate)}>{legacyRecord ? "표준 상품으로 가져오기" : "표준 상품 연결"}</button></div></article>)}</div></section>
     {selected && <StandardProductModal candidate={selected} legacy={selectedState?.legacy} standards={standards} userId={userId} onClose={() => setSelected(null)} onSaved={() => { setSelected(null); void load(); }} />}
   </section>;
@@ -81,6 +90,7 @@ function StandardProductModal({ candidate, legacy, standards, userId, onClose, o
   const [contentAmount, setContentAmount] = useState("");
   const [contentUnit, setContentUnit] = useState<"g" | "ml" | "each">("g");
   const [packageCount, setPackageCount] = useState("1");
+  const [referenceUnit, setReferenceUnit] = useState<ReferenceUnit>(100);
   const [message, setMessage] = useState("");
   const selectedStandard = standards.find((standard) => standard.id === standardProductId);
   const reusedListingName = legacy?.officialName ?? candidate.productName;
@@ -100,7 +110,7 @@ function StandardProductModal({ candidate, legacy, standards, userId, onClose, o
       if (error || !data) { setMessage(error?.message ?? "표준 상품을 저장하지 못했습니다."); return; }
       selectedStandardId = data.id;
     }
-    const { data: variant, error: variantError } = await client.from("catalog_products").insert({ standard_product_id: selectedStandardId, purchase_type: "retail_product", canonical_name: resolvedListingName, content_amount: parsedContentAmount, content_unit: contentUnit, package_count: parsedPackageCount, listing_reference_url: resolvedProductUrl, created_by: userId }).select("id").single();
+    const { data: variant, error: variantError } = await client.from("catalog_products").insert({ standard_product_id: selectedStandardId, purchase_type: "retail_product", canonical_name: resolvedListingName, content_amount: parsedContentAmount, content_unit: contentUnit, package_count: parsedPackageCount, reference_unit: referenceUnit, listing_reference_url: resolvedProductUrl, created_by: userId }).select("id").single();
     if (variantError || !variant) { setMessage(variantError?.message ?? "판매 규격을 저장하지 못했습니다."); return; }
     const reviewedAt = new Date().toISOString();
     const rows = sellers(candidate).map((sourceLabel) => ({ source_label: sourceLabel, source_product_code: candidate.sourceProductCode, catalog_product_id: variant.id, matching_method: "manual", confidence: 1, review_status: "verified", created_by: userId, reviewed_by: userId, reviewed_at: reviewedAt }));
@@ -108,5 +118,11 @@ function StandardProductModal({ candidate, legacy, standards, userId, onClose, o
     if (mappingError) { setMessage(mappingError.message); return; }
     onSaved();
   }
-  return <div className={styles.modalBackdrop} role="presentation" onMouseDown={(event) => event.target === event.currentTarget && onClose()}><section className={`${styles.authModal} ${styles.officialModal}`} role="dialog" aria-modal="true" aria-labelledby="standard-product-title"><button className={styles.closeButton} onClick={onClose} aria-label="표준 상품 연결 닫기">×</button><p className={styles.kicker}>STANDARD PRODUCT</p><h2 id="standard-product-title">표준 상품과 판매 규격 연결</h2><p className={styles.productCode}>판매처 {sellers(candidate).join(", ")} · 코드 {candidate.sourceProductCode}</p><form className={styles.manualForm} onSubmit={save}><label>기존 표준 상품<select value={standardProductId} onChange={(event) => { setStandardProductId(event.target.value); setMessage(""); }}><option value="">새 표준 상품 만들기</option>{standards.map((standard) => <option key={standard.id} value={standard.id}>{standard.canonical_name}</option>)}</select></label>{selectedStandard ? <section className={styles.reusedProductInfo} aria-label="재사용할 상품 정보"><span>표준 상품 <b>{selectedStandard.canonical_name}</b></span><span>하위 상품명 <b>{reusedListingName}</b></span>{reusedProductUrl ? <a href={reusedProductUrl} target="_blank" rel="noreferrer">기존 상품 URL 확인</a> : <strong>기존 URL이 없어 연결할 수 없습니다.</strong>}</section> : <><label>새 표준 상품명<input required value={standardName} onChange={(event) => setStandardName(event.target.value)} placeholder="예: 햇반" /></label><label>판매 규격명<input required value={listingName} onChange={(event) => setListingName(event.target.value)} placeholder="예: 햇반 210g × 3" /></label><label>상품 확인 URL<input required type="url" placeholder="https://" value={productUrl} onChange={(event) => setProductUrl(event.target.value)} /></label></>}<label>개별 내용량<input required inputMode="decimal" placeholder="예: 210" value={contentAmount} onChange={(event) => setContentAmount(event.target.value)} /></label><label>내용 단위<select value={contentUnit} onChange={(event) => setContentUnit(event.target.value as "g" | "ml" | "each")}><option value="g">g</option><option value="ml">ml</option><option value="each">개</option></select></label><label>묶음 수<input required type="number" min="1" step="1" value={packageCount} onChange={(event) => setPackageCount(event.target.value)} /></label><button type="submit" disabled={Boolean(selectedStandard && !reusedProductUrl)}>표준 상품에 판매 규격 등록</button></form>{message && <p className={styles.authMessage} role="status">{message}</p>}</section></div>;
+  return <div className={styles.modalBackdrop} role="presentation" onMouseDown={(event) => event.target === event.currentTarget && onClose()}><section className={`${styles.authModal} ${styles.officialModal}`} role="dialog" aria-modal="true" aria-labelledby="standard-product-title"><button className={styles.closeButton} onClick={onClose} aria-label="표준 상품 연결 닫기">×</button><p className={styles.kicker}>STANDARD PRODUCT</p><h2 id="standard-product-title">표준 상품과 판매 규격 연결</h2><p className={styles.productCode}>판매처 {sellers(candidate).join(", ")} · 코드 {candidate.sourceProductCode}</p><form className={styles.manualForm} onSubmit={save}><label>기존 표준 상품<select value={standardProductId} onChange={(event) => { setStandardProductId(event.target.value); setMessage(""); }}><option value="">새 표준 상품 만들기</option>{standards.map((standard) => <option key={standard.id} value={standard.id}>{standard.canonical_name}</option>)}</select></label>{selectedStandard ? <section className={styles.reusedProductInfo} aria-label="재사용할 상품 정보"><span>표준 상품 <b>{selectedStandard.canonical_name}</b></span><span>하위 상품명 <b>{reusedListingName}</b></span>{reusedProductUrl ? <a href={reusedProductUrl} target="_blank" rel="noreferrer">기존 상품 URL 확인</a> : <strong>기존 URL이 없어 연결할 수 없습니다.</strong>}</section> : <><label>새 표준 상품명<input required value={standardName} onChange={(event) => setStandardName(event.target.value)} placeholder="예: 햇반" /></label><label>판매 규격명<input required value={listingName} onChange={(event) => setListingName(event.target.value)} placeholder="예: 햇반 210g × 3" /></label><label>상품 확인 URL<input required type="url" placeholder="https://" value={productUrl} onChange={(event) => setProductUrl(event.target.value)} /></label></>}<label>개별 내용량<input required inputMode="decimal" placeholder="예: 210" value={contentAmount} onChange={(event) => setContentAmount(event.target.value)} /></label><label>내용 단위<select value={contentUnit} onChange={(event) => setContentUnit(event.target.value as "g" | "ml" | "each")}><option value="g">g</option><option value="ml">ml</option><option value="each">개</option></select></label><label>묶음 수<input required type="number" min="1" step="1" value={packageCount} onChange={(event) => setPackageCount(event.target.value)} /></label><label>단위 가격 기준<select value={referenceUnit} onChange={(event) => setReferenceUnit(Number(event.target.value) as ReferenceUnit)} disabled={contentUnit === "each"}><option value="10">{referenceLabel(contentUnit, 10)}</option><option value="100">{referenceLabel(contentUnit, 100)}</option><option value="1000">{referenceLabel(contentUnit, 1000)}</option></select><small>{contentUnit === "each" ? "개 상품은 1개당으로 계산합니다." : "판매처와 쿠팡가를 이 기준으로 환산합니다."}</small></label><button type="submit" disabled={Boolean(selectedStandard && !reusedProductUrl)}>표준 상품에 판매 규격 등록</button></form>{message && <p className={styles.authMessage} role="status">{message}</p>}</section></div>;
+}
+
+function referenceLabel(contentUnit: "g" | "ml" | "each", referenceUnit: ReferenceUnit) {
+  if (contentUnit === "each") return "1개당";
+  if (referenceUnit === 1000) return contentUnit === "g" ? "1kg당" : "1L당";
+  return `${referenceUnit}${contentUnit}당`;
 }

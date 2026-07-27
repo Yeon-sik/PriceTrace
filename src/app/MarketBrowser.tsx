@@ -1,7 +1,8 @@
 "use client";
 
-import { useMemo } from "react";
-import type { ProductObservationListing } from "@/domain/product-browser";
+import { useEffect, useMemo, useState } from "react";
+import { groupProductObservations, type ProductGroup, type ProductObservationListing } from "@/domain/product-browser";
+import { sellerPricePointsFromGroup, summarizeSellerPrices, type SellerPriceSummary } from "@/domain/seller-price-insights";
 import type { Receipt } from "@/domain/types";
 import { formatKrw } from "@/domain/settlement";
 import styles from "./page.module.css";
@@ -19,9 +20,17 @@ type MarketBrowserProps = {
   observations: ProductObservationListing[];
   selectedStore: string | null;
   onSelectStore: (store: string | null) => void;
+  onOpenTrend: (group: ProductGroup) => void;
 };
 
-export function MarketBrowser({ receipts, observations, selectedStore, onSelectStore }: MarketBrowserProps) {
+type MarketProductInsight = {
+  group: ProductGroup;
+  summary: SellerPriceSummary;
+};
+
+export function MarketBrowser({ receipts, observations, selectedStore, onSelectStore, onOpenTrend }: MarketBrowserProps) {
+  const [query, setQuery] = useState("");
+  const [changedOnly, setChangedOnly] = useState(false);
   const markets = useMemo(() => {
     const receiptsByStore = new Map<string, Receipt[]>();
     const observationsByStore = new Map<string, ProductObservationListing[]>();
@@ -46,6 +55,11 @@ export function MarketBrowser({ receipts, observations, selectedStore, onSelectS
     }).sort((left, right) => left.name.localeCompare(right.name, "ko-KR"));
   }, [observations, receipts]);
 
+  useEffect(() => {
+    setQuery("");
+    setChangedOnly(false);
+  }, [selectedStore]);
+
   const market = markets.find((entry) => entry.name === selectedStore) ?? null;
 
   if (!market) {
@@ -53,19 +67,22 @@ export function MarketBrowser({ receipts, observations, selectedStore, onSelectS
       <div className={styles.browserHead}>
         <div>
           <p className={styles.kicker}>MARKETS</p>
-          <h1>마트 목록</h1>
-          <p>공개 환경에서는 비식별 판매 채널별 관측만 표시하고, private 환경에서는 로컬 영수증의 매장 기록을 표시합니다.</p>
+          <h1>판매처 기록</h1>
+          <p>영수증에 기록된 판매처별 상품 수와 가격 이력 범위를 확인합니다. 공개 환경에서는 비식별 판매 채널만 표시합니다.</p>
         </div>
       </div>
       <div className={styles.marketList}>
         {markets.map((entry) => {
-          const products = new Set(entry.observations.map((observation) => `${observation.item.sourceProductCode}:${observation.item.productName}`));
+          const groups = groupProductObservations(entry.observations);
+          const trackedCount = groups.filter((group) => summarizeSellerPrices(sellerPricePointsFromGroup(group))[0]?.snapshotCount > 1).length;
           const publicOnly = entry.receipts.length === 0;
+          const latestObservedAt = entry.observations.reduce((latest, observation) => observation.observedAt > latest ? observation.observedAt : latest, "");
           return <button key={entry.name} className={styles.marketCard} onClick={() => onSelectStore(entry.name)}>
+            <span className={styles.marketCardEyebrow}>{publicOnly ? "공개 판매 채널" : "영수증 판매처"}</span>
             <strong>{entry.name}</strong>
-            <small>{publicOnly ? `관측 ${entry.observations.length}건` : `영수증 ${entry.receipts.length}건`} · 상품 {products.size}개</small>
+            <small>{publicOnly ? `관측 ${entry.observations.length}건` : `영수증 ${entry.receipts.length}건`} · 상품 {groups.length}개 · 변동 추적 {trackedCount}개</small>
             <span>{publicOnly ? "판매처 상세 비공개" : entry.address ?? "주소 정보 없음"}</span>
-            <span>{publicOnly ? "월 단위 공개 데이터" : entry.phone ?? "연락처 정보 없음"}</span>
+            <span>최근 관측 {latestObservedAt || "정보 없음"} · {publicOnly ? "월 단위 공개 데이터" : entry.phone ?? "연락처 정보 없음"}</span>
           </button>;
         })}
       </div>
@@ -75,21 +92,46 @@ export function MarketBrowser({ receipts, observations, selectedStore, onSelectS
   const publicOnly = market.receipts.length === 0;
   const receiptHistory = [...market.receipts].sort((left, right) => right.purchasedAt.localeCompare(left.purchasedAt));
   const marketObservations = [...market.observations].sort((left, right) => right.observedAt.localeCompare(left.observedAt) || left.item.productName.localeCompare(right.item.productName, "ko-KR"));
+  const productInsights = groupProductObservations(market.observations)
+    .map((group): MarketProductInsight | null => {
+      const summary = summarizeSellerPrices(sellerPricePointsFromGroup(group))[0];
+      return summary ? { group, summary } : null;
+    })
+    .filter((entry): entry is MarketProductInsight => entry !== null)
+    .sort((left, right) =>
+      Number(right.summary.changeKrw !== null) - Number(left.summary.changeKrw !== null)
+      || right.summary.latestObservedAt.localeCompare(left.summary.latestObservedAt)
+      || left.group.productName.localeCompare(right.group.productName, "ko-KR"));
+  const normalizedQuery = query.trim().toLocaleLowerCase("ko-KR");
+  const visibleInsights = productInsights.filter(({ group, summary }) =>
+    (!changedOnly || summary.snapshotCount > 1)
+    && (!normalizedQuery || `${group.productName} ${group.sourceProductCode}`.toLocaleLowerCase("ko-KR").includes(normalizedQuery)));
+  const trackedCount = productInsights.filter(({ summary }) => summary.snapshotCount > 1).length;
+  const changedCount = productInsights.filter(({ summary }) => summary.changeKrw !== null && summary.changeKrw !== 0).length;
+  const latestObservedAt = marketObservations[0]?.observedAt ?? null;
 
   return <section className={styles.browser}>
     <div className={styles.browserHead}>
       <div>
-        <p className={styles.kicker}>MARKET PRODUCTS</p>
+        <p className={styles.kicker}>MARKET PRICE HISTORY</p>
         <h1>{market.name}</h1>
-        <p>{publicOnly ? "개인 구매 내역을 제외한 월 단위 상품 관측 기록입니다." : "같은 마트의 영수증은 날짜별 원본 기록을 유지합니다."}</p>
+        <p>{publicOnly ? "개인 구매 내역을 제외한 월 단위 상품 관측 기록입니다." : "같은 판매처의 영수증 기록을 날짜별로 유지하고 상품 가격 변화를 계산합니다."}</p>
       </div>
-      <button className={styles.outlineButton} onClick={() => onSelectStore(null)}>마트 목록</button>
+      <button className={styles.outlineButton} onClick={() => onSelectStore(null)}>판매처 목록</button>
     </div>
+
+    <section className={styles.marketInsightStats} aria-label="판매처 가격 기록 요약">
+      <div><span>기록 상품</span><strong>{productInsights.length}개</strong></div>
+      <div><span>2회 이상 추적</span><strong>{trackedCount}개</strong></div>
+      <div><span>직전 대비 변동</span><strong>{changedCount}개</strong></div>
+      <div><span>최근 관측</span><strong>{latestObservedAt ?? "-"}</strong></div>
+    </section>
 
     <section className={styles.marketInfo}>
       <strong>판매 채널: {market.name}</strong>
       <span>{publicOnly ? "매장 상세: 공개 데이터에서 제외" : `마트 주소: ${market.address ?? "정보 없음"}`}</span>
       <span>{publicOnly ? "관측 정밀도: 월" : `마트 연락처: ${market.phone ?? "정보 없음"}`}</span>
+      <small>표시 가격은 영수증·공개 기록의 관측가이며 실시간 판매가는 아닙니다.</small>
     </section>
 
     {publicOnly ? <section className={styles.marketReceiptHistory} aria-labelledby="market-observation-history-title">
@@ -99,7 +141,7 @@ export function MarketBrowser({ receipts, observations, selectedStore, onSelectS
           const monthly = marketObservations.filter((observation) => observation.observedAt === month);
           return <article key={month}>
             <span><strong>{month}</strong><small>{monthly.length}건 관측</small></span>
-            <b>{new Set(monthly.map((observation) => `${observation.item.sourceProductCode}:${observation.item.productName}`)).size}개 상품</b>
+            <b>{groupProductObservations(monthly).length}개 상품</b>
           </article>;
         })}
       </div>
@@ -113,14 +155,42 @@ export function MarketBrowser({ receipts, observations, selectedStore, onSelectS
       </div>
     </section>}
 
-    <div className={styles.marketItemList}>
-      {marketObservations.map((observation) => <article key={observation.id}>
-        <div>
-          <strong>{observation.item.productName}</strong>
-          <small>상품 코드 {observation.item.sourceProductCode || "없음"} · {publicOnly ? "관측 월" : "영수증 일자"} {observation.observedAt}</small>
-        </div>
-        <b>{formatKrw(observation.item.unitPriceKrw)}</b>
-      </article>)}
-    </div>
+    <section className={styles.marketProductHistory} aria-labelledby="market-product-history-title">
+      <div className={styles.sectionHeading}>
+        <div><p className={styles.kicker}>PRODUCT CHANGES</p><h2 id="market-product-history-title">상품별 가격 변동</h2></div>
+        <small>같은 판매처·상품 코드·상품명 기준</small>
+      </div>
+      <div className={styles.marketHistoryControls}>
+        <label className={styles.search}><span aria-hidden="true">⌕</span><span className={styles.srOnly}>판매처 상품 검색</span><input type="search" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="상품명 또는 상품 코드 검색" /></label>
+        <button type="button" className={changedOnly ? styles.filterToggleActive : ""} aria-pressed={changedOnly} onClick={() => setChangedOnly((current) => !current)}>2회 이상 추적만</button>
+      </div>
+      <p className={styles.marketHistoryResult}>상품 {visibleInsights.length}개 · 직전 대비 가격은 동일 판매처의 이전 기록과 비교합니다.</p>
+      <div className={styles.marketItemList} aria-live="polite">
+        {visibleInsights.map(({ group, summary }) => <article key={group.id}>
+          <div>
+            <strong>{group.productName}</strong>
+            <small>상품 코드 {group.sourceProductCode || "없음"} · 최근 {summary.latestObservedAt} · 관측 {summary.observationCount}건</small>
+            <small>{formatConfidenceCoverage(summary.highConfidenceRatio)} · 범위 {formatKrw(summary.minimumPriceKrw)}~{formatKrw(summary.maximumPriceKrw)}</small>
+          </div>
+          <div className={styles.marketPriceChange}>
+            <b>{formatKrw(summary.latestPriceKrw)}</b>
+            <em className={summary.changeKrw === null || summary.changeKrw === 0 ? styles.noChange : summary.changeKrw > 0 ? styles.priceUp : styles.priceDown}>{formatMarketChange(summary)}</em>
+          </div>
+          <button type="button" className={styles.marketTrendButton} onClick={() => onOpenTrend(group)} aria-label={`${group.productName} 가격 변동 이력 보기`}>이력 보기</button>
+        </article>)}
+        {visibleInsights.length === 0 && <div className={styles.marketHistoryEmpty}>조건에 맞는 상품 기록이 없습니다.</div>}
+      </div>
+    </section>
   </section>;
+}
+
+function formatMarketChange(summary: SellerPriceSummary) {
+  if (summary.changeKrw === null) return "첫 관측";
+  if (summary.changeKrw === 0) return "직전과 동일";
+  const sign = summary.changeKrw > 0 ? "+" : "";
+  return `직전 대비 ${sign}${formatKrw(summary.changeKrw)} (${sign}${summary.changePercent?.toFixed(1) ?? "0.0"}%)`;
+}
+
+function formatConfidenceCoverage(ratio: number | null) {
+  return ratio === null ? "신뢰도 미분류" : `고신뢰 관측 ${Math.round(ratio * 100)}%`;
 }

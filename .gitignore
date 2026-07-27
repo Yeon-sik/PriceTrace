@@ -65,6 +65,8 @@ e2e/*
 !playwright.config.ts
 !src/domain/product-browser.test.ts
 !src/domain/public-observation.test.ts
+!src/domain/public-standard-catalog.test.ts
+!src/domain/seller-price-insights.test.ts
 !src/repositories/cart.repository.test.ts
 !src/repositories/admin-receipt.repository.test.ts
 !src/repositories/official-product.repository.test.ts

@@ -7,6 +7,37 @@ export type OfficialProductCandidate = {
   storeLabels?: string[];
 };
 
+export type StandardProductMapping<T> = {
+  sourceLabel: string;
+  sourceProductCode: string;
+  product: T;
+};
+
+function sourceMappingKey(sourceLabel: string, sourceProductCode: string) {
+  return `${sourceLabel.trim().toLocaleLowerCase("ko-KR")}:${sourceProductCode.trim()}`;
+}
+
+/**
+ * Seller-owned codes remain seller-scoped. A code-only fallback is allowed
+ * only for an explicit shared namespace or unknown seller, and only when every
+ * verified mapping for the code identifies one catalog product.
+ */
+export function resolveStandardProductMapping<T>(candidate: OfficialProductCandidate, mappings: StandardProductMapping<T>[]) {
+  const sellerLabels = candidate.storeLabels?.length ? candidate.storeLabels : [candidate.storeLabel];
+  const exact = new Map(mappings.map((mapping) => [sourceMappingKey(mapping.sourceLabel, mapping.sourceProductCode), mapping.product]));
+  for (const sellerLabel of sellerLabels) {
+    const product = exact.get(sourceMappingKey(sellerLabel, candidate.sourceProductCode));
+    if (product) return product;
+  }
+  const canUseUniqueCode = Boolean(candidate.catalogNamespace) || sellerLabels.some((sellerLabel) => sellerLabel.trim() === "판매처 미상");
+  if (!canUseUniqueCode) return undefined;
+  const matchedProducts = new Map<T, T>();
+  for (const mapping of mappings) {
+    if (mapping.sourceProductCode.trim() === candidate.sourceProductCode.trim()) matchedProducts.set(mapping.product, mapping.product);
+  }
+  return matchedProducts.size === 1 ? [...matchedProducts.values()][0] : undefined;
+}
+
 export function officialProductCandidateKey(candidate: OfficialProductCandidate) {
   const namespace = candidate.catalogNamespace ?? `merchant:${candidate.storeLabel}`;
   return `${namespace}:${candidate.sourceProductCode}:${normalize(candidate.productName)}`;

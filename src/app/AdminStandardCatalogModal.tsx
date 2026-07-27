@@ -5,18 +5,28 @@ import { formatKrw } from "@/domain/settlement";
 import styles from "./page.module.css";
 
 export type AdminCatalogVariant = { id: string; canonicalName: string; specLabel: string; listingReferenceUrl: string | null };
-export type AdminCoupangPrice = { unitPriceKrw: number; listedPriceKrw: number; quantity: number; productUrl: string };
+export type AdminCoupangPrice = {
+  unitPriceKrw: number | null;
+  referenceLabel: string | null;
+  listedPriceKrw: number;
+  quantity: number;
+  contentAmount: number | null;
+  contentUnit: "g" | "ml" | "each" | null;
+  productUrl: string;
+};
 
 export function AdminStandardCatalogModal({ name, variants, coupangPrice, onClose, onSubmitCoupangPrice }: {
   name: string;
   variants: AdminCatalogVariant[];
   coupangPrice: AdminCoupangPrice | null;
   onClose: () => void;
-  onSubmitCoupangPrice: (productUrl: string, listedPriceKrw: number, quantity: number) => Promise<{ ok: boolean; message: string }>;
+  onSubmitCoupangPrice: (productUrl: string, listedPriceKrw: number, quantity: number, contentAmount: number, contentUnit: "g" | "ml" | "each") => Promise<{ ok: boolean; message: string }>;
 }) {
   const [productUrl, setProductUrl] = useState("");
   const [listedPriceKrw, setListedPriceKrw] = useState("");
   const [quantity, setQuantity] = useState("1");
+  const [contentAmount, setContentAmount] = useState("");
+  const [contentUnit, setContentUnit] = useState<"g" | "ml" | "each">("g");
   const [message, setMessage] = useState("");
   const [saving, setSaving] = useState(false);
 
@@ -32,12 +42,13 @@ export function AdminStandardCatalogModal({ name, variants, coupangPrice, onClos
     event.preventDefault();
     const price = Number(listedPriceKrw);
     const count = Number(quantity);
-    if (!/^https?:\/\//.test(productUrl) || !Number.isInteger(price) || price < 0 || !Number.isInteger(count) || count < 1) { setMessage("쿠팡 링크, 판매 가격, 판매 개수를 올바르게 입력하세요."); return; }
+    const amount = Number(contentAmount);
+    if (!/^https?:\/\//.test(productUrl) || !Number.isInteger(price) || price < 0 || !Number.isInteger(count) || count < 1 || !Number.isFinite(amount) || amount <= 0) { setMessage("쿠팡 링크, 판매 가격, 판매 개수, 개당 내용량을 올바르게 입력하세요."); return; }
     setSaving(true);
-    const result = await onSubmitCoupangPrice(productUrl.trim(), price, count);
+    const result = await onSubmitCoupangPrice(productUrl.trim(), price, count, amount, contentUnit);
     setSaving(false);
     setMessage(result.message);
-    if (result.ok) { setProductUrl(""); setListedPriceKrw(""); setQuantity("1"); }
+    if (result.ok) { setProductUrl(""); setListedPriceKrw(""); setQuantity("1"); setContentAmount(""); setContentUnit("g"); }
   }
 
   return <div className={styles.modalBackdrop} role="presentation" onMouseDown={(event) => event.target === event.currentTarget && onClose()}>
@@ -47,12 +58,14 @@ export function AdminStandardCatalogModal({ name, variants, coupangPrice, onClos
       <h2 id="admin-standard-title">{name}</h2>
       <p className={styles.storeInfo}>하위 상품 {variants.length}개</p>
       <div className={styles.coupangPriceSection}>
-        {coupangPrice ? <><span>현재 쿠팡가</span><strong>개당 {formatKrw(coupangPrice.unitPriceKrw)}</strong><small>{formatKrw(coupangPrice.listedPriceKrw)} · {coupangPrice.quantity}개</small><a href={coupangPrice.productUrl} target="_blank" rel="noreferrer">쿠팡에서 보기</a></> : <><span>현재 쿠팡가</span><small>아직 등록된 쿠팡 가격이 없습니다.</small></>}
-        <p className={styles.muted}>쿠팡가는 특정 하위 상품(규격)이 아니라 이 표준 상품 전체를 대표하는 가격입니다.</p>
+        {coupangPrice ? <><span>현재 쿠팡가</span>{coupangPrice.referenceLabel && coupangPrice.unitPriceKrw !== null ? <strong>{coupangPrice.referenceLabel} {formatKrw(coupangPrice.unitPriceKrw)}</strong> : <strong>기준 용량 미입력</strong>}<small>판매가 {formatKrw(coupangPrice.listedPriceKrw)} · {coupangPrice.quantity}개{coupangPrice.contentAmount !== null && coupangPrice.contentUnit !== null ? ` · 개당 ${coupangPrice.contentAmount}${coupangPrice.contentUnit === "each" ? "개" : coupangPrice.contentUnit}` : ""}</small><a href={coupangPrice.productUrl} target="_blank" rel="noreferrer">쿠팡에서 보기</a></> : <><span>현재 쿠팡가</span><small>아직 등록된 쿠팡 가격이 없습니다.</small></>}
+        <p className={styles.muted}>쿠팡 가격은 판매 가격, 판매 개수, 개당 내용량으로 {coupangPrice?.referenceLabel ?? "표준 단위"} 가격을 자동 계산합니다.</p>
         <form className={styles.inline} onSubmit={submit}>
           <label>쿠팡 링크<input type="url" required placeholder="https://" value={productUrl} onChange={(event) => setProductUrl(event.target.value)} /></label>
           <label>판매 가격<input inputMode="numeric" required value={listedPriceKrw} onChange={(event) => setListedPriceKrw(event.target.value)} /></label>
           <label>판매 개수<input type="number" min="1" step="1" required value={quantity} onChange={(event) => setQuantity(event.target.value)} /></label>
+          <label>개당 내용량<input inputMode="decimal" required placeholder="예: 210" value={contentAmount} onChange={(event) => setContentAmount(event.target.value)} /></label>
+          <label>내용 단위<select value={contentUnit} onChange={(event) => setContentUnit(event.target.value as "g" | "ml" | "each")}><option value="g">g</option><option value="ml">ml</option><option value="each">개</option></select></label>
           <button type="submit" disabled={saving}>쿠팡가 등록</button>
         </form>
         {message && <p role="status" className={styles.muted}>{message}</p>}
