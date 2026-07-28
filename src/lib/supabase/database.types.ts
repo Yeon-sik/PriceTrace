@@ -23,6 +23,26 @@ export interface Database {
     };
     Views: Record<string, never>;
     Functions: {
+      get_public_exact_standard_product_catalog: {
+        Args: Record<string, never>;
+        Returns: {
+          source_label:string;
+          source_product_code:string;
+          catalog_product_id:string;
+          standard_product_id:string;
+          standard_name:string;
+          content_amount:number;
+          content_unit:string;
+          package_count:number;
+          reference_unit:number;
+          coupang_listed_price_krw:number|null;
+          coupang_quantity:number|null;
+          coupang_content_amount:number|null;
+          coupang_content_unit:string|null;
+          coupang_product_url:string|null;
+          coupang_observed_at:string|null;
+        }[];
+      };
       get_public_standard_product_catalog: {
         Args: Record<string, never>;
         Returns: {

@@ -6,6 +6,7 @@ const standardProductId = "22222222-2222-4222-8222-222222222222";
 
 function row(overrides: Record<string, unknown> = {}) {
   return {
+    source_label: "와마트 일산점",
     source_product_code: "210157",
     catalog_product_id: catalogProductId,
     standard_product_id: standardProductId,
@@ -25,13 +26,46 @@ function row(overrides: Record<string, unknown> = {}) {
 }
 
 describe("public standard catalog", () => {
-  it("validates and indexes a public standard product without exposing seller identity", () => {
+  it("indexes a public standard product by seller and source product code", () => {
     const parsed = PublicStandardCatalogRowsSchema.parse([row()]);
     const index = buildPublicStandardCatalogIndex(parsed);
 
-    expect(index.standardMappings.get("210157")).toBe(catalogProductId);
+    expect(index.exactStandardMappings.get("와마트 일산점:210157")).toBe(catalogProductId);
     expect(index.standardNames.get(standardProductId)).toBe("CJ 햇반");
     expect(index.catalogSpecs.get(catalogProductId)).toMatchObject({ contentAmount: 210, contentUnit: "g", referenceUnit: 100 });
+  });
+
+  it("keeps identical source product codes separate for different sellers", () => {
+    const secondCatalogProductId = "33333333-3333-4333-8333-333333333333";
+    const parsed = PublicStandardCatalogRowsSchema.parse([
+      row(),
+      row({
+        source_label: "국군복지단 바다마을마트",
+        catalog_product_id: secondCatalogProductId,
+      }),
+    ]);
+
+    const index = buildPublicStandardCatalogIndex(parsed);
+
+    expect(index.exactStandardMappings.get("와마트 일산점:210157")).toBe(catalogProductId);
+    expect(index.exactStandardMappings.get("국군복지단 바다마을마트:210157")).toBe(secondCatalogProductId);
+  });
+
+  it("rejects conflicting mappings for the same seller and source product code", () => {
+    const parsed = PublicStandardCatalogRowsSchema.safeParse([
+      row(),
+      row({ catalog_product_id: "33333333-3333-4333-8333-333333333333" }),
+    ]);
+
+    expect(parsed.success).toBe(false);
+  });
+
+  it("accepts the previous public RPC shape during rollout", () => {
+    const legacyRow: Record<string, unknown> = row();
+    Reflect.deleteProperty(legacyRow, "source_label");
+    const parsed = PublicStandardCatalogRowsSchema.parse([legacyRow]);
+
+    expect(buildPublicStandardCatalogIndex(parsed).standardMappings.get("210157")).toBe(catalogProductId);
   });
 
   it("rejects a partially populated Coupang observation", () => {

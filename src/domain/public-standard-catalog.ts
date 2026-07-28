@@ -7,6 +7,7 @@ const httpUrlSchema = z.string().url().refine(
 );
 
 export const PublicStandardCatalogRowSchema = z.object({
+  source_label: z.string().trim().min(1).max(200).optional(),
   source_product_code: z.string().trim().min(1).max(128),
   catalog_product_id: z.string().uuid(),
   standard_product_id: z.string().uuid(),
@@ -55,17 +56,20 @@ export const PublicStandardCatalogRowSchema = z.object({
 });
 
 export const PublicStandardCatalogRowsSchema = z.array(PublicStandardCatalogRowSchema).superRefine((rows, context) => {
-  const catalogByCode = new Map<string, string>();
+  const catalogBySourceProduct = new Map<string, string>();
   for (const [index, row] of rows.entries()) {
-    const existing = catalogByCode.get(row.source_product_code);
+    const sourceProductKey = row.source_label
+      ? publicStandardMappingKey(row.source_label, row.source_product_code)
+      : row.source_product_code;
+    const existing = catalogBySourceProduct.get(sourceProductKey);
     if (existing && existing !== row.catalog_product_id) {
       context.addIssue({
         code: z.ZodIssueCode.custom,
-        message: "하나의 공개 상품 코드가 여러 판매 규격에 연결되었습니다.",
+        message: "하나의 공개 판매처 상품이 여러 판매 규격에 연결되었습니다.",
         path: [index, "catalog_product_id"],
       });
     }
-    catalogByCode.set(row.source_product_code, row.catalog_product_id);
+    catalogBySourceProduct.set(sourceProductKey, row.catalog_product_id);
   }
 });
 
@@ -80,14 +84,27 @@ export type PublicCoupangPrice = {
   observedAt: string;
 };
 
+export function publicStandardMappingKey(sourceLabel: string, sourceProductCode: string) {
+  return `${sourceLabel}:${sourceProductCode}`;
+}
+
 export function buildPublicStandardCatalogIndex(rows: PublicStandardCatalogRow[]) {
+  // Keep the previous RPC shape readable while the app and database migration roll out.
   const standardMappings = new Map<string, string>();
+  const exactStandardMappings = new Map<string, string>();
   const catalogSpecs = new Map<string, ProductSpecification & { standardProductId: string }>();
   const standardNames = new Map<string, string>();
   const coupangByStandard = new Map<string, PublicCoupangPrice>();
 
   for (const row of rows) {
-    standardMappings.set(row.source_product_code, row.catalog_product_id);
+    if (row.source_label) {
+      exactStandardMappings.set(
+        publicStandardMappingKey(row.source_label, row.source_product_code),
+        row.catalog_product_id,
+      );
+    } else {
+      standardMappings.set(row.source_product_code, row.catalog_product_id);
+    }
     catalogSpecs.set(row.catalog_product_id, {
       contentAmount: row.content_amount,
       contentUnit: row.content_unit,
@@ -117,5 +134,5 @@ export function buildPublicStandardCatalogIndex(rows: PublicStandardCatalogRow[]
     }
   }
 
-  return { standardMappings, catalogSpecs, standardNames, coupangByStandard };
+  return { standardMappings, exactStandardMappings, catalogSpecs, standardNames, coupangByStandard };
 }
