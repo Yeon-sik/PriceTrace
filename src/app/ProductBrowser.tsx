@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { categoryForProduct, distinctSellerCount, filterAndSortProductGroups, latestSellerRows, mergeOfficialProductGroups, PRODUCT_CATEGORIES, type MartType, type ProductCategory, type ProductGroup, type ProductSort } from "@/domain/product-browser";
-import { buildPublicStandardCatalogIndex, PublicStandardCatalogRowsSchema, type PublicCoupangPrice } from "@/domain/public-standard-catalog";
+import { buildPublicStandardCatalogIndex, publicStandardMappingKey, PublicStandardCatalogRowsSchema, type PublicCoupangPrice } from "@/domain/public-standard-catalog";
 import { sellerPricePointsFromGroup, summarizeSellerPrices } from "@/domain/seller-price-insights";
 import { formatKrw } from "@/domain/settlement";
 import { officialProductCandidateKey, seededOfficialProducts, type OfficialProductRecord } from "@/domain/official-product";
@@ -128,12 +128,18 @@ export function ProductBrowser({ groups, query, setQuery, category, setCategory,
       let images = new Map<string, string>();
       let coupangPrices = new Map<string, PublicCoupangPrice>();
 
-      const publicResult = await client.rpc("get_public_standard_product_catalog");
+      const exactPublicResult = await client.rpc("get_public_exact_standard_product_catalog");
+      const publicResult = exactPublicResult.error
+        ? await client.rpc("get_public_standard_product_catalog")
+        : exactPublicResult;
       if (!publicResult.error) {
         const parsed = PublicStandardCatalogRowsSchema.safeParse(publicResult.data ?? []);
         if (parsed.success) {
           const publicIndex = buildPublicStandardCatalogIndex(parsed.data);
           sharedMappings = publicIndex.standardMappings;
+          for (const [key, catalogProductId] of publicIndex.exactStandardMappings) {
+            exactMappings.set(key, catalogProductId);
+          }
           specs = publicIndex.catalogSpecs;
           names = publicIndex.standardNames;
           coupangPrices = publicIndex.coupangByStandard;
@@ -151,12 +157,17 @@ export function ProductBrowser({ groups, query, setQuery, category, setCategory,
       if (authData.user) {
         const [mappingResult, catalogResult, standardResult, coupangResult] = await Promise.all([
           client.from("source_product_mappings").select("source_label,source_product_code,catalog_product_id").eq("review_status", "verified"),
-          client.from("catalog_products").select("id,standard_product_id,content_amount,content_unit,package_count,reference_unit").eq("status", "active"),
+          client.from("catalog_products").select("id,standard_product_id,content_amount,content_unit,package_count,reference_unit").eq("status", "active").eq("specification_status", "verified"),
           client.from("standard_products").select("id,canonical_name").eq("status", "active"),
           client.from("standard_product_coupang_prices").select("standard_product_id,listed_price_krw,quantity,content_amount,content_unit,product_url,observed_at").order("observed_at", { ascending: false }),
         ]);
         if (!mappingResult.error) {
-          for (const mapping of mappingResult.data ?? []) exactMappings.set(`${mapping.source_label}:${mapping.source_product_code}`, mapping.catalog_product_id as string);
+          for (const mapping of mappingResult.data ?? []) {
+            exactMappings.set(
+              publicStandardMappingKey(mapping.source_label, mapping.source_product_code),
+              mapping.catalog_product_id as string,
+            );
+          }
         }
         if (!catalogResult.error) {
           specs = new Map([
@@ -216,7 +227,7 @@ export function ProductBrowser({ groups, query, setQuery, category, setCategory,
     for (const group of groups) {
       const key = officialProductCandidateKey(group);
       const withOfficial = officialProducts[key] ? { ...group, officialProduct: officialProducts[key] } : group;
-      const catalogProductId = exactStandardMappings.get(`${group.storeLabel}:${group.sourceProductCode}`)
+      const catalogProductId = exactStandardMappings.get(publicStandardMappingKey(group.storeLabel, group.sourceProductCode))
         ?? (group.catalogNamespace ? standardMappings.get(group.sourceProductCode) : undefined);
       const spec = catalogProductId ? catalogSpecs.get(catalogProductId) : undefined;
       if (!spec) { regular.push(withOfficial); continue; }
