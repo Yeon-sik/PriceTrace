@@ -9,7 +9,7 @@ export interface Database {
       standard_products: { Row: { id:string; purchase_type:string; canonical_name:string; brand:string|null; product_reference_url:string|null; category_id:string|null; status:string; created_by:string|null; created_at:string; updated_at:string }; Insert: { id?:string; purchase_type:string; canonical_name:string; brand?:string|null; product_reference_url?:string|null; category_id?:string|null; status?:string; created_by?:string|null }; Update: { canonical_name?:string; brand?:string|null; product_reference_url?:string|null; category_id?:string|null; status?:string } };
       standard_product_images: { Row: { standard_product_id:string; source_type:"upload"|"external_url"; image_url:string; storage_path:string|null; mime_type:string|null; file_size_bytes:number|null; width:number|null; height:number|null; created_by:string|null; created_at:string; updated_at:string }; Insert: { standard_product_id:string; source_type:"upload"|"external_url"; image_url:string; storage_path?:string|null; mime_type?:string|null; file_size_bytes?:number|null; width?:number|null; height?:number|null; created_by?:string|null; updated_at?:string }; Update: { source_type?:"upload"|"external_url"; image_url?:string; storage_path?:string|null; mime_type?:string|null; file_size_bytes?:number|null; width?:number|null; height?:number|null; created_by?:string|null; updated_at?:string } };
       catalog_products: { Row: { id:string; standard_product_id:string; purchase_type:string; canonical_name:string; brand:string|null; specification:string|null; specification_status:"verified"|"placeholder"; content_amount:number|null; content_unit:string|null; package_count:number; reference_unit:number; listing_reference_url:string|null; category_id:string|null; attributes:Json; status:string; created_by:string|null; created_at:string; updated_at:string }; Insert: { id?:string; standard_product_id:string; purchase_type:string; canonical_name:string; brand?:string|null; specification?:string|null; specification_status?:"verified"|"placeholder"; content_amount?:number|null; content_unit?:string|null; package_count?:number; reference_unit?:number; listing_reference_url?:string|null; category_id?:string|null; attributes?:Json; status?:string; created_by?:string|null }; Update: { standard_product_id?:string; canonical_name?:string; brand?:string|null; specification?:string|null; specification_status?:"verified"|"placeholder"; content_amount?:number|null; content_unit?:string|null; package_count?:number; reference_unit?:number; listing_reference_url?:string|null; category_id?:string|null; attributes?:Json; status?:string } };
-      standard_product_coupang_prices: { Row: { id:string; standard_product_id:string; product_url:string; listed_price_krw:number; quantity:number; content_amount:number|null; content_unit:string|null; observed_at:string; created_by:string|null; created_at:string }; Insert: { id?:string; standard_product_id:string; product_url:string; listed_price_krw:number; quantity?:number; content_amount?:number|null; content_unit?:string|null; observed_at?:string; created_by?:string|null }; Update: { product_url?:string; listed_price_krw?:number; quantity?:number; content_amount?:number|null; content_unit?:string|null; observed_at?:string; created_by?:string|null } };
+      standard_product_coupang_prices: { Row: { id:string; standard_product_id:string; product_url:string; listed_price_krw:number; quantity:number; content_amount:number|null; content_unit:string|null; max_bundle_quantity:number|null; max_bundle_listed_price_krw:number|null; observed_at:string; created_by:string|null; created_at:string }; Insert: { id?:string; standard_product_id:string; product_url:string; listed_price_krw:number; quantity?:number; content_amount?:number|null; content_unit?:string|null; max_bundle_quantity?:number|null; max_bundle_listed_price_krw?:number|null; observed_at?:string; created_by?:string|null }; Update: { product_url?:string; listed_price_krw?:number; quantity?:number; content_amount?:number|null; content_unit?:string|null; max_bundle_quantity?:number|null; max_bundle_listed_price_krw?:number|null; observed_at?:string; created_by?:string|null } };
       market_price_observations: { Row: { id:string; catalog_product_id:string; seller_name:string; product_url:string; listed_price_krw:number; shipping_fee_krw:number; minimum_order_quantity:number; observed_at:string; verification_status:string; verified_by:string|null; verified_at:string|null; created_at:string }; Insert: { id?:string; catalog_product_id:string; seller_name:string; product_url:string; listed_price_krw:number; shipping_fee_krw?:number; minimum_order_quantity?:number; observed_at:string; verification_status?:string; verified_by?:string|null; verified_at?:string|null }; Update: { seller_name?:string; product_url?:string; listed_price_krw?:number; shipping_fee_krw?:number; minimum_order_quantity?:number; observed_at?:string; verification_status?:string; verified_by?:string|null; verified_at?:string|null } };
       source_product_mappings: { Row: { id:string; source_label:string; source_product_code:string; catalog_product_id:string; matching_method:string; confidence:number; review_status:string; created_by:string|null; reviewed_by:string|null; reviewed_at:string|null; created_at:string; updated_at:string }; Insert: { id?:string; source_label:string; source_product_code:string; catalog_product_id:string; matching_method?:string; confidence?:number; review_status?:string; created_by?:string|null; reviewed_by?:string|null; reviewed_at?:string|null }; Update: { source_label?:string; source_product_code?:string; catalog_product_id?:string; matching_method?:string; confidence?:number; review_status?:string; reviewed_by?:string|null; reviewed_at?:string|null } };
       products: { Row: { id:string; user_id:string; name:string; purchase_type:string; category_id:string|null; category_tags:string[]; created_at:string }; Insert: { id?:string; user_id:string; name:string; purchase_type?:string; category_id?:string|null; category_tags?:string[] }; Update: { name?:string; purchase_type?:string; category_id?:string|null; category_tags?:string[] } };
@@ -23,6 +23,79 @@ export interface Database {
     };
     Views: Record<string, never>;
     Functions: {
+      register_standard_product_with_coupang_price: {
+        Args: {
+          p_standard_product_id:string|null;
+          p_standard_name:string;
+          p_product_reference_url:string;
+          p_listing_name:string;
+          p_specification_status:string;
+          p_content_amount:number;
+          p_content_unit:string;
+          p_package_count:number;
+          p_reference_unit:number;
+          p_source_product_code:string;
+          p_source_labels:string[];
+          p_coupang_product_url:string;
+          p_coupang_listed_price_krw:number;
+          p_coupang_content_amount:number;
+          p_coupang_content_unit:string;
+          p_coupang_max_bundle_quantity:number|null;
+          p_coupang_max_bundle_listed_price_krw:number|null;
+        };
+        Returns: {
+          standard_product_id:string;
+          catalog_product_id:string;
+        }[];
+      };
+      register_standard_product_with_coupang_offer: {
+        Args: {
+          p_standard_product_id:string|null;
+          p_standard_name:string;
+          p_product_reference_url:string;
+          p_listing_name:string;
+          p_specification_status:string;
+          p_content_amount:number;
+          p_content_unit:string;
+          p_package_count:number;
+          p_reference_unit:number;
+          p_source_product_code:string;
+          p_source_labels:string[];
+          p_coupang_product_url:string;
+          p_coupang_listed_price_krw:number;
+          p_coupang_quantity:number;
+          p_coupang_content_amount:number;
+          p_coupang_content_unit:string;
+          p_coupang_max_bundle_quantity:number|null;
+          p_coupang_max_bundle_listed_price_krw:number|null;
+        };
+        Returns: {
+          standard_product_id:string;
+          catalog_product_id:string;
+        }[];
+      };
+      get_public_exact_standard_product_catalog_v2: {
+        Args: Record<string, never>;
+        Returns: {
+          source_label:string;
+          source_product_code:string;
+          catalog_product_id:string;
+          standard_product_id:string;
+          standard_name:string;
+          content_amount:number;
+          content_unit:string;
+          package_count:number;
+          reference_unit:number;
+          coupang_listed_price_krw:number|null;
+          coupang_quantity:number|null;
+          coupang_content_amount:number|null;
+          coupang_content_unit:string|null;
+          coupang_max_bundle_quantity:number|null;
+          coupang_max_bundle_listed_price_krw:number|null;
+          coupang_product_url:string|null;
+          coupang_observed_at:string|null;
+        }[];
+      };
       get_public_exact_standard_product_catalog: {
         Args: Record<string, never>;
         Returns: {

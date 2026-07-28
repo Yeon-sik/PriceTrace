@@ -1,5 +1,6 @@
 import { z } from "zod";
 import type { ProductSpecification } from "./canonical-price";
+import type { CoupangPriceObservation } from "./coupang-price";
 
 const httpUrlSchema = z.string().url().refine(
   (value) => value.startsWith("https://") || value.startsWith("http://"),
@@ -20,6 +21,8 @@ export const PublicStandardCatalogRowSchema = z.object({
   coupang_quantity: z.number().int().positive().nullable(),
   coupang_content_amount: z.number().positive().nullable(),
   coupang_content_unit: z.enum(["g", "ml", "each"]).nullable(),
+  coupang_max_bundle_quantity: z.number().int().min(2).nullable().optional().default(null),
+  coupang_max_bundle_listed_price_krw: z.number().int().positive().nullable().optional().default(null),
   coupang_product_url: httpUrlSchema.nullable(),
   coupang_observed_at: z.string().datetime({ offset: true }).nullable(),
 }).strict().superRefine((row, context) => {
@@ -53,6 +56,25 @@ export const PublicStandardCatalogRowSchema = z.object({
       path: ["coupang_content_amount"],
     });
   }
+  const bundleValues = [
+    row.coupang_max_bundle_quantity,
+    row.coupang_max_bundle_listed_price_krw,
+  ];
+  const bundleCount = bundleValues.filter((value) => value !== null).length;
+  if (bundleCount !== 0 && bundleCount !== bundleValues.length) {
+    context.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: "쿠팡 최대 묶음 개수와 총가격은 함께 존재해야 합니다.",
+      path: ["coupang_max_bundle_quantity"],
+    });
+  }
+  if (populatedCount === 0 && bundleCount !== 0) {
+    context.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: "쿠팡 필수 판매 가격이 없으면 최대 묶음 가격도 비어 있어야 합니다.",
+      path: ["coupang_max_bundle_quantity"],
+    });
+  }
 });
 
 export const PublicStandardCatalogRowsSchema = z.array(PublicStandardCatalogRowSchema).superRefine((rows, context) => {
@@ -75,14 +97,7 @@ export const PublicStandardCatalogRowsSchema = z.array(PublicStandardCatalogRowS
 
 export type PublicStandardCatalogRow = z.infer<typeof PublicStandardCatalogRowSchema>;
 
-export type PublicCoupangPrice = {
-  listedPriceKrw: number;
-  quantity: number;
-  contentAmount: number | null;
-  contentUnit: ProductSpecification["contentUnit"] | null;
-  productUrl: string;
-  observedAt: string;
-};
+export type PublicCoupangPrice = CoupangPriceObservation;
 
 export function publicStandardMappingKey(sourceLabel: string, sourceProductCode: string) {
   return `${sourceLabel}:${sourceProductCode}`;
@@ -126,6 +141,8 @@ export function buildPublicStandardCatalogIndex(rows: PublicStandardCatalogRow[]
       coupangByStandard.set(row.standard_product_id, {
         listedPriceKrw: row.coupang_listed_price_krw,
         quantity: row.coupang_quantity,
+        maxBundleQuantity: row.coupang_max_bundle_quantity,
+        maxBundleListedPriceKrw: row.coupang_max_bundle_listed_price_krw,
         contentAmount: row.coupang_content_amount,
         contentUnit: row.coupang_content_unit,
         productUrl: row.coupang_product_url,

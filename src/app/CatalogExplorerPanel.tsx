@@ -1,7 +1,8 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { normalizeMarketPrice, summarizeCanonicalPrices, type ProductSpecification, type ReferenceUnit } from "@/domain/canonical-price";
+import { summarizeCanonicalPrices, type ReferenceUnit } from "@/domain/canonical-price";
+import { resolveCoupangPrice } from "@/domain/coupang-price";
 import {
   catalogSpecificationLabel,
   isCatalogSpecificationCalculationEligible,
@@ -9,7 +10,7 @@ import {
   type CatalogContentUnit,
   type CatalogSpecificationStatus,
 } from "@/domain/catalog-specification";
-import { categoryForProduct, PRODUCT_CATEGORIES, type ProductCategory } from "@/domain/product-browser";
+import { availableProductCategories, categoryForProduct, type ProductCategory } from "@/domain/product-browser";
 import type { PurchaseType } from "@/domain/types";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import { AdminStandardCatalogModal, type AdminCatalogVariant, type AdminCoupangPrice } from "./AdminStandardCatalogModal";
@@ -63,23 +64,18 @@ function isContentUnit(value: string | null): value is ContentUnit {
   return value === "g" || value === "ml" || value === "each";
 }
 
-function buildAdminCoupangPrice(row: { listed_price_krw: number; quantity: number; content_amount: number | null; content_unit: string | null; product_url: string }, referenceUnit: ReferenceUnit | null) : AdminCoupangPrice {
+function buildAdminCoupangPrice(row: { listed_price_krw: number; quantity: number; content_amount: number | null; content_unit: string | null; max_bundle_quantity: number | null; max_bundle_listed_price_krw: number | null; product_url: string; observed_at: string }, referenceUnit: ReferenceUnit | null) : AdminCoupangPrice {
   const contentUnit = isContentUnit(row.content_unit) ? row.content_unit : null;
-  const specification: ProductSpecification | null = row.content_amount !== null && contentUnit !== null && referenceUnit !== null
-    ? { contentAmount: row.content_amount, contentUnit, packageCount: row.quantity, referenceUnit }
-    : null;
-  const normalized = specification
-    ? normalizeMarketPrice({ sellerName: "쿠팡", listedPriceKrw: row.listed_price_krw, shippingFeeKrw: 0, minimumOrderQuantity: 1, observedAt: "", verificationStatus: "verified" }, specification)
-    : null;
-  return {
-    unitPriceKrw: normalized?.pricePerReferenceUnitKrw ?? null,
-    referenceLabel: normalized?.referenceLabel ?? null,
+  return resolveCoupangPrice({
     listedPriceKrw: row.listed_price_krw,
     quantity: row.quantity,
+    maxBundleQuantity: row.max_bundle_quantity,
+    maxBundleListedPriceKrw: row.max_bundle_listed_price_krw,
     contentAmount: row.content_amount,
     contentUnit,
     productUrl: row.product_url,
-  };
+    observedAt: row.observed_at,
+  }, referenceUnit);
 }
 
 export function CatalogExplorerPanel() {
@@ -92,7 +88,7 @@ export function CatalogExplorerPanel() {
   const [variants, setVariants] = useState<CatalogProduct[]>([]);
   const [coupangByStandard, setCoupangByStandard] = useState<Map<string, AdminCoupangPrice>>(new Map());
   const [categoryId, setCategoryId] = useState("");
-  const [productCategory, setProductCategory] = useState<ProductCategory>("전체");
+  const [productCategory, setProductCategory] = useState<ProductCategory | null>(null);
   const [selectedStandardId, setSelectedStandardId] = useState("");
   const [showStandardDetail, setShowStandardDetail] = useState(false);
   const [standardName, setStandardName] = useState("");
@@ -134,7 +130,7 @@ export function CatalogExplorerPanel() {
       ) referenceUnitByStandard.set(variant.standard_product_id as string, variant.reference_unit as ReferenceUnit);
     }
     if (standardIds.length === 0) { setCoupangByStandard(new Map()); return; }
-    const { data: coupangData, error: coupangError } = await client.from("standard_product_coupang_prices").select("standard_product_id,listed_price_krw,quantity,content_amount,content_unit,product_url,observed_at").in("standard_product_id", standardIds).order("observed_at", { ascending: false });
+    const { data: coupangData, error: coupangError } = await client.from("standard_product_coupang_prices").select("standard_product_id,listed_price_krw,quantity,content_amount,content_unit,max_bundle_quantity,max_bundle_listed_price_krw,product_url,observed_at").in("standard_product_id", standardIds).order("observed_at", { ascending: false });
     if (coupangError) { setMessage(coupangError.message); return; }
     const latestByStandard = new Map<string, AdminCoupangPrice>();
     for (const row of coupangData ?? []) {
@@ -145,7 +141,10 @@ export function CatalogExplorerPanel() {
           quantity: row.quantity as number,
           content_amount: row.content_amount as number | null,
           content_unit: row.content_unit as string | null,
+          max_bundle_quantity: row.max_bundle_quantity as number | null,
+          max_bundle_listed_price_krw: row.max_bundle_listed_price_krw as number | null,
           product_url: row.product_url as string,
+          observed_at: row.observed_at as string,
         }, referenceUnitByStandard.get(standardProductId) ?? null));
       }
     }
@@ -163,7 +162,7 @@ export function CatalogExplorerPanel() {
   useEffect(() => {
     void loadCatalog();
     setCategoryId("");
-    setProductCategory("전체");
+    setProductCategory(null);
     setSelectedStandardId("");
     setShowStandardDetail(false);
     setSelectedVariantId("");
@@ -189,15 +188,16 @@ export function CatalogExplorerPanel() {
 
   useEffect(() => { void loadSelectedVariantData(); }, [loadSelectedVariantData]);
 
-  const visibleStandardProducts = useMemo(() => {
+  const scopedStandardProducts = useMemo(() => {
     let scoped = standardProducts;
     if (categoryId) {
       const ids = descendantIds(categories, categoryId);
       scoped = scoped.filter((product) => product.category_id && ids.has(product.category_id));
     }
-    if (productCategory !== "전체") scoped = scoped.filter((product) => categoryForProduct(product.canonical_name) === productCategory);
     return scoped;
-  }, [categories, categoryId, productCategory, standardProducts]);
+  }, [categories, categoryId, standardProducts]);
+  const standardCategories = useMemo(() => availableProductCategories(scopedStandardProducts.map((product) => product.canonical_name)), [scopedStandardProducts]);
+  const visibleStandardProducts = useMemo(() => productCategory === "전체" ? scopedStandardProducts : productCategory ? scopedStandardProducts.filter((product) => categoryForProduct(product.canonical_name) === productCategory) : [], [productCategory, scopedStandardProducts]);
   const priceSummaries = useMemo(() => summarizeCanonicalPrices(observations.map((observation) => ({
     locationLabel: observation.location_label,
     unitPriceKrw: observation.unit_price_krw,
@@ -364,11 +364,11 @@ export function CatalogExplorerPanel() {
     await loadSelectedVariantData();
   }
 
-  async function submitCoupangPrice(productUrl: string, listedPriceKrw: number, quantity: number, contentAmount: number, contentUnit: ContentUnit): Promise<{ ok: boolean; message: string }> {
+  async function submitCoupangPrice(productUrl: string, listedPriceKrw: number, quantity: number, contentAmount: number, contentUnit: ContentUnit, maxBundleQuantity: number | null, maxBundleListedPriceKrw: number | null): Promise<{ ok: boolean; message: string }> {
     if (!client || !userId) return { ok: false, message: "로그인이 필요합니다." };
     if (!selectedStandardId) return { ok: false, message: "표준 상품을 먼저 선택하세요." };
     const observedAt = new Date().toISOString();
-    const { error } = await client.from("standard_product_coupang_prices").insert({ standard_product_id: selectedStandardId, product_url: productUrl, listed_price_krw: listedPriceKrw, quantity, content_amount: contentAmount, content_unit: contentUnit, observed_at: observedAt, created_by: userId });
+    const { error } = await client.from("standard_product_coupang_prices").insert({ standard_product_id: selectedStandardId, product_url: productUrl, listed_price_krw: listedPriceKrw, quantity, content_amount: contentAmount, content_unit: contentUnit, max_bundle_quantity: maxBundleQuantity, max_bundle_listed_price_krw: maxBundleListedPriceKrw, observed_at: observedAt, created_by: userId });
     if (error) return { ok: false, message: error.message };
     await loadCatalog();
     return { ok: true, message: "쿠팡가를 등록했습니다." };
@@ -396,8 +396,8 @@ export function CatalogExplorerPanel() {
         </label>
       </div>
       {message && <p role="status" className={styles.muted}>{message}</p>}
-      <div className={styles.filters} aria-label="물품 카테고리">{PRODUCT_CATEGORIES.map((item) => <button type="button" aria-pressed={productCategory === item} className={productCategory === item ? styles.filterActive : ""} key={item} onClick={() => setProductCategory(item)}>{item}</button>)}</div>
-      <div className={styles.catalogGrid}>
+      <div className={styles.filters} aria-label="물품 카테고리"><button type="button" aria-pressed={productCategory === "전체"} className={productCategory === "전체" ? styles.filterActive : ""} onClick={() => { setProductCategory("전체"); setSelectedStandardId(""); setSelectedVariantId(""); setShowStandardDetail(false); }}>전체</button>{standardCategories.map((item) => <button type="button" aria-pressed={productCategory === item} className={productCategory === item ? styles.filterActive : ""} key={item} onClick={() => { setProductCategory(item); setSelectedStandardId(""); setSelectedVariantId(""); setShowStandardDetail(false); }}>{item}</button>)}<button type="button" onClick={() => { setProductCategory(null); setSelectedStandardId(""); setSelectedVariantId(""); setShowStandardDetail(false); }}>선택 해제</button></div>
+      {productCategory ? <><div className={styles.catalogGrid}>
         <div>
           <h3 className={styles.blackHeading}>표준 상품</h3>
           {visibleStandardProducts.length === 0 ? <p>선택한 범위에 등록된 표준 상품이 없습니다.</p> : <div className={styles.catalogList}>
@@ -458,7 +458,7 @@ export function CatalogExplorerPanel() {
             {selectedMapping && <><button type="button" className={styles.secondaryButton} onClick={() => { setSelectedMappingId(""); setSourceLabel(""); setSourceProductCode(""); }}>새 연결</button><button type="button" className={styles.deleteCatalogButton} onClick={deleteSelectedMapping}>연결 삭제</button></>}
           </form>
         </> : <p className={styles.muted}>수정하거나 삭제할 하위 상품을 먼저 선택하세요.</p>}
-      </div>}
+      </div>}</> : <p className={styles.emptyState}>카테고리를 선택하면 해당 표준 상품과 판매 규격을 표시합니다.</p>}
       {selectedStandard && (!isAdmin || showStandardDetail) && <AdminStandardCatalogModal
         name={selectedStandard.canonical_name}
         variants={variantsForSelectedStandard.map((variant): AdminCatalogVariant => ({ id: variant.id, canonicalName: variant.canonical_name, specLabel: specLabelFor(variant), isPlaceholder: variant.specification_status === "placeholder", listingReferenceUrl: variant.listing_reference_url }))}

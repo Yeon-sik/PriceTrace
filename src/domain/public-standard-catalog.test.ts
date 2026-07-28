@@ -19,6 +19,8 @@ function row(overrides: Record<string, unknown> = {}) {
     coupang_quantity: null,
     coupang_content_amount: null,
     coupang_content_unit: null,
+    coupang_max_bundle_quantity: null,
+    coupang_max_bundle_listed_price_krw: null,
     coupang_product_url: null,
     coupang_observed_at: null,
     ...overrides,
@@ -82,6 +84,34 @@ describe("public standard catalog", () => {
       coupang_observed_at: "2026-07-01T00:00:00Z",
     })]);
     expect(parsed.success).toBe(false);
+  });
+
+  it("keeps a complete maximum bundle option and rejects a partial one", () => {
+    const complete = PublicStandardCatalogRowsSchema.parse([row({
+      coupang_listed_price_krw: 4_100,
+      coupang_quantity: 1,
+      coupang_content_amount: 52,
+      coupang_content_unit: "g",
+      coupang_max_bundle_quantity: 20,
+      coupang_max_bundle_listed_price_krw: 21_250,
+      coupang_product_url: "https://www.coupang.com/vp/products/1",
+      coupang_observed_at: "2026-07-01T00:00:00Z",
+    })]);
+    expect(buildPublicStandardCatalogIndex(complete).coupangByStandard.get(standardProductId)).toMatchObject({
+      maxBundleQuantity: 20,
+      maxBundleListedPriceKrw: 21_250,
+    });
+
+    const partial = PublicStandardCatalogRowsSchema.safeParse([row({
+      coupang_listed_price_krw: 4_100,
+      coupang_quantity: 1,
+      coupang_content_amount: 52,
+      coupang_content_unit: "g",
+      coupang_max_bundle_quantity: 20,
+      coupang_product_url: "https://www.coupang.com/vp/products/1",
+      coupang_observed_at: "2026-07-01T00:00:00Z",
+    })]);
+    expect(partial.success).toBe(false);
   });
 
   it("keeps the latest complete Coupang observation for a standard product", () => {

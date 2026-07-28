@@ -8,25 +8,22 @@ import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import { AdminReceiptRepository, localReceiptsToAdminRecords, type AdminReceiptRecord } from "@/repositories/admin-receipt.repository";
 import { AdminQualityPanel } from "./AdminQualityPanel";
 import { StandardProductWorkspace } from "./OfficialProductPanel";
-import { CatalogExplorerPanel } from "./CatalogExplorerPanel";
 import { MarketPricePanel } from "./MarketPricePanel";
 import styles from "./page.module.css";
 
-type AdminTab = "receipts" | "official" | "catalog" | "market" | "quality";
+type AdminTab = "receipts" | "official" | "market" | "quality";
 export function AdminPage({ candidates, receipts }: { candidates: OfficialProductCandidate[]; receipts: Receipt[] }) {
   const [tab, setTab] = useState<AdminTab>("receipts");
   return <section className={styles.browser}>
     <div className={styles.browserHead}><div><p className={styles.kicker}>ADMINISTRATION</p><h1>관리자</h1><p>영수증 기록, 상품 연결, 품질 검토를 분리해 관리합니다.</p></div></div>
     <div className={styles.adminTabs} role="tablist" aria-label="관리자 기능">
       <button role="tab" aria-selected={tab === "receipts"} onClick={() => setTab("receipts")}>영수증 기록</button>
-      <button role="tab" aria-selected={tab === "official"} onClick={() => setTab("official")}>표준 상품 연결</button>
-      <button role="tab" aria-selected={tab === "catalog"} onClick={() => setTab("catalog")}>표준 상품·규격</button>
+      <button role="tab" aria-selected={tab === "official"} onClick={() => setTab("official")}>표준 상품 관리</button>
       <button role="tab" aria-selected={tab === "market"} onClick={() => setTab("market")}>시장가</button>
       <button role="tab" aria-selected={tab === "quality"} onClick={() => setTab("quality")}>품질 검토</button>
     </div>
     {tab === "receipts" && <AdminReceiptHistory receipts={receipts} />}
     {tab === "official" && <StandardProductWorkspace candidates={candidates} revision={0} />}
-    {tab === "catalog" && <CatalogExplorerPanel />}
     {tab === "market" && <MarketPricePanel />}
     {tab === "quality" && <AdminQualityPanel />}
   </section>;
