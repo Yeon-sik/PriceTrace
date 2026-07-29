@@ -97,6 +97,35 @@ export function martTypeFor(receipt: Receipt): Exclude<MartType, "all"> {
   return /px|군마트|국군복지단|와마트/i.test(receipt.storeLabel) || receipt.items.some((item) => /영외/i.test(item.productName)) ? "px" : "regular";
 }
 
+export function martTagFor(store: Pick<ProductGroup, "martType" | "storeLabel">) {
+  const compactStoreLabel = normalizedSellerDisplayLabel(store.storeLabel).replace(/\s+/g, "");
+  const hasPxLabel = /군마트|국군복지단|와마트/i.test(compactStoreLabel)
+    || /(?:^|[^a-z])px(?:$|[^a-z])/i.test(store.storeLabel);
+  if (store.martType === "px" || hasPxLabel) return "PX";
+  return store.storeLabel.replace(/\s+\S+점$/, "").trim() || "일반 마트";
+}
+
+export type CoupangPriceComparison = {
+  winner: "seller" | "coupang" | "tie";
+  sellerTag: string;
+  differenceKrw: number;
+};
+
+export function compareCoupangPrice(
+  seller: Pick<ProductGroup, "martType" | "storeLabel"> & { unitPriceKrw: number; unitPriceLabel: string },
+  coupangPrice: { unitPriceKrw: number | null; referenceLabel: string | null } | null,
+): CoupangPriceComparison | null {
+  if (!coupangPrice || coupangPrice.unitPriceKrw === null || coupangPrice.referenceLabel !== seller.unitPriceLabel) return null;
+  const sellerTag = martTagFor(seller);
+  if (seller.unitPriceKrw < coupangPrice.unitPriceKrw) {
+    return { winner: "seller", sellerTag, differenceKrw: coupangPrice.unitPriceKrw - seller.unitPriceKrw };
+  }
+  if (coupangPrice.unitPriceKrw < seller.unitPriceKrw) {
+    return { winner: "coupang", sellerTag, differenceKrw: seller.unitPriceKrw - coupangPrice.unitPriceKrw };
+  }
+  return { winner: "tie", sellerTag, differenceKrw: 0 };
+}
+
 export function categoryForProduct(productName: string): ProductCategory {
   const name = productName.toLowerCase();
   if (/샴푸|바디워시|로션|크림|마스크|패드|연고|면도|질레트|쿨토시|런닝|반바지|화장품|세트/.test(name)) return "생활용품";
@@ -106,6 +135,12 @@ export function categoryForProduct(productName: string): ProductCategory {
   if (/프라이팬|냄비|도마|칼|수세미|주방/.test(name)) return "주방용품";
   if (/쌀|햇반|국수|파스타|소시지|어묵|쌈장|케찹|김|빵|식빵|짜장|우동|탕|불고기|쭈꾸미|골뱅이|양념|폭립/.test(name)) return "식품";
   return "미분류";
+}
+
+export function availableProductCategories(productNames: Iterable<string>): Exclude<ProductCategory, "전체">[] {
+  const present = new Set<ProductCategory>();
+  for (const productName of productNames) present.add(categoryForProduct(productName));
+  return PRODUCT_CATEGORIES.filter((category): category is Exclude<ProductCategory, "전체"> => category !== "전체" && present.has(category));
 }
 
 export function listingsFromReceipts(receipts: Receipt[]): ProductObservationListing[] {

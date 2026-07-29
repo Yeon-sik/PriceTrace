@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { distinctSellerCount, filterAndSortProductGroups, groupProductObservations, latestSellerRows, martTypeFor, mergeOfficialProductGroups, normalizeSellerLabel, type ProductObservationListing } from "./product-browser";
+import { compareCoupangPrice, distinctSellerCount, filterAndSortProductGroups, groupProductObservations, latestSellerRows, martTagFor, martTypeFor, mergeOfficialProductGroups, normalizeSellerLabel, type ProductObservationListing } from "./product-browser";
 import type { ReceiptItem } from "./types";
 import { createUniversalReceipt } from "./receipt.fixture";
 import { mapReceipt } from "./receipt";
@@ -13,6 +13,39 @@ describe("product browser domain", () => {
   it("uses the explicit receipt retail channel", () => {
     const source = createUniversalReceipt(); source.merchant.retail_channel = "px";
     expect(martTypeFor(mapReceipt(source))).toBe("px");
+  });
+
+  it("uses the retail-channel tag instead of an individual branch name", () => {
+    expect(martTagFor({ martType: "px", storeLabel: "와마트 일산점" })).toBe("PX");
+    expect(martTagFor({ martType: "px", storeLabel: "국군 복지단 바다마을마트" })).toBe("PX");
+    expect(martTagFor({ martType: "regular", storeLabel: "와마트 일산점" })).toBe("PX");
+    expect(martTagFor({ martType: "regular", storeLabel: "국군복지단 바다마을마트" })).toBe("PX");
+    expect(martTagFor({ martType: "regular", storeLabel: "홈플러스 일산점" })).toBe("홈플러스");
+    expect(martTagFor({ martType: "regular", storeLabel: "이마트 에브리데이 풍산점" })).toBe("이마트 에브리데이");
+  });
+
+  it("compares the lowest seller with Coupang in either direction", () => {
+    const seller = { martType: "regular" as const, storeLabel: "국군복지단 바다마을마트", unitPriceLabel: "10g당", unitPriceKrw: 250 };
+    expect(compareCoupangPrice(seller, { referenceLabel: "10g당", unitPriceKrw: 300 })).toEqual({
+      winner: "seller",
+      sellerTag: "PX",
+      differenceKrw: 50,
+    });
+    expect(compareCoupangPrice(seller, { referenceLabel: "10g당", unitPriceKrw: 200 })).toEqual({
+      winner: "coupang",
+      sellerTag: "PX",
+      differenceKrw: 50,
+    });
+    expect(compareCoupangPrice(seller, { referenceLabel: "10g당", unitPriceKrw: 250 })).toEqual({
+      winner: "tie",
+      sellerTag: "PX",
+      differenceKrw: 0,
+    });
+  });
+
+  it("does not compare prices with different reference units", () => {
+    const seller = { martType: "regular" as const, storeLabel: "홈플러스 일산점", unitPriceLabel: "100g당", unitPriceKrw: 500 };
+    expect(compareCoupangPrice(seller, { referenceLabel: "10g당", unitPriceKrw: 50 })).toBeNull();
   });
 
   it("keeps same-name products with different product codes separate", () => {
