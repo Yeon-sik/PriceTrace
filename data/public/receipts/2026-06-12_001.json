@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "privacyPolicyVersion": 2,
-  "revision": "d3cbd893ef272065",
+  "revision": "808d8e136aa47ddd",
   "id": "2026-06-12_001",
   "fileName": "2026-06-12_001.json",
   "merchant": {
@@ -485,7 +485,7 @@
     {
       "id": "line_ee1db8bc6162e0f6",
       "type": "product",
-      "description": "멘토스 쿠키앤크림",
+      "description": "월드콘 쿠키앤크림",
       "sourceLineReferences": [
         "019"
       ],
@@ -660,7 +660,7 @@
     {
       "id": "line_9cb63be2a92d3936",
       "type": "product",
-      "description": "멘토스 쿠키앤크림",
+      "description": "월드콘 쿠키앤크림",
       "sourceLineReferences": [
         "026"
       ],
