@@ -20,7 +20,10 @@
     "sync:public-receipts": "vite-node scripts/sync-public-receipts.ts",
     "check:public-receipts": "vite-node scripts/sync-public-receipts.ts --check",
     "sync:public-observations": "npm run sync:public-receipts",
-    "check:public-observations": "npm run check:public-receipts"
+    "check:public-observations": "npm run check:public-receipts",
+    "normalize:private-px-catalog": "vite-node scripts/sync-public-official-channel-catalog.ts --normalize-source",
+    "sync:public-official-catalog": "vite-node scripts/sync-public-official-channel-catalog.ts",
+    "check:public-official-catalog": "vite-node scripts/sync-public-official-channel-catalog.ts --check"
   },
   "dependencies": {
     "@capacitor/android": "^8.0.0",

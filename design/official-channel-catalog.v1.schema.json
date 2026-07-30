@@ -1,0 +1,2238 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:pricetrace:schema:official-channel-catalog:v1",
+  "title": "PriceTrace Official Channel Catalog Snapshot v1",
+  "description": "Design-only source contract for immutable snapshots collected from an official distribution-channel source. It is not a runtime or database contract yet.",
+  "$comment": "JSON Schema validates record shape. The companion bundle invariants in OFFICIAL_CHANNEL_PRODUCT_DATA_MODEL.md are also normative.",
+  "x-pricetrace-semantic-invariants": [
+    "All source, listing snapshot, and offer IDs are unique within the bundle.",
+    "Every source_ref resolves to exactly one sources[].id in the same bundle.",
+    "Every singular source_ref and every source_refs item is checked; child claim refs are contained by their enclosing offer and listing refs.",
+    "Every non-null or non-empty common source field and offer source name has at least one claim-level source ref.",
+    "The declared hashes match their defined byte or RFC 8785 canonical JSON subjects.",
+    "A full collection is delisting-eligible only when its scope is explicit, collection_status is completed, expected and collected counts match, expected and collected pages match, pagination_exhausted is true, coverage sources are captured, errors is empty, and all cross-record checks pass.",
+    "The durable listing identity tuple is unique within a bundle, and collected_listing_count equals the number of those unique tuples.",
+    "A source_product_code or source_offer_code identity uses a non-null source-system namespace and direct source_ref; receipt compatibility is a separate reviewed decision.",
+    "Exactly one identifier has is_identity_basis=true when source_identity.basis is identifier.",
+    "A source-explicit delisted publication has non-empty source_text and all supporting source refs resolve to captured evidence.",
+    "valid_from must not be later than valid_until when both values are comparable.",
+    "Re-importing a bundle with the same snapshot content_hash is idempotent."
+  ],
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "snapshot",
+    "channel",
+    "sources",
+    "listing_snapshots"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "official-channel-catalog.v1"
+    },
+    "snapshot": {
+      "$ref": "#/$defs/snapshot"
+    },
+    "channel": {
+      "$ref": "#/$defs/channel"
+    },
+    "sources": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "$ref": "#/$defs/source"
+      }
+    },
+    "listing_snapshots": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/listingSnapshot"
+      }
+    },
+    "extensions": {
+      "$ref": "#/$defs/extensions"
+    }
+  },
+  "$defs": {
+    "extensions": {
+      "type": "object",
+      "description": "Namespaced channel-specific data. Core semantics must not be redefined here.",
+      "propertyNames": {
+        "pattern": "^[a-z0-9][a-z0-9._-]{0,63}:[A-Za-z0-9][A-Za-z0-9._-]{0,127}$"
+      },
+      "additionalProperties": true
+    },
+    "nullableNonEmptyString": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "minLength": 1
+    },
+    "nullableUri": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "format": "uri",
+      "pattern": "^https?://"
+    },
+    "nullableSha256": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "sha256": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "sourceRefArray": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
+    "nullableTemporal": {
+      "description": "A source-declared date or date-time. Precision must not be invented.",
+      "oneOf": [
+        {
+          "type": "string",
+          "format": "date"
+        },
+        {
+          "type": "string",
+          "format": "date-time"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "snapshot": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "previous_snapshot_id",
+        "captured_at",
+        "capture_method",
+        "coverage",
+        "collection_status",
+        "collector",
+        "content_hash",
+        "errors",
+        "notes"
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "previous_snapshot_id": {
+          "description": "Previous accepted snapshot UUID for the same channel and coverage scope, when known.",
+          "oneOf": [
+            {
+              "type": "string",
+              "format": "uuid"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "captured_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "capture_method": {
+          "enum": [
+            "manual",
+            "crawler",
+            "api",
+            "export",
+            "unknown"
+          ]
+        },
+        "coverage": {
+          "$ref": "#/$defs/coverage"
+        },
+        "collection_status": {
+          "enum": [
+            "completed",
+            "partial",
+            "blocked",
+            "failed",
+            "unknown"
+          ]
+        },
+        "collector": {
+          "$ref": "#/$defs/collector"
+        },
+        "content_hash": {
+          "description": "SHA-256 of the RFC 8785 canonicalized bundle with the snapshot.content_hash member omitted.",
+          "$ref": "#/$defs/sha256"
+        },
+        "errors": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/collectionError"
+          }
+        },
+        "notes": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "coverage": {
+                "type": "object",
+                "properties": {
+                  "completeness": {
+                    "const": "full"
+                  }
+                },
+                "required": [
+                  "completeness"
+                ]
+              }
+            },
+            "required": [
+              "coverage"
+            ]
+          },
+          "then": {
+            "properties": {
+              "collection_status": {
+                "const": "completed"
+              },
+              "errors": {
+                "maxItems": 0
+              }
+            }
+          }
+        }
+      ]
+    },
+    "coverage": {
+      "type": "object",
+      "description": "Defines what universe was collected and the evidence for completeness. full never means the whole channel unless scope_kind is entire_channel.",
+      "additionalProperties": false,
+      "required": [
+        "scope_kind",
+        "scope_key",
+        "completeness",
+        "completion_basis",
+        "expected_listing_count",
+        "collected_listing_count",
+        "pages_expected",
+        "pages_collected",
+        "pagination_exhausted",
+        "source_refs"
+      ],
+      "properties": {
+        "scope_kind": {
+          "enum": [
+            "entire_channel",
+            "category",
+            "collection",
+            "search_query",
+            "url_set",
+            "other",
+            "unknown"
+          ]
+        },
+        "scope_key": {
+          "description": "Deterministic source-facing key for the category, collection, query, URL set, or other bounded scope. It is required for every non-entire, non-unknown scope.",
+          "$ref": "#/$defs/nullableNonEmptyString"
+        },
+        "completeness": {
+          "enum": [
+            "full",
+            "partial",
+            "unknown"
+          ]
+        },
+        "completion_basis": {
+          "enum": [
+            "source_complete_export",
+            "reported_count_matched",
+            "pagination_exhausted",
+            "single_source_exhausted",
+            "manual_verified",
+            "unknown"
+          ]
+        },
+        "expected_listing_count": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 0
+        },
+        "collected_listing_count": {
+          "description": "Number of unique durable listing identity tuples in listing_snapshots; record_local identities count by record_local_id.",
+          "type": "integer",
+          "minimum": 0
+        },
+        "pages_expected": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 1
+        },
+        "pages_collected": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 0
+        },
+        "pagination_exhausted": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "source_refs": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "completeness": {
+                "const": "full"
+              }
+            },
+            "required": [
+              "completeness"
+            ]
+          },
+          "then": {
+            "properties": {
+              "scope_kind": {
+                "enum": [
+                  "entire_channel",
+                  "category",
+                  "collection",
+                  "search_query",
+                  "url_set",
+                  "other"
+                ]
+              },
+              "completion_basis": {
+                "enum": [
+                  "source_complete_export",
+                  "reported_count_matched",
+                  "pagination_exhausted",
+                  "single_source_exhausted",
+                  "manual_verified"
+                ]
+              },
+              "expected_listing_count": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "pages_expected": {
+                "type": "integer",
+                "minimum": 1
+              },
+              "pages_collected": {
+                "type": "integer",
+                "minimum": 1
+              },
+              "pagination_exhausted": {
+                "const": true
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "scope_kind": {
+                "enum": [
+                  "category",
+                  "collection",
+                  "search_query",
+                  "url_set",
+                  "other"
+                ]
+              }
+            },
+            "required": [
+              "scope_kind"
+            ]
+          },
+          "then": {
+            "properties": {
+              "scope_key": {
+                "type": "string",
+                "minLength": 1
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "completion_basis": {
+                "const": "reported_count_matched"
+              }
+            },
+            "required": [
+              "completion_basis"
+            ]
+          },
+          "then": {
+            "properties": {
+              "expected_listing_count": {
+                "type": "integer",
+                "minimum": 0
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "completion_basis": {
+                "const": "pagination_exhausted"
+              }
+            },
+            "required": [
+              "completion_basis"
+            ]
+          },
+          "then": {
+            "properties": {
+              "pages_collected": {
+                "type": "integer",
+                "minimum": 1
+              },
+              "pagination_exhausted": {
+                "const": true
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "completion_basis": {
+                "const": "single_source_exhausted"
+              }
+            },
+            "required": [
+              "completion_basis"
+            ]
+          },
+          "then": {
+            "properties": {
+              "pages_expected": {
+                "const": 1
+              },
+              "pages_collected": {
+                "const": 1
+              },
+              "pagination_exhausted": {
+                "const": true
+              }
+            }
+          }
+        }
+      ]
+    },
+    "collectionError": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "stage",
+        "code",
+        "message",
+        "source_ref",
+        "recoverable"
+      ],
+      "properties": {
+        "stage": {
+          "enum": [
+            "discovery",
+            "retrieval",
+            "pagination",
+            "extraction",
+            "validation",
+            "unknown"
+          ]
+        },
+        "code": {
+          "type": "string",
+          "minLength": 1
+        },
+        "message": {
+          "type": "string",
+          "minLength": 1
+        },
+        "source_ref": {
+          "$ref": "#/$defs/nullableNonEmptyString"
+        },
+        "recoverable": {
+          "type": "boolean"
+        }
+      }
+    },
+    "collector": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "type",
+        "name",
+        "version",
+        "run_id"
+      ],
+      "properties": {
+        "type": {
+          "enum": [
+            "human",
+            "script",
+            "service",
+            "unknown"
+          ]
+        },
+        "name": {
+          "$ref": "#/$defs/nullableNonEmptyString"
+        },
+        "version": {
+          "$ref": "#/$defs/nullableNonEmptyString"
+        },
+        "run_id": {
+          "$ref": "#/$defs/nullableNonEmptyString"
+        }
+      }
+    },
+    "channel": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "name",
+        "kind",
+        "operator_name"
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9._-]{1,127}$"
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1
+        },
+        "kind": {
+          "enum": [
+            "retailer",
+            "marketplace",
+            "brand_store",
+            "other",
+            "unknown"
+          ]
+        },
+        "operator_name": {
+          "$ref": "#/$defs/nullableNonEmptyString"
+        },
+        "extensions": {
+          "$ref": "#/$defs/extensions"
+        }
+      }
+    },
+    "source": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "medium",
+        "publisher_relation",
+        "url",
+        "title",
+        "retrieved_at",
+        "published",
+        "access_scope",
+        "evidence_status",
+        "content_hash",
+        "content_hash_basis",
+        "artifact_ref",
+        "artifact_access_class",
+        "media_type",
+        "encoding",
+        "byte_length",
+        "sanitization",
+        "raw_payload"
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9._:-]+$"
+        },
+        "medium": {
+          "enum": [
+            "web_page",
+            "api",
+            "export",
+            "document",
+            "unknown"
+          ]
+        },
+        "publisher_relation": {
+          "description": "Relationship of the publisher to the channel, not a product-match confidence.",
+          "enum": [
+            "channel_owner",
+            "channel_operator",
+            "authorized_channel_service",
+            "unknown"
+          ]
+        },
+        "url": {
+          "$ref": "#/$defs/nullableUri"
+        },
+        "title": {
+          "$ref": "#/$defs/nullableNonEmptyString"
+        },
+        "retrieved_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "published": {
+          "$ref": "#/$defs/nullableTemporal"
+        },
+        "access_scope": {
+          "description": "Authentication state only. Credentials, cookies, and tokens must never be stored.",
+          "enum": [
+            "public",
+            "authenticated",
+            "restricted",
+            "unknown"
+          ]
+        },
+        "evidence_status": {
+          "enum": [
+            "captured",
+            "reference_only"
+          ]
+        },
+        "content_hash": {
+          "$ref": "#/$defs/nullableSha256"
+        },
+        "content_hash_basis": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "enum": [
+            "artifact_bytes",
+            "raw_payload_rfc8785",
+            null
+          ]
+        },
+        "artifact_ref": {
+          "$ref": "#/$defs/nullableNonEmptyString"
+        },
+        "artifact_access_class": {
+          "enum": [
+            "private_restricted",
+            "private_internal",
+            "public_projection",
+            "not_applicable"
+          ]
+        },
+        "media_type": {
+          "$ref": "#/$defs/nullableNonEmptyString"
+        },
+        "encoding": {
+          "$ref": "#/$defs/nullableNonEmptyString"
+        },
+        "byte_length": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 0
+        },
+        "sanitization": {
+          "$ref": "#/$defs/sanitization"
+        },
+        "raw_payload": {
+          "description": "Optional sanitized source payload. Authentication material and unrelated personal data are forbidden.",
+          "oneOf": [
+            {
+              "type": "object"
+            },
+            {
+              "type": "array"
+            },
+            {
+              "type": "string",
+              "minLength": 1
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "extensions": {
+          "$ref": "#/$defs/extensions"
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "evidence_status": {
+                "const": "captured"
+              }
+            },
+            "required": [
+              "evidence_status"
+            ]
+          },
+          "then": {
+            "properties": {
+              "content_hash": {
+                "type": "string",
+                "pattern": "^sha256:[0-9a-f]{64}$"
+              },
+              "content_hash_basis": {
+                "enum": [
+                  "artifact_bytes",
+                  "raw_payload_rfc8785"
+                ]
+              }
+            },
+            "required": [
+              "content_hash",
+              "content_hash_basis"
+            ],
+            "anyOf": [
+              {
+                "properties": {
+                  "artifact_ref": {
+                    "type": "string",
+                    "minLength": 1
+                  }
+                },
+                "required": [
+                  "artifact_ref"
+                ]
+              },
+              {
+                "properties": {
+                  "raw_payload": {
+                    "not": {
+                      "type": "null"
+                    }
+                  }
+                },
+                "required": [
+                  "raw_payload"
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "evidence_status": {
+                "const": "reference_only"
+              }
+            },
+            "required": [
+              "evidence_status"
+            ]
+          },
+          "then": {
+            "properties": {
+              "content_hash": {
+                "type": "null"
+              },
+              "content_hash_basis": {
+                "type": "null"
+              },
+              "artifact_ref": {
+                "type": "null"
+              },
+              "artifact_access_class": {
+                "const": "not_applicable"
+              },
+              "raw_payload": {
+                "type": "null"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "medium": {
+                "enum": [
+                  "web_page",
+                  "api"
+                ]
+              }
+            },
+            "required": [
+              "medium"
+            ]
+          },
+          "then": {
+            "properties": {
+              "url": {
+                "type": "string",
+                "format": "uri",
+                "pattern": "^https?://"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "medium": {
+                "enum": [
+                  "export",
+                  "document"
+                ]
+              }
+            },
+            "required": [
+              "medium"
+            ]
+          },
+          "then": {
+            "anyOf": [
+              {
+                "properties": {
+                  "url": {
+                    "type": "string",
+                    "format": "uri",
+                    "pattern": "^https?://"
+                  }
+                }
+              },
+              {
+                "properties": {
+                  "artifact_ref": {
+                    "type": "string",
+                    "minLength": 1
+                  }
+                }
+              },
+              {
+                "properties": {
+                  "raw_payload": {
+                    "not": {
+                      "type": "null"
+                    }
+                  }
+                }
+              }
+            ]
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "content_hash_basis": {
+                "const": "artifact_bytes"
+              }
+            },
+            "required": [
+              "content_hash_basis"
+            ]
+          },
+          "then": {
+            "properties": {
+              "artifact_ref": {
+                "type": "string",
+                "minLength": 1
+              },
+              "media_type": {
+                "type": "string",
+                "minLength": 1
+              },
+              "byte_length": {
+                "type": "integer",
+                "minimum": 0
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "content_hash_basis": {
+                "const": "raw_payload_rfc8785"
+              }
+            },
+            "required": [
+              "content_hash_basis"
+            ]
+          },
+          "then": {
+            "properties": {
+              "raw_payload": {
+                "not": {
+                  "type": "null"
+                }
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "artifact_access_class": {
+                "const": "public_projection"
+              }
+            },
+            "required": [
+              "artifact_access_class"
+            ]
+          },
+          "then": {
+            "properties": {
+              "sanitization": {
+                "type": "object",
+                "properties": {
+                  "status": {
+                    "enum": [
+                      "not_required",
+                      "sanitized"
+                    ]
+                  },
+                  "credentials_scan": {
+                    "const": "passed"
+                  },
+                  "personal_data_scan": {
+                    "const": "passed"
+                  }
+                }
+              }
+            }
+          }
+        },
+        {
+          "anyOf": [
+            {
+              "properties": {
+                "url": {
+                  "type": "string",
+                  "format": "uri",
+                  "pattern": "^https?://"
+                }
+              }
+            },
+            {
+              "properties": {
+                "artifact_ref": {
+                  "type": "string",
+                  "minLength": 1
+                }
+              }
+            },
+            {
+              "properties": {
+                "raw_payload": {
+                  "not": {
+                    "type": "null"
+                  }
+                }
+              }
+            }
+          ]
+        }
+      ]
+    },
+    "sanitization": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "status",
+        "version",
+        "credentials_scan",
+        "personal_data_scan"
+      ],
+      "properties": {
+        "status": {
+          "enum": [
+            "not_required",
+            "sanitized",
+            "pending",
+            "unknown"
+          ]
+        },
+        "version": {
+          "$ref": "#/$defs/nullableNonEmptyString"
+        },
+        "credentials_scan": {
+          "enum": [
+            "passed",
+            "failed",
+            "not_run"
+          ]
+        },
+        "personal_data_scan": {
+          "enum": [
+            "passed",
+            "failed",
+            "not_run"
+          ]
+        }
+      }
+    },
+    "extraction": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "method",
+        "confidence",
+        "notes"
+      ],
+      "properties": {
+        "method": {
+          "enum": [
+            "source_structured",
+            "dom",
+            "parsed_text",
+            "manual",
+            "unknown"
+          ]
+        },
+        "confidence": {
+          "enum": [
+            "high",
+            "medium",
+            "low",
+            "user_verified"
+          ]
+        },
+        "notes": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "identifier": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "scheme",
+        "namespace",
+        "value",
+        "issuer",
+        "source_ref",
+        "is_identity_basis"
+      ],
+      "properties": {
+        "scheme": {
+          "type": "string",
+          "minLength": 1
+        },
+        "namespace": {
+          "description": "Stable identifier namespace used in durable identity keys, for example gs1:gtin.",
+          "type": "string",
+          "minLength": 1
+        },
+        "value": {
+          "type": "string",
+          "minLength": 1
+        },
+        "issuer": {
+          "$ref": "#/$defs/nullableNonEmptyString"
+        },
+        "source_ref": {
+          "type": "string",
+          "minLength": 1
+        },
+        "is_identity_basis": {
+          "type": "boolean"
+        }
+      }
+    },
+    "sourceCode": {
+      "type": "object",
+      "description": "A source-native product or offer code with its source-system namespace and direct evidence reference.",
+      "additionalProperties": false,
+      "required": [
+        "value",
+        "namespace",
+        "source_ref"
+      ],
+      "properties": {
+        "value": {
+          "type": "string",
+          "minLength": 1
+        },
+        "namespace": {
+          "$ref": "#/$defs/nullableNonEmptyString"
+        },
+        "source_ref": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "sourceIdentity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "basis",
+        "source_product_code",
+        "canonical_url",
+        "canonical_url_basis",
+        "canonical_url_source_ref",
+        "identifiers",
+        "record_local_id"
+      ],
+      "properties": {
+        "basis": {
+          "description": "record_local means that no cross-snapshot merge is allowed.",
+          "enum": [
+            "source_product_code",
+            "canonical_url",
+            "identifier",
+            "record_local"
+          ]
+        },
+        "source_product_code": {
+          "oneOf": [
+            {
+              "$ref": "#/$defs/sourceCode"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "canonical_url": {
+          "$ref": "#/$defs/nullableUri"
+        },
+        "canonical_url_basis": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "enum": [
+            "source_declared",
+            "api_identity_url",
+            null
+          ]
+        },
+        "canonical_url_source_ref": {
+          "$ref": "#/$defs/nullableNonEmptyString"
+        },
+        "identifiers": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/identifier"
+          }
+        },
+        "record_local_id": {
+          "$ref": "#/$defs/nullableNonEmptyString"
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "basis": {
+                "const": "source_product_code"
+              }
+            },
+            "required": [
+              "basis"
+            ]
+          },
+          "then": {
+            "properties": {
+              "source_product_code": {
+                "type": "object",
+                "properties": {
+                  "namespace": {
+                    "type": "string",
+                    "minLength": 1
+                  }
+                },
+                "required": [
+                  "namespace"
+                ]
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "basis": {
+                "const": "canonical_url"
+              }
+            },
+            "required": [
+              "basis"
+            ]
+          },
+          "then": {
+            "properties": {
+              "canonical_url": {
+                "type": "string",
+                "format": "uri",
+                "pattern": "^https?://"
+              },
+              "canonical_url_basis": {
+                "enum": [
+                  "source_declared",
+                  "api_identity_url"
+                ]
+              },
+              "canonical_url_source_ref": {
+                "type": "string",
+                "minLength": 1
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "basis": {
+                "const": "identifier"
+              }
+            },
+            "required": [
+              "basis"
+            ]
+          },
+          "then": {
+            "properties": {
+              "identifiers": {
+                "minItems": 1
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "basis": {
+                "const": "record_local"
+              }
+            },
+            "required": [
+              "basis"
+            ]
+          },
+          "then": {
+            "properties": {
+              "record_local_id": {
+                "type": "string",
+                "minLength": 1
+              }
+            }
+          }
+        }
+      ]
+    },
+    "sourceFields": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "source_name",
+        "source_brand",
+        "source_manufacturer",
+        "source_category_path",
+        "source_specification_text",
+        "source_description",
+        "source_badges",
+        "raw_attributes",
+        "field_sources"
+      ],
+      "properties": {
+        "source_name": {
+          "description": "Exact source text. It must never be overwritten by a normalized or canonical name.",
+          "type": "string",
+          "minLength": 1
+        },
+        "source_brand": {
+          "$ref": "#/$defs/nullableNonEmptyString"
+        },
+        "source_manufacturer": {
+          "$ref": "#/$defs/nullableNonEmptyString"
+        },
+        "source_category_path": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "source_specification_text": {
+          "$ref": "#/$defs/nullableNonEmptyString"
+        },
+        "source_description": {
+          "$ref": "#/$defs/nullableNonEmptyString"
+        },
+        "source_badges": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "raw_attributes": {
+          "type": "array",
+          "description": "Ordered source labels and values that do not yet have common semantics. Repeated labels are preserved.",
+          "items": {
+            "$ref": "#/$defs/rawAttribute"
+          }
+        },
+        "field_sources": {
+          "$ref": "#/$defs/sourceFieldRefs"
+        }
+      }
+    },
+    "sourceFieldRefs": {
+      "type": "object",
+      "description": "Claim-level evidence for each common source field. Non-null/non-empty field values require at least one ref; that cross-field rule is enforced by the bundle validator.",
+      "additionalProperties": false,
+      "required": [
+        "source_name",
+        "source_brand",
+        "source_manufacturer",
+        "source_category_path",
+        "source_specification_text",
+        "source_description",
+        "source_badges"
+      ],
+      "properties": {
+        "source_name": {
+          "allOf": [
+            {
+              "$ref": "#/$defs/sourceRefArray"
+            },
+            {
+              "minItems": 1
+            }
+          ]
+        },
+        "source_brand": {
+          "$ref": "#/$defs/sourceRefArray"
+        },
+        "source_manufacturer": {
+          "$ref": "#/$defs/sourceRefArray"
+        },
+        "source_category_path": {
+          "$ref": "#/$defs/sourceRefArray"
+        },
+        "source_specification_text": {
+          "$ref": "#/$defs/sourceRefArray"
+        },
+        "source_description": {
+          "$ref": "#/$defs/sourceRefArray"
+        },
+        "source_badges": {
+          "$ref": "#/$defs/sourceRefArray"
+        }
+      }
+    },
+    "rawAttribute": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "source_label",
+        "source_value",
+        "source_ref"
+      ],
+      "properties": {
+        "source_label": {
+          "type": "string",
+          "minLength": 1
+        },
+        "source_value": {
+          "description": "Exact JSON-compatible source value after sanitization."
+        },
+        "source_ref": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "publication": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "status",
+        "status_basis",
+        "location_scope",
+        "source_locations",
+        "source_text",
+        "source_refs"
+      ],
+      "properties": {
+        "status": {
+          "description": "Official catalog publication state, not stock or completed-sale evidence. delisted requires an explicit source claim; absence-based lifecycle inference belongs outside this source contract.",
+          "enum": [
+            "listed",
+            "delisted",
+            "unknown"
+          ]
+        },
+        "status_basis": {
+          "enum": [
+            "record_present",
+            "source_explicit",
+            "unknown"
+          ]
+        },
+        "location_scope": {
+          "enum": [
+            "channel_unspecified",
+            "online_only",
+            "named_locations",
+            "unknown"
+          ]
+        },
+        "source_locations": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "$ref": "#/$defs/sourceLocation"
+          }
+        },
+        "source_text": {
+          "$ref": "#/$defs/nullableNonEmptyString"
+        },
+        "source_refs": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "location_scope": {
+                "const": "named_locations"
+              }
+            },
+            "required": [
+              "location_scope"
+            ]
+          },
+          "then": {
+            "properties": {
+              "source_locations": {
+                "minItems": 1
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "location_scope": {
+                "enum": [
+                  "channel_unspecified",
+                  "online_only",
+                  "unknown"
+                ]
+              }
+            },
+            "required": [
+              "location_scope"
+            ]
+          },
+          "then": {
+            "properties": {
+              "source_locations": {
+                "maxItems": 0
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "status": {
+                "const": "delisted"
+              }
+            },
+            "required": [
+              "status"
+            ]
+          },
+          "then": {
+            "properties": {
+              "status_basis": {
+                "const": "source_explicit"
+              },
+              "source_text": {
+                "type": "string",
+                "minLength": 1
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "status": {
+                "const": "listed"
+              }
+            },
+            "required": [
+              "status"
+            ]
+          },
+          "then": {
+            "properties": {
+              "status_basis": {
+                "enum": [
+                  "record_present",
+                  "source_explicit"
+                ]
+              }
+            }
+          }
+        }
+      ]
+    },
+    "sourceLocation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "source_code",
+        "source_name",
+        "source_ref"
+      ],
+      "properties": {
+        "source_code": {
+          "$ref": "#/$defs/nullableNonEmptyString"
+        },
+        "source_name": {
+          "$ref": "#/$defs/nullableNonEmptyString"
+        },
+        "source_ref": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "anyOf": [
+        {
+          "properties": {
+            "source_code": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        },
+        {
+          "properties": {
+            "source_name": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        }
+      ]
+    },
+    "image": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "url",
+        "role",
+        "alt_text",
+        "source_ref",
+        "content_hash",
+        "content_hash_basis",
+        "byte_length",
+        "media_type"
+      ],
+      "properties": {
+        "url": {
+          "type": "string",
+          "format": "uri",
+          "pattern": "^https?://"
+        },
+        "role": {
+          "enum": [
+            "primary",
+            "gallery",
+            "thumbnail",
+            "unknown"
+          ]
+        },
+        "alt_text": {
+          "$ref": "#/$defs/nullableNonEmptyString"
+        },
+        "source_ref": {
+          "type": "string",
+          "minLength": 1
+        },
+        "content_hash": {
+          "$ref": "#/$defs/nullableSha256"
+        },
+        "content_hash_basis": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "enum": [
+            "downloaded_bytes",
+            null
+          ]
+        },
+        "byte_length": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 0
+        },
+        "media_type": {
+          "$ref": "#/$defs/nullableNonEmptyString"
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "content_hash": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "content_hash"
+            ]
+          },
+          "then": {
+            "properties": {
+              "content_hash_basis": {
+                "const": "downloaded_bytes"
+              },
+              "byte_length": {
+                "type": "integer",
+                "minimum": 0
+              }
+            }
+          },
+          "else": {
+            "properties": {
+              "content_hash_basis": {
+                "type": "null"
+              },
+              "byte_length": {
+                "type": "null"
+              }
+            }
+          }
+        }
+      ]
+    },
+    "quantity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "content_amount",
+        "content_unit",
+        "package_count",
+        "source_text",
+        "source_refs"
+      ],
+      "properties": {
+        "content_amount": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "exclusiveMinimum": 0
+        },
+        "content_unit": {
+          "$ref": "#/$defs/nullableNonEmptyString"
+        },
+        "package_count": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 1
+        },
+        "source_text": {
+          "$ref": "#/$defs/nullableNonEmptyString"
+        },
+        "source_refs": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "content_amount": {
+                "type": "number"
+              }
+            },
+            "required": [
+              "content_amount"
+            ]
+          },
+          "then": {
+            "properties": {
+              "content_unit": {
+                "type": "string",
+                "minLength": 1
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "content_unit": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "content_unit"
+            ]
+          },
+          "then": {
+            "properties": {
+              "content_amount": {
+                "type": "number",
+                "exclusiveMinimum": 0
+              }
+            }
+          }
+        }
+      ]
+    },
+    "price": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "kind",
+        "amount_minor",
+        "currency",
+        "source_text",
+        "conditions_text",
+        "tax_included",
+        "source_refs"
+      ],
+      "properties": {
+        "kind": {
+          "enum": [
+            "regular",
+            "sale",
+            "member",
+            "promotion",
+            "shipping",
+            "unknown"
+          ]
+        },
+        "amount_minor": {
+          "description": "Lossless non-negative decimal integer string in the currency's minor unit. It is a string to avoid IEEE-754 precision loss.",
+          "type": [
+            "string",
+            "null"
+          ],
+          "pattern": "^(0|[1-9][0-9]*)$"
+        },
+        "currency": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "pattern": "^[A-Z]{3}$"
+        },
+        "source_text": {
+          "$ref": "#/$defs/nullableNonEmptyString"
+        },
+        "conditions_text": {
+          "$ref": "#/$defs/nullableNonEmptyString"
+        },
+        "tax_included": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "source_refs": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "amount_minor": {
+                "type": "string",
+                "pattern": "^(0|[1-9][0-9]*)$"
+              }
+            },
+            "required": [
+              "amount_minor"
+            ]
+          },
+          "then": {
+            "properties": {
+              "currency": {
+                "type": "string",
+                "pattern": "^[A-Z]{3}$"
+              }
+            }
+          }
+        },
+        {
+          "anyOf": [
+            {
+              "properties": {
+                "amount_minor": {
+                  "type": "string",
+                  "pattern": "^(0|[1-9][0-9]*)$"
+                }
+              }
+            },
+            {
+              "properties": {
+                "source_text": {
+                  "type": "string",
+                  "minLength": 1
+                }
+              }
+            }
+          ]
+        }
+      ]
+    },
+    "availability": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "status",
+        "status_basis",
+        "location_scope",
+        "source_locations",
+        "source_text",
+        "source_refs"
+      ],
+      "properties": {
+        "status": {
+          "enum": [
+            "in_stock",
+            "out_of_stock",
+            "preorder",
+            "unknown"
+          ]
+        },
+        "status_basis": {
+          "enum": [
+            "source_explicit",
+            "unknown"
+          ]
+        },
+        "location_scope": {
+          "enum": [
+            "channel_unspecified",
+            "online_only",
+            "named_locations",
+            "unknown"
+          ]
+        },
+        "source_locations": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "$ref": "#/$defs/sourceLocation"
+          }
+        },
+        "source_text": {
+          "$ref": "#/$defs/nullableNonEmptyString"
+        },
+        "source_refs": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "location_scope": {
+                "const": "named_locations"
+              }
+            },
+            "required": [
+              "location_scope"
+            ]
+          },
+          "then": {
+            "properties": {
+              "source_locations": {
+                "minItems": 1
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "location_scope": {
+                "enum": [
+                  "channel_unspecified",
+                  "online_only",
+                  "unknown"
+                ]
+              }
+            },
+            "required": [
+              "location_scope"
+            ]
+          },
+          "then": {
+            "properties": {
+              "source_locations": {
+                "maxItems": 0
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "status": {
+                "enum": [
+                  "in_stock",
+                  "out_of_stock",
+                  "preorder"
+                ]
+              }
+            },
+            "required": [
+              "status"
+            ]
+          },
+          "then": {
+            "properties": {
+              "status_basis": {
+                "const": "source_explicit"
+              }
+            }
+          }
+        }
+      ]
+    },
+    "optionValue": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "source_name",
+        "source_value",
+        "source_ref"
+      ],
+      "properties": {
+        "source_name": {
+          "type": "string",
+          "minLength": 1
+        },
+        "source_value": {
+          "type": "string",
+          "minLength": 1
+        },
+        "source_ref": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "offer": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "observed_at",
+        "identity_basis",
+        "source_offer_code",
+        "record_local_id",
+        "source_name",
+        "source_name_source_refs",
+        "options",
+        "quantity",
+        "prices",
+        "availability",
+        "valid_from",
+        "valid_until",
+        "extraction",
+        "source_refs"
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "observed_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "identity_basis": {
+          "description": "record_local prevents cross-snapshot offer merging.",
+          "enum": [
+            "source_offer_code",
+            "option_set",
+            "record_local"
+          ]
+        },
+        "source_offer_code": {
+          "oneOf": [
+            {
+              "$ref": "#/$defs/sourceCode"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "record_local_id": {
+          "$ref": "#/$defs/nullableNonEmptyString"
+        },
+        "source_name": {
+          "$ref": "#/$defs/nullableNonEmptyString"
+        },
+        "source_name_source_refs": {
+          "$ref": "#/$defs/sourceRefArray"
+        },
+        "options": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/optionValue"
+          }
+        },
+        "quantity": {
+          "oneOf": [
+            {
+              "$ref": "#/$defs/quantity"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "prices": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/price"
+          }
+        },
+        "availability": {
+          "$ref": "#/$defs/availability"
+        },
+        "valid_from": {
+          "$ref": "#/$defs/nullableTemporal"
+        },
+        "valid_until": {
+          "$ref": "#/$defs/nullableTemporal"
+        },
+        "extraction": {
+          "$ref": "#/$defs/extraction"
+        },
+        "source_refs": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "extensions": {
+          "$ref": "#/$defs/extensions"
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "identity_basis": {
+                "const": "source_offer_code"
+              }
+            },
+            "required": [
+              "identity_basis"
+            ]
+          },
+          "then": {
+            "properties": {
+              "source_offer_code": {
+                "type": "object",
+                "properties": {
+                  "namespace": {
+                    "type": "string",
+                    "minLength": 1
+                  }
+                },
+                "required": [
+                  "namespace"
+                ]
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "identity_basis": {
+                "const": "option_set"
+              }
+            },
+            "required": [
+              "identity_basis"
+            ]
+          },
+          "then": {
+            "properties": {
+              "options": {
+                "minItems": 1
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "identity_basis": {
+                "const": "record_local"
+              }
+            },
+            "required": [
+              "identity_basis"
+            ]
+          },
+          "then": {
+            "properties": {
+              "record_local_id": {
+                "type": "string",
+                "minLength": 1
+              }
+            }
+          }
+        }
+      ]
+    },
+    "listingSnapshot": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "observed_at",
+        "source_refs",
+        "source_identity",
+        "source_fields",
+        "extraction",
+        "publication",
+        "images",
+        "offers",
+        "record_hash"
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "observed_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "source_refs": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "source_identity": {
+          "$ref": "#/$defs/sourceIdentity"
+        },
+        "source_fields": {
+          "$ref": "#/$defs/sourceFields"
+        },
+        "extraction": {
+          "$ref": "#/$defs/extraction"
+        },
+        "publication": {
+          "$ref": "#/$defs/publication"
+        },
+        "images": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/image"
+          }
+        },
+        "offers": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/offer"
+          }
+        },
+        "record_hash": {
+          "description": "SHA-256 of this listing snapshot's RFC 8785 canonical JSON with record_hash omitted.",
+          "$ref": "#/$defs/sha256"
+        },
+        "extensions": {
+          "$ref": "#/$defs/extensions"
+        }
+      }
+    }
+  }
+}

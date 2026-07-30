@@ -10,13 +10,17 @@ import { officialProductCandidateKey, seededOfficialProducts, type OfficialProdu
 import { normalizeMarketPrice, type ProductSpecification } from "@/domain/canonical-price";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import { OfficialProductRepository } from "@/repositories/official-product.repository";
+import { PublicOfficialChannelCatalogRepository } from "@/repositories/public-official-channel-catalog.repository";
 import { CoupangComparisonMessage } from "./CoupangComparisonMessage";
 import { ProductImage } from "./ProductImage";
+import { PxOfficialProductBrowser } from "./PxOfficialProductBrowser";
 import { StandardProductDetailModal } from "./StandardProductDetailModal";
 import { StoreListModal } from "./StoreListModal";
 import styles from "./page.module.css";
 
 const officialProductRepository = new OfficialProductRepository();
+const publicPxCatalog = new PublicOfficialChannelCatalogRepository().loadPxCatalog();
+type CatalogView = "observed" | "standard" | "px-official";
 
 export type StandardProductItem = ProductGroup & { unitPriceLabel: string; unitPriceKrw: number; packageLabel: string; referenceUnit: number };
 
@@ -77,7 +81,7 @@ export function ProductBrowser({ groups, query, setQuery, category, setCategory,
   const [standardImages, setStandardImages] = useState<Map<string, string>>(new Map());
   const [coupangByStandard, setCoupangByStandard] = useState<Map<string, PublicCoupangPrice>>(new Map());
   const [catalogNotice, setCatalogNotice] = useState("");
-  const [showStandardOnly, setShowStandardOnly] = useState(false);
+  const [catalogView, setCatalogView] = useState<CatalogView>("observed");
   const [openStandardId, setOpenStandardId] = useState<string | null>(null);
   const [storeListTarget, setStoreListTarget] = useState<{ title: string; rows: { storeLabel: string; observedAt: string }[] } | null>(null);
   useEffect(() => setOfficialProducts({ ...seededOfficialProducts, ...officialProductRepository.loadAll() }), []);
@@ -296,7 +300,7 @@ export function ProductBrowser({ groups, query, setQuery, category, setCategory,
   const gridEntries = useMemo(() => {
     type Entry = { kind: "standard"; standard: StandardProductGroup } | { kind: "product"; group: ProductGroup };
     const standardEntries: Entry[] = visibleStandardGroups.map((standard) => ({ kind: "standard" as const, standard }));
-    const entries: Entry[] = showStandardOnly
+    const entries: Entry[] = catalogView === "standard"
       ? standardEntries
       : [...standardEntries, ...visibleGroups.map((group) => ({ kind: "product" as const, group }))];
     const priceOf = (entry: Entry) => {
@@ -313,29 +317,54 @@ export function ProductBrowser({ groups, query, setQuery, category, setCategory,
       if (sort === "expensive") return priceOf(b) - priceOf(a) || nameOf(a).localeCompare(nameOf(b));
       return priceOf(a) - priceOf(b) || nameOf(a).localeCompare(nameOf(b));
     });
-  }, [visibleStandardGroups, visibleGroups, showStandardOnly, sort]);
+  }, [visibleStandardGroups, visibleGroups, catalogView, sort]);
 
   const openStandard = visibleStandardGroups.find((standard) => standard.id === openStandardId) ?? null;
+  const showStandardOnly = catalogView === "standard";
 
   return <section className={styles.browser}>
-    <div className={styles.browserHead}><div><p className={styles.kicker}>PRODUCT CATALOG</p><h1>상품 목록</h1><p>표준 상품 : 공식 상품에 연결되어 단위 가격 파악이 가능한 상품</p></div><label className={styles.search}><span aria-hidden="true">⌕</span><span className={styles.srOnly}>상품 검색</span><input type="search" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="상품명, 판매처 코드, 판매 마트 검색" /></label></div>
-    {catalogNotice && <p className={styles.dataNotice} role="status">{catalogNotice}</p>}
-    <div className={styles.marketControls}>
-      <div className={styles.segmented} aria-label="판매처 유형">{([ ["all", "전체"], ["regular", "일반 마트"], ["px", "PX (군마트)"] ] as const).map(([value, label]) => <button key={value} aria-pressed={martType === value} className={martType === value ? styles.selectedSegment : ""} onClick={() => { setMartType(value); setSelectedStore("all"); }}>{label}</button>)}</div>
-      <div className={styles.segmented} aria-label="상품 유형">
-        <button type="button" aria-pressed={!showStandardOnly} className={!showStandardOnly ? styles.selectedSegment : ""} onClick={() => setShowStandardOnly(false)}>전체 상품</button>
-        <button type="button" aria-pressed={showStandardOnly} className={showStandardOnly ? styles.selectedSegment : ""} onClick={() => setShowStandardOnly(true)}>표준 상품만 보기</button>
+    <div className={styles.browserHead}>
+      <div>
+        <p className={styles.kicker}>PRODUCT CATALOG</p>
+        <h1>상품 목록</h1>
+        <p>표준 상품, 유통채널 공식 판매상품, 영수증 가격 관측을 출처별로 구분합니다.</p>
       </div>
-      <label className={styles.storeSelect}>판매 마트<select value={selectedStore} onChange={(event) => setSelectedStore(event.target.value)}><option value="all">전체 마트</option>{stores.map((store) => <option key={store} value={store}>{store}</option>)}</select></label>
-      <label className={styles.sortSelect}>정렬<select value={sort} onChange={(event) => setSort(event.target.value as ProductSort)}><option value="expensive">비싼 물품 순</option><option value="cheap">저렴한 물품 순</option><option value="sellers">판매처 많은 물품 순</option></select></label>
+      <label className={styles.search}>
+        <span aria-hidden="true">⌕</span>
+        <span className={styles.srOnly}>상품 검색</span>
+        <input
+          type="search"
+          value={query}
+          onChange={(event) => setQuery(event.target.value)}
+          placeholder={catalogView === "px-official" ? "상품명, 업체명, 규격, 상품 코드 검색" : "상품명, 판매처 코드, 판매 마트 검색"}
+        />
+      </label>
     </div>
-    <div className={styles.filters} aria-label="상품 카테고리">{PRODUCT_CATEGORIES.map((item) => <button aria-pressed={category === item} className={category === item ? styles.filterActive : ""} key={item} onClick={() => setCategory(item)}>{item}</button>)}</div>
-    <div className={styles.resultBar}><p>상품 {gridEntries.length}개</p>{(query || category !== "전체" || martType !== "all" || selectedStore !== "all" || showStandardOnly) && <button onClick={() => { setQuery(""); setCategory("전체"); setMartType("all"); setSelectedStore("all"); setShowStandardOnly(false); }}>필터 초기화</button>}</div>
-    <div className={styles.productGrid} aria-live="polite">{gridEntries.map((entry) => entry.kind === "standard"
-      ? <article className={styles.productCard} key={entry.standard.id}><div className={styles.productVisual} data-testid="product-image-slot"><ProductImage item={entry.standard.items[0].latest.item} category={entry.standard.category} imageUrl={entry.standard.imageUrl} /></div><div className={styles.productInfo}><h2>{entry.standard.name}</h2><StoreInfo sellerCount={entry.standard.sellerCount} onOpen={() => setStoreListTarget({ title: `${entry.standard.name} 판매처`, rows: latestSellerRows(entry.standard.items.flatMap((item) => item.observations)) })} /><div className={styles.standardPriceBlock}><strong>{formatKrw(entry.standard.lowestPriceKrw)} ~</strong><small>{entry.standard.unitPriceLabel} {formatKrw(entry.standard.lowestUnitPriceKrw)} ~ {formatKrw(entry.standard.highestUnitPriceKrw)}</small>{entry.standard.coupangComparison && <CoupangComparisonMessage compact unitPriceLabel={entry.standard.unitPriceLabel} comparison={entry.standard.coupangComparison} />}</div><button aria-label={`${entry.standard.name} 하위 상품 보기`} onClick={() => setOpenStandardId(entry.standard.id)}>판매처 가격 기준 비교 보기 ›</button></div></article>
-      : <article className={styles.productCard} key={entry.group.id}><div className={styles.productVisual} data-testid="product-image-slot"><ProductImage item={entry.group.latest.item} category={entry.group.category} imageUrl={entry.group.officialProduct?.imageUrl} /></div><div className={styles.productInfo}><h2>{entry.group.officialProduct?.officialName ?? entry.group.productName}</h2><StoreInfo sellerCount={distinctSellerCount(entry.group.observations)} onOpen={() => setStoreListTarget({ title: `${entry.group.productName} 판매처`, rows: latestSellerRows(entry.group.observations) })} /><RecordedPriceBlock group={entry.group} /><div className={styles.productActions}><button className={styles.trendButton} aria-label={`${entry.group.productName} 가격 이력 보기`} onClick={() => onTrend(entry.group)}>가격 이력</button><button aria-label={`${entry.group.productName} 장바구니에 담기`} onClick={() => onAdd(entry.group)}>+ 담기</button></div></div></article>)}</div>
-    {gridEntries.length === 0 && <div className={styles.noResult}><strong>조건에 맞는 상품이 없습니다.</strong></div>}
-    {openStandard && <StandardProductDetailModal standard={openStandard} onClose={() => setOpenStandardId(null)} onOpenStore={onOpenStore} />}
-    {storeListTarget && <StoreListModal title={storeListTarget.title} rows={storeListTarget.rows} onClose={() => setStoreListTarget(null)} onOpenStore={onOpenStore} />}
+
+    <div className={styles.catalogLayerTabs} aria-label="상품 데이터 계층">
+      <button type="button" aria-pressed={catalogView === "observed"} className={catalogView === "observed" ? styles.catalogLayerTabActive : ""} onClick={() => setCatalogView("observed")}>전체 상품</button>
+      <button type="button" aria-pressed={catalogView === "standard"} className={catalogView === "standard" ? styles.catalogLayerTabActive : ""} onClick={() => setCatalogView("standard")}>표준 상품</button>
+      <button type="button" aria-pressed={catalogView === "px-official"} className={catalogView === "px-official" ? styles.catalogLayerTabActive : ""} onClick={() => setCatalogView("px-official")}>PX 공식 판매상품 <span>{publicPxCatalog.collection.listingCount.toLocaleString("ko-KR")}</span></button>
+    </div>
+
+    {catalogView === "px-official"
+      ? <PxOfficialProductBrowser catalog={publicPxCatalog} query={query} />
+      : <>
+        {catalogNotice && <p className={styles.dataNotice} role="status">{catalogNotice}</p>}
+        <div className={styles.marketControls}>
+          <div className={styles.segmented} aria-label="판매처 유형">{([ ["all", "전체"], ["regular", "일반 마트"], ["px", "PX (군마트)"] ] as const).map(([value, label]) => <button key={value} aria-pressed={martType === value} className={martType === value ? styles.selectedSegment : ""} onClick={() => { setMartType(value); setSelectedStore("all"); }}>{label}</button>)}</div>
+          <label className={styles.storeSelect}>판매 마트<select value={selectedStore} onChange={(event) => setSelectedStore(event.target.value)}><option value="all">전체 마트</option>{stores.map((store) => <option key={store} value={store}>{store}</option>)}</select></label>
+          <label className={styles.sortSelect}>정렬<select value={sort} onChange={(event) => setSort(event.target.value as ProductSort)}><option value="expensive">비싼 물품 순</option><option value="cheap">저렴한 물품 순</option><option value="sellers">판매처 많은 물품 순</option></select></label>
+        </div>
+        <div className={styles.filters} aria-label="상품 카테고리">{PRODUCT_CATEGORIES.map((item) => <button aria-pressed={category === item} className={category === item ? styles.filterActive : ""} key={item} onClick={() => setCategory(item)}>{item}</button>)}</div>
+        <div className={styles.resultBar}><p>상품 {gridEntries.length}개</p>{(query || category !== "전체" || martType !== "all" || selectedStore !== "all" || showStandardOnly) && <button onClick={() => { setQuery(""); setCategory("전체"); setMartType("all"); setSelectedStore("all"); setCatalogView("observed"); }}>필터 초기화</button>}</div>
+        <div className={styles.productGrid} aria-live="polite">{gridEntries.map((entry) => entry.kind === "standard"
+          ? <article className={styles.productCard} key={entry.standard.id}><div className={styles.productVisual} data-testid="product-image-slot"><ProductImage item={entry.standard.items[0].latest.item} category={entry.standard.category} imageUrl={entry.standard.imageUrl} /></div><div className={styles.productInfo}><h2>{entry.standard.name}</h2><StoreInfo sellerCount={entry.standard.sellerCount} onOpen={() => setStoreListTarget({ title: `${entry.standard.name} 판매처`, rows: latestSellerRows(entry.standard.items.flatMap((item) => item.observations)) })} /><div className={styles.standardPriceBlock}><strong>{formatKrw(entry.standard.lowestPriceKrw)} ~</strong><small>{entry.standard.unitPriceLabel} {formatKrw(entry.standard.lowestUnitPriceKrw)} ~ {formatKrw(entry.standard.highestUnitPriceKrw)}</small>{entry.standard.coupangComparison && <CoupangComparisonMessage compact unitPriceLabel={entry.standard.unitPriceLabel} comparison={entry.standard.coupangComparison} />}</div><button aria-label={`${entry.standard.name} 하위 상품 보기`} onClick={() => setOpenStandardId(entry.standard.id)}>판매처 가격 기준 비교 보기 ›</button></div></article>
+          : <article className={styles.productCard} key={entry.group.id}><div className={styles.productVisual} data-testid="product-image-slot"><ProductImage item={entry.group.latest.item} category={entry.group.category} imageUrl={entry.group.officialProduct?.imageUrl} /></div><div className={styles.productInfo}><h2>{entry.group.officialProduct?.officialName ?? entry.group.productName}</h2><StoreInfo sellerCount={distinctSellerCount(entry.group.observations)} onOpen={() => setStoreListTarget({ title: `${entry.group.productName} 판매처`, rows: latestSellerRows(entry.group.observations) })} /><RecordedPriceBlock group={entry.group} /><div className={styles.productActions}><button className={styles.trendButton} aria-label={`${entry.group.productName} 가격 이력 보기`} onClick={() => onTrend(entry.group)}>가격 이력</button><button aria-label={`${entry.group.productName} 장바구니에 담기`} onClick={() => onAdd(entry.group)}>+ 담기</button></div></div></article>)}</div>
+        {gridEntries.length === 0 && <div className={styles.noResult}><strong>조건에 맞는 상품이 없습니다.</strong></div>}
+      </>}
+
+    {openStandard && catalogView !== "px-official" && <StandardProductDetailModal standard={openStandard} onClose={() => setOpenStandardId(null)} onOpenStore={onOpenStore} />}
+    {storeListTarget && catalogView !== "px-official" && <StoreListModal title={storeListTarget.title} rows={storeListTarget.rows} onClose={() => setStoreListTarget(null)} onOpenStore={onOpenStore} />}
   </section>;
 }
