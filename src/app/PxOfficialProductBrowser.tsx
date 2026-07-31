@@ -8,6 +8,7 @@ import {
   type PublicOfficialChannelCatalog,
   type PublicOfficialChannelListing,
 } from "@/domain/public-official-channel-catalog";
+import type { ProductCategory } from "@/domain/product-browser";
 import { formatKrw } from "@/domain/settlement";
 import styles from "./page.module.css";
 
@@ -38,29 +39,33 @@ function PxOfficialImage({ listing }: { listing: PublicOfficialChannelListing })
 
 export function PxOfficialProductBrowser({
   catalog,
+  listings: sourceListings,
   query,
+  category,
 }: {
   catalog: PublicOfficialChannelCatalog;
+  listings: PublicOfficialChannelListing[];
   query: string;
+  category: ProductCategory;
 }) {
   const [sort, setSort] = useState<OfficialChannelListingSort>("price-asc");
   const [page, setPage] = useState(1);
   const listings = useMemo(
-    () => filterAndSortOfficialChannelListings(catalog.listings, query, sort),
-    [catalog.listings, query, sort],
+    () => filterAndSortOfficialChannelListings(sourceListings, query, sort, category),
+    [category, query, sort, sourceListings],
   );
   const pageCount = Math.max(1, Math.ceil(listings.length / PAGE_SIZE));
   const currentPage = Math.min(page, pageCount);
   const visibleListings = listings.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
 
-  useEffect(() => setPage(1), [query, sort]);
+  useEffect(() => setPage(1), [category, query, sort]);
 
-  return <section aria-label="PX 공식 판매상품">
+  return <section className={styles.officialChannelSection} aria-label="PX 공식 판매상품">
     <div className={styles.officialChannelScope}>
       <div>
         <p className={styles.kicker}>OFFICIAL CHANNEL COLLECTION</p>
-        <h2>{catalog.channel.name} · {catalog.collection.name}</h2>
-        <p>공식 사이트 전체상품 컬렉션 {catalog.collection.listingCount.toLocaleString("ko-KR")}개를 표시합니다.</p>
+        <h2>표준 상품 연결 전 공식 판매상품</h2>
+        <p>{catalog.channel.name} 공식 사이트 전체상품 {catalog.collection.listingCount.toLocaleString("ko-KR")}개 중 연결 전 상품 {sourceListings.length.toLocaleString("ko-KR")}개를 표시합니다.</p>
       </div>
       <dl>
         <div><dt>수집 범위</dt><dd>마트 판매상품 컬렉션</dd></div>
@@ -74,7 +79,7 @@ export function PxOfficialProductBrowser({
     </div>
 
     <div className={styles.officialChannelToolbar}>
-      <p>검색 결과 <strong>{listings.length.toLocaleString("ko-KR")}개</strong></p>
+      <p><strong>{category}</strong> 검색 결과 <strong>{listings.length.toLocaleString("ko-KR")}개</strong></p>
       <label>정렬
         <select value={sort} onChange={(event) => setSort(event.target.value as OfficialChannelListingSort)}>
           <option value="price-asc">표시가 낮은 순</option>
@@ -91,6 +96,7 @@ export function PxOfficialProductBrowser({
           <span className={styles.officialChannelBadge}>PX 공식 등재</span>
         </div>
         <div className={`${styles.productInfo} ${styles.officialChannelInfo}`}>
+          <span className={styles.officialCategoryBadge}>{listing.category}</span>
           <h2>{listing.sourceNameRaw}</h2>
           <p><b>업체명 원문</b> {listing.vendorNameRaw ?? "미표시"}</p>
           <p><b>규격 원문</b> {listing.specificationTextRaw ?? "미표시"}</p>

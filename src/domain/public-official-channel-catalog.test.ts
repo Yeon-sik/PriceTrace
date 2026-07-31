@@ -1,7 +1,9 @@
 import { describe, expect, it } from "vitest";
 import {
   filterAndSortOfficialChannelListings,
+  partitionOfficialChannelListingsByStandardProduct,
   PublicOfficialChannelCatalogSchema,
+  PublicOfficialChannelStandardLinkRegistrySchema,
   type PublicOfficialChannelCatalog,
 } from "./public-official-channel-catalog";
 
@@ -27,6 +29,20 @@ function catalog(): PublicOfficialChannelCatalog {
       pagesCollected: 46,
       paginationExhausted: true,
     },
+    classification: {
+      version: "px-official-category.v1",
+      existingProductMatchCount: 1,
+      curatedRuleCount: 1,
+      unclassifiedCount: 0,
+      categoryCounts: {
+        "식품": 1,
+        "생활용품": 0,
+        "주방용품": 0,
+        "신선식품": 0,
+        "음료": 1,
+        "간식": 0,
+      },
+    },
     notices: ["공식 사이트 등재는 특정 지점 판매 또는 재고 확인이 아닙니다."],
     listings: [
       {
@@ -36,6 +52,11 @@ function catalog(): PublicOfficialChannelCatalog {
         sourceNameRaw: "비싼 상품",
         vendorNameRaw: "업체 나",
         specificationTextRaw: "200g",
+        category: "음료",
+        categoryAssignment: {
+          method: "curated_rule",
+          basis: "test-beverage",
+        },
         officialPrice: {
           amountKrw: 2_000,
           sourceText: "2,000원",
@@ -53,6 +74,11 @@ function catalog(): PublicOfficialChannelCatalog {
         sourceNameRaw: "저렴한 상품",
         vendorNameRaw: "업체 가",
         specificationTextRaw: "100g",
+        category: "식품",
+        categoryAssignment: {
+          method: "existing_product_match",
+          basis: "저렴한 상품",
+        },
         officialPrice: {
           amountKrw: 1_000,
           sourceText: "1,000원",
@@ -89,5 +115,44 @@ describe("public official channel catalog", () => {
     expect(filterAndSortOfficialChannelListings(listings, "업체 나", "price-asc").map((item) => item.sourceProductCode)).toEqual(["2"]);
     expect(filterAndSortOfficialChannelListings(listings, "", "price-asc").map((item) => item.sourceProductCode)).toEqual(["1", "2"]);
     expect(filterAndSortOfficialChannelListings(listings, "", "price-desc").map((item) => item.sourceProductCode)).toEqual(["2", "1"]);
+  });
+
+  it("filters official listings by the persisted category", () => {
+    const listings = catalog().listings;
+
+    expect(filterAndSortOfficialChannelListings(listings, "", "price-asc", "음료").map((item) => item.sourceProductCode)).toEqual(["2"]);
+    expect(filterAndSortOfficialChannelListings(listings, "", "price-asc", "식품").map((item) => item.sourceProductCode)).toEqual(["1"]);
+  });
+
+  it("removes linked official listings from standalone cards and groups them under the standard product", () => {
+    const listings = catalog().listings;
+    listings[0].standardProductLink = {
+      status: "linked",
+      standardProductId: "11111111-1111-4111-8111-111111111111",
+    };
+
+    const partitioned = partitionOfficialChannelListingsByStandardProduct(listings);
+
+    expect(partitioned.standaloneListings.map((listing) => listing.sourceProductCode)).toEqual(["1"]);
+    expect(partitioned.linkedByStandardProduct.get("11111111-1111-4111-8111-111111111111")?.map(
+      (listing) => listing.sourceProductCode,
+    )).toEqual(["2"]);
+  });
+
+  it("rejects duplicate source identities in the manual standard link registry", () => {
+    const duplicatedLink = {
+      sourceProductCodeNamespace: "welfare.mil.kr:shop:p_code",
+      sourceProductCode: "2",
+      standardProductId: "11111111-1111-4111-8111-111111111111",
+      linkedAt: "2026-07-31T00:00:00.000Z",
+      linkMethod: "manual" as const,
+    };
+    const result = PublicOfficialChannelStandardLinkRegistrySchema.safeParse({
+      schemaVersion: "public-official-channel-standard-links.v1",
+      channelId: "korean-military-px",
+      links: [duplicatedLink, duplicatedLink],
+    });
+
+    expect(result.success).toBe(false);
   });
 });

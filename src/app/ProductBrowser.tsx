@@ -8,6 +8,11 @@ import { sellerPricePointsFromGroup, summarizeSellerPrices } from "@/domain/sell
 import { formatKrw } from "@/domain/settlement";
 import { officialProductCandidateKey, seededOfficialProducts, type OfficialProductRecord } from "@/domain/official-product";
 import { normalizeMarketPrice, type ProductSpecification } from "@/domain/canonical-price";
+import {
+  filterAndSortOfficialChannelListings,
+  partitionOfficialChannelListingsByStandardProduct,
+  type PublicOfficialChannelListing,
+} from "@/domain/public-official-channel-catalog";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import { OfficialProductRepository } from "@/repositories/official-product.repository";
 import { PublicOfficialChannelCatalogRepository } from "@/repositories/public-official-channel-catalog.repository";
@@ -20,7 +25,7 @@ import styles from "./page.module.css";
 
 const officialProductRepository = new OfficialProductRepository();
 const publicPxCatalog = new PublicOfficialChannelCatalogRepository().loadPxCatalog();
-type CatalogView = "observed" | "standard" | "px-official";
+type CatalogView = "all" | "standard" | "official";
 
 export type StandardProductItem = ProductGroup & { unitPriceLabel: string; unitPriceKrw: number; packageLabel: string; referenceUnit: number };
 
@@ -44,6 +49,16 @@ export type StandardProductGroup = {
   coupangPrice: CoupangPrice | null;
   coupangComparison: CoupangPriceComparison | null;
   priceHistory: PriceHistoryPoint[];
+  officialListings: PublicOfficialChannelListing[];
+};
+
+type OfficialLinkedStandardSummary = {
+  id: string;
+  standardProductId: string;
+  name: string;
+  imageUrl?: string;
+  category: ProductCategory;
+  listings: PublicOfficialChannelListing[];
 };
 
 function formatPackageLabel(spec: ProductSpecification) {
@@ -69,10 +84,62 @@ function RecordedPriceBlock({ group }: { group: ProductGroup }) {
   return <div className={styles.listedPrice}><strong>{formatKrw(group.latestPriceKrw)}</strong></div>;
 }
 
+function officialListingSearchText(listing: PublicOfficialChannelListing) {
+  return [
+    listing.sourceNameRaw,
+    listing.vendorNameRaw,
+    listing.specificationTextRaw,
+    listing.sourceProductCode,
+  ].filter(Boolean).join(" ");
+}
+
+function OfficialLinkedStandardCard({
+  standard,
+  onOpen,
+}: {
+  standard: OfficialLinkedStandardSummary;
+  onOpen?: () => void;
+}) {
+  const prices = standard.listings.map((listing) => listing.officialPrice.amountKrw);
+  const lowestPrice = Math.min(...prices);
+  const highestPrice = Math.max(...prices);
+  const firstListing = standard.listings[0];
+
+  return <article className={`${styles.productCard} ${styles.officialLinkedStandardCard}`}>
+    <div className={styles.productVisual} data-testid="product-image-slot">
+      <ProductImage
+        productName={standard.name}
+        sourceProductCode={firstListing.sourceProductCode}
+        category={standard.category}
+        imageUrl={standard.imageUrl}
+      />
+      <span className={styles.standardProductBadge}>표준 상품</span>
+    </div>
+    <div className={`${styles.productInfo} ${styles.officialChannelInfo}`}>
+      <span className={styles.officialCategoryBadge}>{standard.category}</span>
+      <h2>{standard.name}</h2>
+      <p><b>공식 출처</b> PX 공식 판매상품 {standard.listings.length.toLocaleString("ko-KR")}개 연결</p>
+      <div className={styles.officialChannelPrice}>
+        <small>PX 공식 사이트 표시가</small>
+        <strong>{formatKrw(lowestPrice)}{highestPrice === lowestPrice ? "" : ` ~ ${formatKrw(highestPrice)}`}</strong>
+      </div>
+      <div className={styles.officialChannelMeta}>
+        <span>연결된 원문: {standard.listings.map((listing) => listing.sourceNameRaw).join(", ")}</span>
+        <span>특정 지점 판매·재고 확인 아님</span>
+      </div>
+      {onOpen && <button type="button" onClick={onOpen}>출처·가격 상세 보기 ›</button>}
+    </div>
+  </article>;
+}
+
 export function ProductBrowser({ groups, query, setQuery, category, setCategory, martType, setMartType, selectedStore, setSelectedStore, sort, setSort, authRevision, onAdd, onTrend, onOpenStore }: {
   groups: ProductGroup[]; query: string; setQuery: (value: string) => void; category: ProductCategory; setCategory: (value: ProductCategory) => void; martType: MartType; setMartType: (value: MartType) => void; selectedStore: string; setSelectedStore: (value: string) => void; sort: ProductSort; setSort: (value: ProductSort) => void; authRevision: number; onAdd: (group: ProductGroup) => void; onTrend: (group: ProductGroup) => void; onOpenStore: (store: string) => void;
 }) {
   const client = getSupabaseBrowserClient();
+  const { linkedByStandardProduct, standaloneListings } = useMemo(
+    () => partitionOfficialChannelListingsByStandardProduct(publicPxCatalog.listings),
+    [],
+  );
   const [officialProducts, setOfficialProducts] = useState<Record<string, OfficialProductRecord>>(seededOfficialProducts);
   const [standardMappings, setStandardMappings] = useState<Map<string, string>>(new Map());
   const [exactStandardMappings, setExactStandardMappings] = useState<Map<string, string>>(new Map());
@@ -81,7 +148,7 @@ export function ProductBrowser({ groups, query, setQuery, category, setCategory,
   const [standardImages, setStandardImages] = useState<Map<string, string>>(new Map());
   const [coupangByStandard, setCoupangByStandard] = useState<Map<string, PublicCoupangPrice>>(new Map());
   const [catalogNotice, setCatalogNotice] = useState("");
-  const [catalogView, setCatalogView] = useState<CatalogView>("observed");
+  const [catalogView, setCatalogView] = useState<CatalogView>("all");
   const [openStandardId, setOpenStandardId] = useState<string | null>(null);
   const [storeListTarget, setStoreListTarget] = useState<{ title: string; rows: { storeLabel: string; observedAt: string }[] } | null>(null);
   useEffect(() => setOfficialProducts({ ...seededOfficialProducts, ...officialProductRepository.loadAll() }), []);
@@ -250,10 +317,11 @@ export function ProductBrowser({ groups, query, setQuery, category, setCategory,
         coupangPrice,
         coupangComparison,
         priceHistory,
+        officialListings: linkedByStandardProduct.get(standardProductId) ?? [],
       };
     });
     return { productGroups: regular, standardGroups: standards };
-  }, [groups, officialProducts, standardMappings, exactStandardMappings, catalogSpecs, standardNames, standardImages, coupangByStandard]);
+  }, [groups, officialProducts, standardMappings, exactStandardMappings, catalogSpecs, standardNames, standardImages, coupangByStandard, linkedByStandardProduct]);
 
   const stores = useMemo(() => [...new Set([
     ...productGroups.filter((group) => martType === "all" || group.martType === martType).map((group) => group.storeLabel),
@@ -261,13 +329,40 @@ export function ProductBrowser({ groups, query, setQuery, category, setCategory,
   ])].sort(), [martType, productGroups, standardGroups]);
 
   const visibleGroups = useMemo(() => mergeOfficialProductGroups(filterAndSortProductGroups(productGroups, { query, category, martType, storeLabel: selectedStore, sort })), [category, martType, query, selectedStore, sort, productGroups]);
+  const officialListingsEligible = martType !== "regular" && selectedStore === "all";
+
+  const linkedStandardSummaries = useMemo<OfficialLinkedStandardSummary[]>(() =>
+    [...linkedByStandardProduct.entries()].map(([standardProductId, listings]) => {
+      const name = standardNames.get(standardProductId) ?? listings[0].sourceNameRaw;
+      const inferredCategory = categoryForProduct(name);
+      return {
+        id: `official-standard:${standardProductId}`,
+        standardProductId,
+        name,
+        imageUrl: standardImages.get(standardProductId) ?? listings.find((listing) => listing.image)?.image?.url,
+        category: inferredCategory === "미분류" ? listings[0].category : inferredCategory,
+        listings,
+      };
+    }), [linkedByStandardProduct, standardImages, standardNames]);
+
+  const visibleLinkedStandardSummaries = useMemo(() => {
+    if (!officialListingsEligible) return [];
+    const normalizedQuery = query.trim().toLocaleLowerCase("ko-KR");
+    return linkedStandardSummaries
+      .filter((standard) => category === "전체" || standard.category === category)
+      .filter((standard) => !normalizedQuery || [
+        standard.name,
+        ...standard.listings.map(officialListingSearchText),
+      ].join(" ").toLocaleLowerCase("ko-KR").includes(normalizedQuery));
+  }, [category, linkedStandardSummaries, officialListingsEligible, query]);
 
   const visibleStandardGroups = useMemo(() => {
     const normalizedQuery = query.trim().toLowerCase();
     return standardGroups
       .map((standard) => {
+        const officialListings = officialListingsEligible ? standard.officialListings : [];
         const items = standard.items.filter((item) => (martType === "all" || item.martType === martType) && (selectedStore === "all" || item.storeLabel === selectedStore));
-        if (items.length === 0) return { ...standard, items };
+        if (items.length === 0) return { ...standard, items, officialListings };
         const lowest = [...items].sort((left, right) => left.unitPriceKrw - right.unitPriceKrw || right.latest.observedAt.localeCompare(left.latest.observedAt))[0];
         const coupangEntry = coupangByStandard.get(standard.id.replace("standard:", ""));
         const coupangPrice = coupangEntry ? buildCoupangPrice(coupangEntry, lowest.referenceUnit) : standard.coupangPrice;
@@ -285,42 +380,84 @@ export function ProductBrowser({ groups, query, setQuery, category, setCategory,
           observationCount: items.reduce((sum, item) => sum + item.observations.length, 0),
           coupangPrice,
           coupangComparison,
+          officialListings,
         };
       })
       .filter((standard) => standard.items.length > 0)
       .filter((standard) => category === "전체" || standard.category === category)
-      .filter((standard) => !normalizedQuery || `${standard.name} ${standard.items.map((item) => `${item.productName} ${item.sourceProductCode} ${item.storeLabel}`).join(" ")}`.toLowerCase().includes(normalizedQuery))
+      .filter((standard) => !normalizedQuery || [
+        standard.name,
+        ...standard.items.map((item) => `${item.productName} ${item.sourceProductCode} ${item.storeLabel}`),
+        ...standard.officialListings.map(officialListingSearchText),
+      ].join(" ").toLowerCase().includes(normalizedQuery))
       .sort((a, b) => {
         if (sort === "expensive") return b.lowestUnitPriceKrw - a.lowestUnitPriceKrw || a.name.localeCompare(b.name);
         if (sort === "sellers") return b.sellerCount - a.sellerCount || a.name.localeCompare(b.name);
         return a.lowestUnitPriceKrw - b.lowestUnitPriceKrw || a.name.localeCompare(b.name);
       });
-  }, [standardGroups, coupangByStandard, query, category, martType, selectedStore, sort]);
+  }, [standardGroups, coupangByStandard, query, category, martType, officialListingsEligible, selectedStore, sort]);
 
   const gridEntries = useMemo(() => {
-    type Entry = { kind: "standard"; standard: StandardProductGroup } | { kind: "product"; group: ProductGroup };
+    type Entry =
+      | { kind: "standard"; standard: StandardProductGroup }
+      | { kind: "official-standard"; standard: OfficialLinkedStandardSummary }
+      | { kind: "product"; group: ProductGroup };
     const standardEntries: Entry[] = visibleStandardGroups.map((standard) => ({ kind: "standard" as const, standard }));
-    const entries: Entry[] = catalogView === "standard"
-      ? standardEntries
-      : [...standardEntries, ...visibleGroups.map((group) => ({ kind: "product" as const, group }))];
+    const representedStandardIds = new Set(
+      visibleStandardGroups.map((standard) => standard.id.replace("standard:", "")),
+    );
+    const linkedStandardEntries: Entry[] = visibleLinkedStandardSummaries
+      .filter((standard) => catalogView === "official" || !representedStandardIds.has(standard.standardProductId))
+      .map((standard) => ({ kind: "official-standard" as const, standard }));
+    const entries: Entry[] = catalogView === "official"
+      ? linkedStandardEntries
+      : catalogView === "standard"
+        ? [...standardEntries, ...linkedStandardEntries]
+        : [
+          ...standardEntries,
+          ...linkedStandardEntries,
+          ...visibleGroups.map((group) => ({ kind: "product" as const, group })),
+        ];
     const priceOf = (entry: Entry) => {
       if (entry.kind === "standard") return entry.standard.lowestUnitPriceKrw;
+      if (entry.kind === "official-standard") {
+        return Math.min(...entry.standard.listings.map((listing) => listing.officialPrice.amountKrw));
+      }
       const latestOffers = summarizeSellerPrices(sellerPricePointsFromGroup(entry.group));
       return sort === "expensive"
         ? Math.max(...latestOffers.map((offer) => offer.latestPriceKrw))
         : latestOffers[0]?.latestPriceKrw ?? entry.group.latestPriceKrw;
     };
-    const sellersOf = (entry: Entry) => entry.kind === "standard" ? entry.standard.sellerCount : distinctSellerCount(entry.group.observations);
-    const nameOf = (entry: Entry) => entry.kind === "standard" ? entry.standard.name : entry.group.productName;
+    const sellersOf = (entry: Entry) => entry.kind === "standard"
+      ? entry.standard.sellerCount
+      : entry.kind === "official-standard"
+        ? 1
+        : distinctSellerCount(entry.group.observations);
+    const nameOf = (entry: Entry) => entry.kind === "product" ? entry.group.productName : entry.standard.name;
     return entries.sort((a, b) => {
       if (sort === "sellers") return sellersOf(b) - sellersOf(a) || nameOf(a).localeCompare(nameOf(b));
       if (sort === "expensive") return priceOf(b) - priceOf(a) || nameOf(a).localeCompare(nameOf(b));
       return priceOf(a) - priceOf(b) || nameOf(a).localeCompare(nameOf(b));
     });
-  }, [visibleStandardGroups, visibleGroups, catalogView, sort]);
+  }, [visibleStandardGroups, visibleGroups, visibleLinkedStandardSummaries, catalogView, sort]);
 
-  const openStandard = visibleStandardGroups.find((standard) => standard.id === openStandardId) ?? null;
+  const standaloneOfficialListingCount = useMemo(
+    () => officialListingsEligible
+      ? filterAndSortOfficialChannelListings(standaloneListings, query, "price-asc", category).length
+      : 0,
+    [category, officialListingsEligible, query, standaloneListings],
+  );
+  const openStandard = visibleStandardGroups.find((standard) => standard.id === openStandardId)
+    ?? standardGroups.find((standard) => standard.id === openStandardId)
+    ?? null;
   const showStandardOnly = catalogView === "standard";
+  const showOfficialOnly = catalogView === "official";
+  const showStandaloneOfficialListings = catalogView !== "standard"
+    && officialListingsEligible
+    && standaloneOfficialListingCount > 0;
+  const officialProductDisplayCount = standaloneListings.length + linkedByStandardProduct.size;
+  const resultCount = gridEntries.length
+    + (showStandaloneOfficialListings ? standaloneOfficialListingCount : 0);
 
   return <section className={styles.browser}>
     <div className={styles.browserHead}>
@@ -336,35 +473,60 @@ export function ProductBrowser({ groups, query, setQuery, category, setCategory,
           type="search"
           value={query}
           onChange={(event) => setQuery(event.target.value)}
-          placeholder={catalogView === "px-official" ? "상품명, 업체명, 규격, 상품 코드 검색" : "상품명, 판매처 코드, 판매 마트 검색"}
+          placeholder={showOfficialOnly ? "상품명, 업체명, 규격, 상품 코드 검색" : "상품명, 판매처 코드, 판매 마트 검색"}
         />
       </label>
     </div>
 
-    <div className={styles.catalogLayerTabs} aria-label="상품 데이터 계층">
-      <button type="button" aria-pressed={catalogView === "observed"} className={catalogView === "observed" ? styles.catalogLayerTabActive : ""} onClick={() => setCatalogView("observed")}>전체 상품</button>
-      <button type="button" aria-pressed={catalogView === "standard"} className={catalogView === "standard" ? styles.catalogLayerTabActive : ""} onClick={() => setCatalogView("standard")}>표준 상품</button>
-      <button type="button" aria-pressed={catalogView === "px-official"} className={catalogView === "px-official" ? styles.catalogLayerTabActive : ""} onClick={() => setCatalogView("px-official")}>PX 공식 판매상품 <span>{publicPxCatalog.collection.listingCount.toLocaleString("ko-KR")}</span></button>
+    <div className={styles.catalogLayerTabs} role="group" aria-label="상품 데이터 계층">
+      <button type="button" aria-pressed={catalogView === "all"} className={catalogView === "all" ? styles.catalogLayerTabActive : ""} onClick={() => setCatalogView("all")}>전체 상품</button>
+      <button type="button" aria-pressed={catalogView === "standard"} className={catalogView === "standard" ? styles.catalogLayerTabActive : ""} onClick={() => setCatalogView("standard")}>표준 상품만</button>
+      <button type="button" aria-pressed={catalogView === "official"} className={catalogView === "official" ? styles.catalogLayerTabActive : ""} onClick={() => setCatalogView("official")}>공식 상품만 <span>{officialProductDisplayCount.toLocaleString("ko-KR")}</span></button>
     </div>
 
-    {catalogView === "px-official"
-      ? <PxOfficialProductBrowser catalog={publicPxCatalog} query={query} />
-      : <>
-        {catalogNotice && <p className={styles.dataNotice} role="status">{catalogNotice}</p>}
-        <div className={styles.marketControls}>
-          <div className={styles.segmented} aria-label="판매처 유형">{([ ["all", "전체"], ["regular", "일반 마트"], ["px", "PX (군마트)"] ] as const).map(([value, label]) => <button key={value} aria-pressed={martType === value} className={martType === value ? styles.selectedSegment : ""} onClick={() => { setMartType(value); setSelectedStore("all"); }}>{label}</button>)}</div>
-          <label className={styles.storeSelect}>판매 마트<select value={selectedStore} onChange={(event) => setSelectedStore(event.target.value)}><option value="all">전체 마트</option>{stores.map((store) => <option key={store} value={store}>{store}</option>)}</select></label>
+    {catalogNotice && !showOfficialOnly && <p className={styles.dataNotice} role="status">{catalogNotice}</p>}
+    <div className={styles.marketControls}>
+      <div className={styles.segmented} aria-label="판매처 유형">{([ ["all", "전체"], ["regular", "일반 마트"], ["px", "PX (군마트)"] ] as const).map(([value, label]) => <button key={value} aria-pressed={martType === value} className={martType === value ? styles.selectedSegment : ""} onClick={() => { setMartType(value); setSelectedStore("all"); }}>{label}</button>)}</div>
+      <label className={styles.storeSelect}>판매 마트<select value={selectedStore} onChange={(event) => setSelectedStore(event.target.value)}><option value="all">전체 마트</option>{stores.map((store) => <option key={store} value={store}>{store}</option>)}</select></label>
+      {!showOfficialOnly &&
           <label className={styles.sortSelect}>정렬<select value={sort} onChange={(event) => setSort(event.target.value as ProductSort)}><option value="expensive">비싼 물품 순</option><option value="cheap">저렴한 물품 순</option><option value="sellers">판매처 많은 물품 순</option></select></label>
-        </div>
-        <div className={styles.filters} aria-label="상품 카테고리">{PRODUCT_CATEGORIES.map((item) => <button aria-pressed={category === item} className={category === item ? styles.filterActive : ""} key={item} onClick={() => setCategory(item)}>{item}</button>)}</div>
-        <div className={styles.resultBar}><p>상품 {gridEntries.length}개</p>{(query || category !== "전체" || martType !== "all" || selectedStore !== "all" || showStandardOnly) && <button onClick={() => { setQuery(""); setCategory("전체"); setMartType("all"); setSelectedStore("all"); setCatalogView("observed"); }}>필터 초기화</button>}</div>
-        <div className={styles.productGrid} aria-live="polite">{gridEntries.map((entry) => entry.kind === "standard"
-          ? <article className={styles.productCard} key={entry.standard.id}><div className={styles.productVisual} data-testid="product-image-slot"><ProductImage item={entry.standard.items[0].latest.item} category={entry.standard.category} imageUrl={entry.standard.imageUrl} /></div><div className={styles.productInfo}><h2>{entry.standard.name}</h2><StoreInfo sellerCount={entry.standard.sellerCount} onOpen={() => setStoreListTarget({ title: `${entry.standard.name} 판매처`, rows: latestSellerRows(entry.standard.items.flatMap((item) => item.observations)) })} /><div className={styles.standardPriceBlock}><strong>{formatKrw(entry.standard.lowestPriceKrw)} ~</strong><small>{entry.standard.unitPriceLabel} {formatKrw(entry.standard.lowestUnitPriceKrw)} ~ {formatKrw(entry.standard.highestUnitPriceKrw)}</small>{entry.standard.coupangComparison && <CoupangComparisonMessage compact unitPriceLabel={entry.standard.unitPriceLabel} comparison={entry.standard.coupangComparison} />}</div><button aria-label={`${entry.standard.name} 하위 상품 보기`} onClick={() => setOpenStandardId(entry.standard.id)}>판매처 가격 기준 비교 보기 ›</button></div></article>
-          : <article className={styles.productCard} key={entry.group.id}><div className={styles.productVisual} data-testid="product-image-slot"><ProductImage item={entry.group.latest.item} category={entry.group.category} imageUrl={entry.group.officialProduct?.imageUrl} /></div><div className={styles.productInfo}><h2>{entry.group.officialProduct?.officialName ?? entry.group.productName}</h2><StoreInfo sellerCount={distinctSellerCount(entry.group.observations)} onOpen={() => setStoreListTarget({ title: `${entry.group.productName} 판매처`, rows: latestSellerRows(entry.group.observations) })} /><RecordedPriceBlock group={entry.group} /><div className={styles.productActions}><button className={styles.trendButton} aria-label={`${entry.group.productName} 가격 이력 보기`} onClick={() => onTrend(entry.group)}>가격 이력</button><button aria-label={`${entry.group.productName} 장바구니에 담기`} onClick={() => onAdd(entry.group)}>+ 담기</button></div></div></article>)}</div>
-        {gridEntries.length === 0 && <div className={styles.noResult}><strong>조건에 맞는 상품이 없습니다.</strong></div>}
-      </>}
+      }
+    </div>
+    <div className={styles.filters} aria-label="상품 카테고리">{PRODUCT_CATEGORIES.map((item) => <button aria-pressed={category === item} className={category === item ? styles.filterActive : ""} key={item} onClick={() => setCategory(item)}>{item}</button>)}</div>
+    <div className={styles.resultBar}><p>상품 {resultCount.toLocaleString("ko-KR")}개</p>{(query || category !== "전체" || martType !== "all" || selectedStore !== "all" || showStandardOnly || showOfficialOnly) && <button onClick={() => { setQuery(""); setCategory("전체"); setMartType("all"); setSelectedStore("all"); setCatalogView("all"); }}>필터 초기화</button>}</div>
 
-    {openStandard && catalogView !== "px-official" && <StandardProductDetailModal standard={openStandard} onClose={() => setOpenStandardId(null)} onOpenStore={onOpenStore} />}
-    {storeListTarget && catalogView !== "px-official" && <StoreListModal title={storeListTarget.title} rows={storeListTarget.rows} onClose={() => setStoreListTarget(null)} onOpenStore={onOpenStore} />}
+    <div className={styles.productGrid} aria-live="polite">{gridEntries.map((entry) => entry.kind === "official-standard"
+      ? <OfficialLinkedStandardCard
+          key={entry.standard.id}
+          standard={entry.standard}
+          onOpen={standardGroups.some((standard) => standard.id === `standard:${entry.standard.standardProductId}`)
+            ? () => setOpenStandardId(`standard:${entry.standard.standardProductId}`)
+            : undefined}
+        />
+      : entry.kind === "standard"
+        ? <article className={styles.productCard} key={entry.standard.id}>
+            <div className={styles.productVisual} data-testid="product-image-slot">
+              <ProductImage item={entry.standard.items[0].latest.item} category={entry.standard.category} imageUrl={entry.standard.imageUrl} />
+              <span className={styles.standardProductBadge}>표준 상품</span>
+            </div>
+            <div className={styles.productInfo}>
+              <h2>{entry.standard.name}</h2>
+              <StoreInfo sellerCount={entry.standard.sellerCount} onOpen={() => setStoreListTarget({ title: `${entry.standard.name} 판매처`, rows: latestSellerRows(entry.standard.items.flatMap((item) => item.observations)) })} />
+              <div className={styles.standardPriceBlock}><strong>{formatKrw(entry.standard.lowestPriceKrw)} ~</strong><small>{entry.standard.unitPriceLabel} {formatKrw(entry.standard.lowestUnitPriceKrw)} ~ {formatKrw(entry.standard.highestUnitPriceKrw)}</small>{entry.standard.coupangComparison && <CoupangComparisonMessage compact unitPriceLabel={entry.standard.unitPriceLabel} comparison={entry.standard.coupangComparison} />}</div>
+              {entry.standard.officialListings.length > 0 && <div className={styles.standardOfficialSource}>
+                <small>PX 공식 판매상품 {entry.standard.officialListings.length.toLocaleString("ko-KR")}개 연결</small>
+                <strong>공식 표시가 {formatKrw(Math.min(...entry.standard.officialListings.map((listing) => listing.officialPrice.amountKrw)))} ~</strong>
+              </div>}
+              <button aria-label={`${entry.standard.name} 하위 상품 보기`} onClick={() => setOpenStandardId(entry.standard.id)}>판매처 가격 기준 비교 보기 ›</button>
+            </div>
+          </article>
+        : <article className={styles.productCard} key={entry.group.id}><div className={styles.productVisual} data-testid="product-image-slot"><ProductImage item={entry.group.latest.item} category={entry.group.category} imageUrl={entry.group.officialProduct?.imageUrl} /></div><div className={styles.productInfo}><h2>{entry.group.officialProduct?.officialName ?? entry.group.productName}</h2><StoreInfo sellerCount={distinctSellerCount(entry.group.observations)} onOpen={() => setStoreListTarget({ title: `${entry.group.productName} 판매처`, rows: latestSellerRows(entry.group.observations) })} /><RecordedPriceBlock group={entry.group} /><div className={styles.productActions}><button className={styles.trendButton} aria-label={`${entry.group.productName} 가격 이력 보기`} onClick={() => onTrend(entry.group)}>가격 이력</button><button aria-label={`${entry.group.productName} 장바구니에 담기`} onClick={() => onAdd(entry.group)}>+ 담기</button></div></div></article>)}</div>
+    {gridEntries.length === 0 && !showStandaloneOfficialListings && !(showOfficialOnly && !officialListingsEligible) && <div className={styles.noResult}><strong>조건에 맞는 상품이 없습니다.</strong></div>}
+
+    {showStandaloneOfficialListings && <PxOfficialProductBrowser catalog={publicPxCatalog} listings={standaloneListings} query={query} category={category} />}
+    {showOfficialOnly && !officialListingsEligible && <div className={styles.noResult}><strong>{selectedStore !== "all" ? "공식 상품은 특정 지점의 판매·재고로 확인할 수 없습니다." : "일반 마트 조건에 해당하는 공식 상품 컬렉션이 없습니다."}</strong><p>판매처 유형을 전체 또는 PX로 선택하고, 판매 마트는 전체 마트로 두세요.</p></div>}
+
+    {openStandard && !showOfficialOnly && <StandardProductDetailModal standard={openStandard} onClose={() => setOpenStandardId(null)} onOpenStore={onOpenStore} />}
+    {storeListTarget && !showOfficialOnly && <StoreListModal title={storeListTarget.title} rows={storeListTarget.rows} onClose={() => setStoreListTarget(null)} onOpenStore={onOpenStore} />}
   </section>;
 }

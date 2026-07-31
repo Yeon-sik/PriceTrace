@@ -1,0 +1,4 @@
+interface:
+  display_name: "PriceTrace 표준상품 연결"
+  short_description: "영수증과 공식상품을 검증해 표준상품에 안전하게 연결"
+  default_prompt: "Use $pricetrace-link-standard-products to investigate one PriceTrace product and prepare a read-only LinkProposal."

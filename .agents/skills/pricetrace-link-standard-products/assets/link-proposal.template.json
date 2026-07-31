@@ -1,0 +1,131 @@
+{
+  "schemaVersion": "pricetrace-link-proposal.v2",
+  "caseId": "case-20260731-demo",
+  "status": "approval_requested",
+  "inputFingerprint": "sha256:5d18323b56898c370c19a1e7727981cc96e71e70f551a5402f94d756a960bd6c",
+  "receipt": {
+    "receiptId": "receipt-demo",
+    "receiptItemId": "item-demo",
+    "receiptRevision": "revision-demo",
+    "sourceCatalogNamespace": "official-channel",
+    "sourceLabel": "receipt-store",
+    "sourceProductCode": "receipt-code-001",
+    "sourceNameRaw": "Demo Product 500 ml",
+    "observedAt": "2026-07-31T10:00:00+09:00",
+    "unitPriceKrw": 1000,
+    "quantity": 1
+  },
+  "officialListing": {
+    "channelId": "official-channel",
+    "sourceProductCodeNamespace": "official-listing-code",
+    "sourceProductCode": "official-code-001",
+    "snapshotId": "33333333-3333-4333-8333-333333333333",
+    "snapshotHash": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+    "sourceNameRaw": "Demo Product 500 ml",
+    "specificationTextRaw": "500 ml, one bottle",
+    "sourceRefs": [
+      "private-data/official/demo.json#official-code-001"
+    ]
+  },
+  "sameChannelNameRule": {
+    "sameChannel": true,
+    "normalization": "remove_unicode_whitespace_only",
+    "normalizedReceiptName": "DemoProduct500ml",
+    "normalizedOfficialName": "DemoProduct500ml",
+    "exactNameMatch": true,
+    "outcome": "apply_official_identity",
+    "importedOfficialFields": [
+      "brand",
+      "contentAmount",
+      "contentUnit",
+      "packageCount"
+    ]
+  },
+  "normalizedIdentity": {
+    "brand": "Demo Brand",
+    "productFamilyName": "Demo Product",
+    "variantName": "Demo Product 500 ml",
+    "contentAmount": 500,
+    "contentUnit": "ml",
+    "packageCount": 1,
+    "gtin": null
+  },
+  "decision": {
+    "action": "reuse_variant",
+    "standardProductId": "11111111-1111-4111-8111-111111111111",
+    "catalogProductId": "22222222-2222-4222-8222-222222222222",
+    "proposedStandardName": null,
+    "proposedVariantName": null,
+    "confidence": "high",
+    "matchedFields": [
+      "brand",
+      "productFamilyName",
+      "contentAmount",
+      "contentUnit",
+      "packageCount"
+    ],
+    "conflictingFields": [],
+    "missingFields": []
+  },
+  "coupangOffer": null,
+  "evidence": [
+    {
+      "sourceType": "receipt",
+      "sourceId": "receipt-demo:item-demo",
+      "authority": "transactional",
+      "url": null,
+      "capturedAt": "2026-07-31T10:00:00+09:00",
+      "claims": [
+        "Observed receipt name, price, quantity, and source product code."
+      ],
+      "sourceRefs": [
+        "private-data/receipts/demo.json#item-demo"
+      ]
+    },
+    {
+      "sourceType": "official_channel",
+      "sourceId": "official-channel:official-listing-code:official-code-001",
+      "authority": "primary",
+      "url": "https://example.com/official-code-001",
+      "capturedAt": "2026-07-31T10:05:00+09:00",
+      "claims": [
+        "Official listing confirms brand, family, 500 ml content, and one-bottle package."
+      ],
+      "sourceRefs": [
+        "snapshot:33333333-3333-4333-8333-333333333333"
+      ]
+    }
+  ],
+  "review": {
+    "verdict": "approve",
+    "reviewerAgent": "pricetrace_independent_reviewer",
+    "counterCandidates": [
+      "No compatible counter-candidate found in the supplied catalog snapshot."
+    ],
+    "conflicts": [],
+    "evidenceQuality": "sufficient",
+    "notes": [
+      "GTIN is unavailable but non-blocking for this demonstrated write path.",
+      "Demo values only; replace every field before requesting approval."
+    ]
+  },
+  "plannedEffects": [
+    "reuse_standard_family",
+    "reuse_catalog_variant",
+    "link_official_listing",
+    "verify_receipt_mapping"
+  ],
+  "approval": {
+    "status": "requested",
+    "approvalRef": null,
+    "userApprovalText": null,
+    "approvedAt": null,
+    "targetFingerprint": "sha256:01a8ca6af3450799541e59ff58e3234d708eb851694d74cc39062a5125af4128"
+  },
+  "execution": {
+    "status": "not_started",
+    "idempotencyKey": "link:case-20260731-demo:pending-approval",
+    "appliedAt": null,
+    "result": null
+  }
+}

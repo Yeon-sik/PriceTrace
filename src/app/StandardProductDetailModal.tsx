@@ -47,6 +47,27 @@ export function StandardProductDetailModal({ standard, onClose, onOpenStore }: {
         {standard.coupangComparison && <CoupangComparisonMessage unitPriceLabel={standard.unitPriceLabel} comparison={standard.coupangComparison} />}
         {standard.coupangPrice && (!standard.coupangPrice.requiredOffer.referenceLabel || standard.coupangPrice.requiredOffer.referenceLabel !== standard.unitPriceLabel) && <p className={styles.comparisonCaution}>판매처와 쿠팡 필수 판매 가격의 기준 단위가 같을 때만 자동 우열 비교합니다.</p>}
       </div>
+      {standard.officialListings.length > 0 && <section className={styles.standardOfficialListings} aria-labelledby="standard-official-listings-title">
+        <div className={styles.sectionHeading}>
+          <div>
+            <h3 id="standard-official-listings-title">연결된 공식 판매상품</h3>
+            <p>공식 등재와 표시가는 특정 PX 지점의 판매·재고 확인이 아닙니다.</p>
+          </div>
+        </div>
+        <div className={styles.standardOfficialListingList}>
+          {standard.officialListings.map((listing) => <article key={listing.id}>
+            <div>
+              <strong>{listing.sourceNameRaw}</strong>
+              <small>{listing.vendorNameRaw ?? "업체명 미표시"} · {listing.specificationTextRaw ?? "규격 미표시"}</small>
+              <small>상품코드 {listing.sourceProductCode} · {listing.officialPrice.observedAt.slice(0, 10)} 관측</small>
+            </div>
+            <div>
+              <small>PX 공식 사이트 표시가</small>
+              <strong>{formatKrw(listing.officialPrice.amountKrw)}</strong>
+            </div>
+          </article>)}
+        </div>
+      </section>}
       {sellerOffers.length > 0 && <section className={styles.standardSellerComparison} aria-labelledby="standard-seller-comparison-title">
         <div className={styles.sectionHeading}>
           <div><h3 id="standard-seller-comparison-title">판매처별 최근 단위가격</h3></div>

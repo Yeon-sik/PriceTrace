@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { summarizeCanonicalPrices, type ReferenceUnit } from "@/domain/canonical-price";
 import { resolveCoupangPrice } from "@/domain/coupang-price";
 import {
@@ -10,41 +10,22 @@ import {
   type CatalogContentUnit,
   type CatalogSpecificationStatus,
 } from "@/domain/catalog-specification";
-import { availableProductCategories, categoryForProduct, type ProductCategory } from "@/domain/product-browser";
 import type { PurchaseType } from "@/domain/types";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import { AdminStandardCatalogModal, type AdminCatalogVariant, type AdminCoupangPrice } from "./AdminStandardCatalogModal";
 import styles from "./page.module.css";
 
-type Category = { id: string; purchase_type: PurchaseType; parent_id: string | null; display_name: string; depth: number };
 type ContentUnit = CatalogContentUnit;
-type StandardProduct = { id: string; canonical_name: string; brand: string | null; category_id: string | null };
-type CatalogProduct = { id: string; standard_product_id: string; purchase_type: PurchaseType; canonical_name: string; brand: string | null; specification: string | null; specification_status: CatalogSpecificationStatus; content_amount: number | null; content_unit: ContentUnit | null; package_count: number; reference_unit: ReferenceUnit; listing_reference_url: string | null; category_id: string | null };
+type StandardProduct = { id: string; canonical_name: string; brand: string | null };
+type CatalogProduct = { id: string; standard_product_id: string; purchase_type: PurchaseType; canonical_name: string; brand: string | null; specification: string | null; specification_status: CatalogSpecificationStatus; content_amount: number | null; content_unit: ContentUnit | null; package_count: number; reference_unit: ReferenceUnit; listing_reference_url: string | null };
 type RemoteObservation = { location_label: string | null; unit_price_krw: number; observed_at: string; measurement_unit: string };
 type SourceProductMapping = { id: string; source_label: string; source_product_code: string };
 
-const purchaseTypeLabels: Record<PurchaseType, string> = {
-  retail_product: "소매 상품",
-  menu_item: "식당 메뉴",
-  raw_material: "원자재",
-  property: "부동산",
-  service: "서비스",
+export type CatalogExplorerSelectionRequest = {
+  standardProductId: string;
+  purchaseType: PurchaseType;
+  requestId: number;
 };
-
-function descendantIds(categories: Category[], categoryId: string) {
-  const ids = new Set([categoryId]);
-  let changed = true;
-  while (changed) {
-    changed = false;
-    for (const category of categories) {
-      if (category.parent_id && ids.has(category.parent_id) && !ids.has(category.id)) {
-        ids.add(category.id);
-        changed = true;
-      }
-    }
-  }
-  return ids;
-}
 
 const specLabelFor = (product: CatalogProduct) => catalogSpecificationLabel({
   specificationStatus: product.specification_status,
@@ -78,17 +59,13 @@ function buildAdminCoupangPrice(row: { listed_price_krw: number; quantity: numbe
   }, referenceUnit);
 }
 
-export function CatalogExplorerPanel() {
+export function CatalogExplorerPanel({ selectionRequest }: { selectionRequest?: CatalogExplorerSelectionRequest }) {
   const client = getSupabaseBrowserClient();
   const [userId, setUserId] = useState<string | null>(null);
   const [isAdmin, setIsAdmin] = useState(false);
-  const [purchaseType, setPurchaseType] = useState<PurchaseType>("retail_product");
-  const [categories, setCategories] = useState<Category[]>([]);
   const [standardProducts, setStandardProducts] = useState<StandardProduct[]>([]);
   const [variants, setVariants] = useState<CatalogProduct[]>([]);
   const [coupangByStandard, setCoupangByStandard] = useState<Map<string, AdminCoupangPrice>>(new Map());
-  const [categoryId, setCategoryId] = useState("");
-  const [productCategory, setProductCategory] = useState<ProductCategory | null>(null);
   const [selectedStandardId, setSelectedStandardId] = useState("");
   const [showStandardDetail, setShowStandardDetail] = useState(false);
   const [standardName, setStandardName] = useState("");
@@ -109,19 +86,22 @@ export function CatalogExplorerPanel() {
   const [sourceLabel, setSourceLabel] = useState("");
   const [sourceProductCode, setSourceProductCode] = useState("");
   const [message, setMessage] = useState("");
+  const managementPanelRef = useRef<HTMLDivElement>(null);
 
   const loadCatalog = useCallback(async () => {
-    if (!client) return;
-    const [{ data: categoryData, error: categoryError }, { data: standardData, error: standardError }, { data: variantData, error: variantError }] = await Promise.all([
-      client.from("catalog_categories").select("id,purchase_type,parent_id,display_name,depth").eq("purchase_type", purchaseType).order("depth").order("display_name"),
-      client.from("standard_products").select("id,canonical_name,brand,category_id").eq("purchase_type", purchaseType).eq("status", "active").order("canonical_name"),
-      client.from("catalog_products").select("id,standard_product_id,purchase_type,canonical_name,brand,specification,specification_status,content_amount,content_unit,package_count,reference_unit,listing_reference_url,category_id").eq("purchase_type", purchaseType).eq("status", "active").order("canonical_name"),
+    if (!client || !selectionRequest) {
+      setStandardProducts([]);
+      setVariants([]);
+      setCoupangByStandard(new Map());
+      return;
+    }
+    const [{ data: standardData, error: standardError }, { data: variantData, error: variantError }] = await Promise.all([
+      client.from("standard_products").select("id,canonical_name,brand").eq("id", selectionRequest.standardProductId).eq("purchase_type", selectionRequest.purchaseType).eq("status", "active"),
+      client.from("catalog_products").select("id,standard_product_id,purchase_type,canonical_name,brand,specification,specification_status,content_amount,content_unit,package_count,reference_unit,listing_reference_url").eq("standard_product_id", selectionRequest.standardProductId).eq("purchase_type", selectionRequest.purchaseType).eq("status", "active").order("canonical_name"),
     ]);
-    if (categoryError || standardError || variantError) { setMessage(categoryError?.message ?? standardError?.message ?? variantError?.message ?? "카탈로그를 불러오지 못했습니다."); return; }
-    setCategories((categoryData ?? []) as Category[]);
+    if (standardError || variantError) { setMessage(standardError?.message ?? variantError?.message ?? "표준 상품 관리 정보를 불러오지 못했습니다."); return; }
     setStandardProducts((standardData ?? []) as StandardProduct[]);
     setVariants((variantData ?? []) as CatalogProduct[]);
-    const standardIds = (standardData ?? []).map((row) => row.id as string);
     const referenceUnitByStandard = new Map<string, ReferenceUnit>();
     for (const variant of variantData ?? []) {
       if (
@@ -129,8 +109,8 @@ export function CatalogExplorerPanel() {
         && !referenceUnitByStandard.has(variant.standard_product_id as string)
       ) referenceUnitByStandard.set(variant.standard_product_id as string, variant.reference_unit as ReferenceUnit);
     }
-    if (standardIds.length === 0) { setCoupangByStandard(new Map()); return; }
-    const { data: coupangData, error: coupangError } = await client.from("standard_product_coupang_prices").select("standard_product_id,listed_price_krw,quantity,content_amount,content_unit,max_bundle_quantity,max_bundle_listed_price_krw,product_url,observed_at").in("standard_product_id", standardIds).order("observed_at", { ascending: false });
+    if ((standardData ?? []).length === 0) { setCoupangByStandard(new Map()); return; }
+    const { data: coupangData, error: coupangError } = await client.from("standard_product_coupang_prices").select("standard_product_id,listed_price_krw,quantity,content_amount,content_unit,max_bundle_quantity,max_bundle_listed_price_krw,product_url,observed_at").eq("standard_product_id", selectionRequest.standardProductId).order("observed_at", { ascending: false });
     if (coupangError) { setMessage(coupangError.message); return; }
     const latestByStandard = new Map<string, AdminCoupangPrice>();
     for (const row of coupangData ?? []) {
@@ -149,7 +129,8 @@ export function CatalogExplorerPanel() {
       }
     }
     setCoupangByStandard(latestByStandard);
-  }, [client, purchaseType]);
+    setMessage("");
+  }, [client, selectionRequest]);
 
   useEffect(() => {
     if (!client) return;
@@ -161,12 +142,15 @@ export function CatalogExplorerPanel() {
 
   useEffect(() => {
     void loadCatalog();
-    setCategoryId("");
-    setProductCategory(null);
-    setSelectedStandardId("");
+    setSelectedStandardId(selectionRequest?.standardProductId ?? "");
     setShowStandardDetail(false);
     setSelectedVariantId("");
-  }, [loadCatalog]);
+  }, [loadCatalog, selectionRequest]);
+
+  useEffect(() => {
+    if (!selectionRequest || selectedStandardId !== selectionRequest.standardProductId) return;
+    managementPanelRef.current?.scrollIntoView({ block: "start" });
+  }, [selectedStandardId, selectionRequest, standardProducts]);
 
   const loadSelectedVariantData = useCallback(async () => {
     if (!client || !selectedVariantId) {
@@ -188,16 +172,6 @@ export function CatalogExplorerPanel() {
 
   useEffect(() => { void loadSelectedVariantData(); }, [loadSelectedVariantData]);
 
-  const scopedStandardProducts = useMemo(() => {
-    let scoped = standardProducts;
-    if (categoryId) {
-      const ids = descendantIds(categories, categoryId);
-      scoped = scoped.filter((product) => product.category_id && ids.has(product.category_id));
-    }
-    return scoped;
-  }, [categories, categoryId, standardProducts]);
-  const standardCategories = useMemo(() => availableProductCategories(scopedStandardProducts.map((product) => product.canonical_name)), [scopedStandardProducts]);
-  const visibleStandardProducts = useMemo(() => productCategory === "전체" ? scopedStandardProducts : productCategory ? scopedStandardProducts.filter((product) => categoryForProduct(product.canonical_name) === productCategory) : [], [productCategory, scopedStandardProducts]);
   const priceSummaries = useMemo(() => summarizeCanonicalPrices(observations.map((observation) => ({
     locationLabel: observation.location_label,
     unitPriceKrw: observation.unit_price_krw,
@@ -377,59 +351,33 @@ export function CatalogExplorerPanel() {
   if (!client || !userId) return null;
 
   return (
-    <section className={styles.section} aria-labelledby="catalog-title">
-      <div className={styles.controls}>
+    <section className={styles.section} aria-labelledby="standard-management-title">
+      <div className={styles.sectionHeading}>
         <div>
-          <h2 id="catalog-title">상품 카테고리 탐색</h2>
-          <p className={styles.muted}>표준 상품과 카테고리는 영수증 원본 JSON과 분리되어 관리됩니다.</p>
+          <h2 id="standard-management-title">규격·판매처 코드 관리</h2>
+          <p className={styles.muted}>상단의 등록된 표준 상품을 선택하면 해당 상품의 규격과 판매처 코드를 관리할 수 있습니다.</p>
         </div>
-        <label>구매 대상 유형
-          <select value={purchaseType} onChange={(event) => setPurchaseType(event.target.value as PurchaseType)}>
-            {Object.entries(purchaseTypeLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
-          </select>
-        </label>
-        <label>카테고리
-          <select value={categoryId} onChange={(event) => setCategoryId(event.target.value)}>
-            <option value="">전체</option>
-            {categories.map((category) => <option key={category.id} value={category.id}>{"-- ".repeat(category.depth)}{category.display_name}</option>)}
-          </select>
-        </label>
       </div>
       {message && <p role="status" className={styles.muted}>{message}</p>}
-      <div className={styles.filters} aria-label="물품 카테고리"><button type="button" aria-pressed={productCategory === "전체"} className={productCategory === "전체" ? styles.filterActive : ""} onClick={() => { setProductCategory("전체"); setSelectedStandardId(""); setSelectedVariantId(""); setShowStandardDetail(false); }}>전체</button>{standardCategories.map((item) => <button type="button" aria-pressed={productCategory === item} className={productCategory === item ? styles.filterActive : ""} key={item} onClick={() => { setProductCategory(item); setSelectedStandardId(""); setSelectedVariantId(""); setShowStandardDetail(false); }}>{item}</button>)}<button type="button" onClick={() => { setProductCategory(null); setSelectedStandardId(""); setSelectedVariantId(""); setShowStandardDetail(false); }}>선택 해제</button></div>
-      {productCategory ? <><div className={styles.catalogGrid}>
-        <div>
-          <h3 className={styles.blackHeading}>표준 상품</h3>
-          {visibleStandardProducts.length === 0 ? <p>선택한 범위에 등록된 표준 상품이 없습니다.</p> : <div className={styles.catalogList}>
-            {visibleStandardProducts.map((product) => <button type="button" className={`${styles.catalogProduct} ${product.id === selectedStandardId ? styles.selectedCatalogProduct : ""}`} key={product.id} aria-pressed={product.id === selectedStandardId} onClick={() => { setSelectedStandardId(product.id); setSelectedVariantId(""); setShowStandardDetail(false); }}>
-              <strong>{product.canonical_name}</strong>
-              <small>{[product.brand, `하위 상품 ${variants.filter((variant) => variant.standard_product_id === product.id).length}개`].filter(Boolean).join(" | ")}</small>
-              {variants.some((variant) => variant.standard_product_id === product.id && variant.specification_status === "placeholder") && <span className={styles.specificationBadge}>규격 확인 필요</span>}
-            </button>)}
-          </div>}
-        </div>
-        <div>
-          <h3>판매처별 관측가</h3>
-          {!selectedVariantId ? <p>하위 상품을 선택하세요.</p> : priceSummaries.length === 0 ? <p>이 하위 상품에 연결된 가격 관측이 없습니다.</p> : <div className={styles.catalogList}>
-            {priceSummaries.map((summary) => <article className={styles.catalogProduct} key={summary.locationLabel}>
-              <strong>{summary.locationLabel}</strong>
-              <small>최근 {summary.latestKrw.toLocaleString("ko-KR")}원 | 최저 {summary.minimumKrw.toLocaleString("ko-KR")}원 | 최고 {summary.maximumKrw.toLocaleString("ko-KR")}원</small>
-              <small>{summary.observationCount}회 관측 | {summary.measurementUnits.join(", ")}</small>
-            </article>)}
-          </div>}
-        </div>
-      </div>
-      {isAdmin && <div className={styles.catalogAdmin}>
-        <h3>관리자 표준 상품·판매처 코드 관리</h3>
-        {selectedStandard
-          ? <form className={styles.inline} onSubmit={updateSelectedStandardName}>
-              <label>표준 상품명<input value={standardName} onChange={(event) => setStandardName(event.target.value)} required aria-label="표준 상품명" /></label>
-              <button type="submit" disabled={standardNameSaving || !standardName.trim()}>{standardNameSaving ? "상품명 저장 중..." : "표준 상품명 수정"}</button>
-            </form>
-          : <p className={styles.muted}>이름을 수정할 표준 상품을 먼저 선택하세요.</p>}
-        {selectedStandard && <button type="button" className={styles.secondaryButton} onClick={() => setShowStandardDetail(true)}>쿠팡가·상세 보기</button>}
+      {selectedStandard && isAdmin ? <div className={styles.catalogAdmin} ref={managementPanelRef}>
+        <h3>{selectedStandard.canonical_name}</h3>
+        <form className={styles.inline} onSubmit={updateSelectedStandardName}>
+          <label>표준 상품명<input value={standardName} onChange={(event) => setStandardName(event.target.value)} required aria-label="표준 상품명" /></label>
+          <button type="submit" disabled={standardNameSaving || !standardName.trim()}>{standardNameSaving ? "상품명 저장 중..." : "표준 상품명 수정"}</button>
+        </form>
+        <button type="button" className={styles.secondaryButton} onClick={() => setShowStandardDetail(true)}>쿠팡가·상세 보기</button>
         <label>하위 상품 선택 (판매처 매핑 대상)<select value={selectedVariantId} onChange={(event) => setSelectedVariantId(event.target.value)}><option value="">하위 상품을 선택하세요</option>{variantsForSelectedStandard.map((variant) => <option key={variant.id} value={variant.id}>{variant.canonical_name} · {specLabelFor(variant)}</option>)}</select></label>
         {selectedVariant ? <>
+          <section>
+            <h4>판매처별 관측가</h4>
+            {priceSummaries.length === 0 ? <p className={styles.muted}>이 하위 상품에 연결된 가격 관측이 없습니다.</p> : <div className={styles.catalogList}>
+              {priceSummaries.map((summary) => <article className={styles.catalogProduct} key={summary.locationLabel}>
+                <strong>{summary.locationLabel}</strong>
+                <small>최근 {summary.latestKrw.toLocaleString("ko-KR")}원 | 최저 {summary.minimumKrw.toLocaleString("ko-KR")}원 | 최고 {summary.maximumKrw.toLocaleString("ko-KR")}원</small>
+                <small>{summary.observationCount}회 관측 | {summary.measurementUnits.join(", ")}</small>
+              </article>)}
+            </div>}
+          </section>
           <form className={styles.inline} onSubmit={updateSelectedVariant}>
             <label>판매 규격명<input value={canonicalName} onChange={(event) => setCanonicalName(event.target.value)} required /></label>
             <label>브랜드<input value={brand} onChange={(event) => setBrand(event.target.value)} /></label>
@@ -458,7 +406,7 @@ export function CatalogExplorerPanel() {
             {selectedMapping && <><button type="button" className={styles.secondaryButton} onClick={() => { setSelectedMappingId(""); setSourceLabel(""); setSourceProductCode(""); }}>새 연결</button><button type="button" className={styles.deleteCatalogButton} onClick={deleteSelectedMapping}>연결 삭제</button></>}
           </form>
         </> : <p className={styles.muted}>수정하거나 삭제할 하위 상품을 먼저 선택하세요.</p>}
-      </div>}</> : <p className={styles.emptyState}>카테고리를 선택하면 해당 표준 상품과 판매 규격을 표시합니다.</p>}
+      </div> : <p className={styles.emptyState}>{selectionRequest ? "선택한 표준 상품의 관리 정보를 불러오는 중입니다." : "상단의 등록된 표준 상품을 선택하세요."}</p>}
       {selectedStandard && (!isAdmin || showStandardDetail) && <AdminStandardCatalogModal
         name={selectedStandard.canonical_name}
         variants={variantsForSelectedStandard.map((variant): AdminCatalogVariant => ({ id: variant.id, canonicalName: variant.canonical_name, specLabel: specLabelFor(variant), isPlaceholder: variant.specification_status === "placeholder", listingReferenceUrl: variant.listing_reference_url }))}
