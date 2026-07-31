@@ -147,7 +147,7 @@ export function ProductBrowser({ groups, query, setQuery, category, setCategory,
   const [catalogSpecs, setCatalogSpecs] = useState<Map<string, ProductSpecification & { standardProductId: string }>>(new Map());
   const [standardNames, setStandardNames] = useState<Map<string, string>>(new Map());
   const [standardImages, setStandardImages] = useState<Map<string, string>>(new Map());
-  const [coupangByCatalog, setCoupangByCatalog] = useState<Map<string, PublicCoupangPrice>>(new Map());
+  const [coupangByStandard, setCoupangByStandard] = useState<Map<string, PublicCoupangPrice>>(new Map());
   const [catalogNotice, setCatalogNotice] = useState("");
   const [catalogView, setCatalogView] = useState<CatalogView>("all");
   const [openStandardId, setOpenStandardId] = useState<string | null>(null);
@@ -188,7 +188,7 @@ export function ProductBrowser({ groups, query, setQuery, category, setCategory,
           }
           specs = publicIndex.catalogSpecs;
           names = publicIndex.standardNames;
-          coupangPrices = publicIndex.coupangByCatalog;
+          coupangPrices = publicIndex.coupangByStandard;
           publicCatalogReady = true;
           coupangReady = true;
         }
@@ -255,7 +255,7 @@ export function ProductBrowser({ groups, query, setQuery, category, setCategory,
       setCatalogSpecs(specs);
       setStandardNames(names);
       setStandardImages(images);
-      setCoupangByCatalog(coupangPrices);
+      setCoupangByStandard(coupangPrices);
       setCatalogNotice(
         !publicCatalogReady && !signedInCatalogReady
           ? "표준 상품 정보를 불러오지 못해 현재는 개별 상품으로 표시합니다."
@@ -313,7 +313,7 @@ export function ProductBrowser({ groups, query, setQuery, category, setCategory,
       const ordered = [...items].sort((a, b) => a.unitPriceKrw - b.unitPriceKrw);
       const lowest = ordered[0];
       const name = standardNames.get(standardProductId) ?? lowest.productName;
-      const coupangEntry = coupangByCatalog.get(lowest.catalogProductId);
+      const coupangEntry = coupangByStandard.get(standardProductId);
       const coupangPrice = coupangEntry ? buildCoupangPrice(coupangEntry, lowest.referenceUnit) : null;
       const coupangComparison = compareCoupangPrice(lowest, coupangPrice?.requiredOffer ?? null);
       const comparableItems = ordered.filter((item) => item.unitPriceLabel === lowest.unitPriceLabel);
@@ -345,7 +345,7 @@ export function ProductBrowser({ groups, query, setQuery, category, setCategory,
       };
     });
     return { productGroups: regular, standardGroups: standards };
-  }, [groups, officialProducts, standardMappings, exactStandardMappings, catalogSpecs, standardNames, standardImages, coupangByCatalog, linkedByStandardProduct]);
+  }, [groups, officialProducts, standardMappings, exactStandardMappings, catalogSpecs, standardNames, standardImages, coupangByStandard, linkedByStandardProduct]);
 
   const stores = useMemo(() => [...new Set([
     ...productGroups.filter((group) => martType === "all" || group.martType === martType).map((group) => group.storeLabel),
@@ -389,7 +389,8 @@ export function ProductBrowser({ groups, query, setQuery, category, setCategory,
         const items = standard.items.filter((item) => (martType === "all" || item.martType === martType) && (selectedStore === "all" || item.storeLabel === selectedStore));
         if (items.length === 0) return { ...standard, items, officialListings };
         const lowest = [...items].sort((left, right) => left.unitPriceKrw - right.unitPriceKrw || right.latest.observedAt.localeCompare(left.latest.observedAt))[0];
-        const coupangEntry = coupangByCatalog.get(lowest.catalogProductId);
+        const standardProductId = standard.id.replace("standard:", "");
+        const coupangEntry = coupangByStandard.get(standardProductId);
         const coupangPrice = coupangEntry ? buildCoupangPrice(coupangEntry, lowest.referenceUnit) : standard.coupangPrice;
         const coupangComparison = compareCoupangPrice(lowest, coupangPrice?.requiredOffer ?? null);
         const comparableItems = items.filter((item) => item.unitPriceLabel === lowest.unitPriceLabel);
@@ -420,7 +421,7 @@ export function ProductBrowser({ groups, query, setQuery, category, setCategory,
         if (sort === "sellers") return b.sellerCount - a.sellerCount || a.name.localeCompare(b.name);
         return a.lowestUnitPriceKrw - b.lowestUnitPriceKrw || a.name.localeCompare(b.name);
       });
-  }, [standardGroups, coupangByCatalog, query, category, martType, officialListingsEligible, selectedStore, sort]);
+  }, [standardGroups, coupangByStandard, query, category, martType, officialListingsEligible, selectedStore, sort]);
 
   const gridEntries = useMemo(() => {
     type Entry =

@@ -65,7 +65,7 @@ export function CatalogExplorerPanel({ selectionRequest }: { selectionRequest?: 
   const [isAdmin, setIsAdmin] = useState(false);
   const [standardProducts, setStandardProducts] = useState<StandardProduct[]>([]);
   const [variants, setVariants] = useState<CatalogProduct[]>([]);
-  const [coupangByCatalog, setCoupangByCatalog] = useState<Map<string, AdminCoupangPrice>>(new Map());
+  const [coupangPrice, setCoupangPrice] = useState<AdminCoupangPrice | null>(null);
   const [selectedStandardId, setSelectedStandardId] = useState("");
   const [showStandardDetail, setShowStandardDetail] = useState(false);
   const [standardName, setStandardName] = useState("");
@@ -89,7 +89,7 @@ export function CatalogExplorerPanel({ selectionRequest }: { selectionRequest?: 
     if (!client || !selectionRequest) {
       setStandardProducts([]);
       setVariants([]);
-      setCoupangByCatalog(new Map());
+      setCoupangPrice(null);
       return;
     }
     const [{ data: standardData, error: standardError }, { data: variantData, error: variantError }] = await Promise.all([
@@ -99,32 +99,23 @@ export function CatalogExplorerPanel({ selectionRequest }: { selectionRequest?: 
     if (standardError || variantError) { setMessage(standardError?.message ?? variantError?.message ?? "표준 상품 관리 정보를 불러오지 못했습니다."); return; }
     setStandardProducts((standardData ?? []) as StandardProduct[]);
     setVariants((variantData ?? []) as CatalogProduct[]);
-    const referenceUnitByCatalog = new Map<string, ReferenceUnit>();
-    for (const variant of variantData ?? []) {
-      if (variant.specification_status === "verified") {
-        referenceUnitByCatalog.set(variant.id as string, variant.reference_unit as ReferenceUnit);
-      }
-    }
-    if ((standardData ?? []).length === 0) { setCoupangByCatalog(new Map()); return; }
-    const { data: coupangData, error: coupangError } = await client.from("standard_product_coupang_prices").select("catalog_product_id,listed_price_krw,quantity,content_amount,content_unit,max_bundle_quantity,max_bundle_listed_price_krw,product_url,observed_at").eq("standard_product_id", selectionRequest.standardProductId).order("observed_at", { ascending: false });
+    const referenceUnitForStandard = (variantData ?? []).find(
+      (variant) => variant.specification_status === "verified",
+    )?.reference_unit as ReferenceUnit | undefined;
+    if ((standardData ?? []).length === 0) { setCoupangPrice(null); return; }
+    const { data: coupangData, error: coupangError } = await client.from("standard_product_coupang_prices").select("listed_price_krw,quantity,content_amount,content_unit,max_bundle_quantity,max_bundle_listed_price_krw,product_url,observed_at").eq("standard_product_id", selectionRequest.standardProductId).order("observed_at", { ascending: false }).limit(1);
     if (coupangError) { setMessage(coupangError.message); return; }
-    const latestByCatalog = new Map<string, AdminCoupangPrice>();
-    for (const row of coupangData ?? []) {
-      const catalogProductId = row.catalog_product_id as string | null;
-      if (catalogProductId && !latestByCatalog.has(catalogProductId)) {
-        latestByCatalog.set(catalogProductId, buildAdminCoupangPrice({
-          listed_price_krw: row.listed_price_krw as number,
-          quantity: row.quantity as number,
-          content_amount: row.content_amount as number | null,
-          content_unit: row.content_unit as string | null,
-          max_bundle_quantity: row.max_bundle_quantity as number | null,
-          max_bundle_listed_price_krw: row.max_bundle_listed_price_krw as number | null,
-          product_url: row.product_url as string,
-          observed_at: row.observed_at as string,
-        }, referenceUnitByCatalog.get(catalogProductId) ?? null));
-      }
-    }
-    setCoupangByCatalog(latestByCatalog);
+    const latest = coupangData?.[0];
+    setCoupangPrice(latest ? buildAdminCoupangPrice({
+      listed_price_krw: latest.listed_price_krw as number,
+      quantity: latest.quantity as number,
+      content_amount: latest.content_amount as number | null,
+      content_unit: latest.content_unit as string | null,
+      max_bundle_quantity: latest.max_bundle_quantity as number | null,
+      max_bundle_listed_price_krw: latest.max_bundle_listed_price_krw as number | null,
+      product_url: latest.product_url as string,
+      observed_at: latest.observed_at as string,
+    }, referenceUnitForStandard ?? null) : null);
     setMessage("");
   }, [client, selectionRequest]);
 
@@ -299,15 +290,12 @@ export function CatalogExplorerPanel({ selectionRequest }: { selectionRequest?: 
     await loadSelectedVariantData();
   }
 
-  async function submitCoupangPrice(catalogProductId: string, productUrl: string, listedPriceKrw: number, quantity: number, contentAmount: number, contentUnit: ContentUnit, maxBundleQuantity: number | null, maxBundleListedPriceKrw: number | null): Promise<{ ok: boolean; message: string }> {
+  async function submitCoupangPrice(productUrl: string, listedPriceKrw: number, quantity: number, contentAmount: number, contentUnit: ContentUnit, maxBundleQuantity: number | null, maxBundleListedPriceKrw: number | null): Promise<{ ok: boolean; message: string }> {
     if (!client || !userId) return { ok: false, message: "로그인이 필요합니다." };
     if (!selectedStandardId) return { ok: false, message: "표준 상품을 먼저 선택하세요." };
-    if (!variants.some((variant) => variant.id === catalogProductId && variant.standard_product_id === selectedStandardId)) {
-      return { ok: false, message: "선택한 판매 규격이 현재 표준 상품에 속하지 않습니다." };
-    }
     const { error } = await client.rpc("admin_manage_standard_catalog", {
       p_action: "record_coupang_price",
-      p_target_id: catalogProductId,
+      p_target_id: selectedStandardId,
       p_payload: {
         productUrl,
         listedPriceKrw,
@@ -317,11 +305,11 @@ export function CatalogExplorerPanel({ selectionRequest }: { selectionRequest?: 
         maxBundleQuantity,
         maxBundleListedPriceKrw,
       },
-      p_confirmation: `CONFIRM_STANDARD_CATALOG_ACTION:record_coupang_price:${catalogProductId}`,
+      p_confirmation: `CONFIRM_STANDARD_CATALOG_ACTION:record_coupang_price:${selectedStandardId}`,
     });
     if (error) return { ok: false, message: error.message };
     await loadCatalog();
-    return { ok: true, message: "선택한 판매 규격에 쿠팡가를 등록했습니다." };
+    return { ok: true, message: "표준 상품의 쿠팡가를 등록했습니다." };
   }
 
   if (!client || !userId) return null;
@@ -387,7 +375,7 @@ export function CatalogExplorerPanel({ selectionRequest }: { selectionRequest?: 
       {selectedStandard && (!isAdmin || showStandardDetail) && <AdminStandardCatalogModal
         name={selectedStandard.canonical_name}
         variants={variantsForSelectedStandard.map((variant): AdminCatalogVariant => ({ id: variant.id, canonicalName: variant.canonical_name, specLabel: specLabelFor(variant), isPlaceholder: variant.specification_status === "placeholder", contentAmount: variant.content_amount, contentUnit: variant.content_unit, listingReferenceUrl: variant.listing_reference_url }))}
-        coupangPrices={coupangByCatalog}
+        coupangPrice={coupangPrice}
         onClose={() => {
           setShowStandardDetail(false);
           if (!isAdmin) setSelectedStandardId("");

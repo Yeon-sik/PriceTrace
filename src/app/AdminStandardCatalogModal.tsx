@@ -16,14 +16,13 @@ export type AdminCatalogVariant = {
 };
 export type AdminCoupangPrice = ResolvedCoupangPrice;
 
-export function AdminStandardCatalogModal({ name, variants, coupangPrices, onClose, onSubmitCoupangPrice }: {
+export function AdminStandardCatalogModal({ name, variants, coupangPrice, onClose, onSubmitCoupangPrice }: {
   name: string;
   variants: AdminCatalogVariant[];
-  coupangPrices: ReadonlyMap<string, AdminCoupangPrice>;
+  coupangPrice: AdminCoupangPrice | null;
   onClose: () => void;
-  onSubmitCoupangPrice: (catalogProductId: string, productUrl: string, listedPriceKrw: number, quantity: number, contentAmount: number, contentUnit: "g" | "ml" | "each", maxBundleQuantity: number | null, maxBundleListedPriceKrw: number | null) => Promise<{ ok: boolean; message: string }>;
+  onSubmitCoupangPrice: (productUrl: string, listedPriceKrw: number, quantity: number, contentAmount: number, contentUnit: "g" | "ml" | "each", maxBundleQuantity: number | null, maxBundleListedPriceKrw: number | null) => Promise<{ ok: boolean; message: string }>;
 }) {
-  const [catalogProductId, setCatalogProductId] = useState(variants[0]?.id ?? "");
   const [productUrl, setProductUrl] = useState("");
   const [listedPriceKrw, setListedPriceKrw] = useState("");
   const [quantity, setQuantity] = useState("1");
@@ -33,22 +32,17 @@ export function AdminStandardCatalogModal({ name, variants, coupangPrices, onClo
   const [maxBundleListedPriceKrw, setMaxBundleListedPriceKrw] = useState("");
   const [message, setMessage] = useState("");
   const [saving, setSaving] = useState(false);
-  const selectedVariant = variants.find((variant) => variant.id === catalogProductId) ?? null;
-  const coupangPrice = catalogProductId ? coupangPrices.get(catalogProductId) ?? null : null;
-
-  useEffect(() => {
-    if (!variants.some((variant) => variant.id === catalogProductId)) {
-      setCatalogProductId(variants[0]?.id ?? "");
-    }
-  }, [catalogProductId, variants]);
+  const defaultVariant = variants.find((variant) => !variant.isPlaceholder && variant.contentAmount !== null && variant.contentUnit !== null)
+    ?? variants[0]
+    ?? null;
 
   useEffect(() => {
     if (!coupangPrice) {
       setProductUrl("");
       setListedPriceKrw("");
       setQuantity("1");
-      setContentAmount(selectedVariant?.contentAmount === null || selectedVariant?.contentAmount === undefined ? "" : String(selectedVariant.contentAmount));
-      setContentUnit(selectedVariant?.contentUnit ?? "g");
+      setContentAmount(defaultVariant?.contentAmount === null || defaultVariant?.contentAmount === undefined ? "" : String(defaultVariant.contentAmount));
+      setContentUnit(defaultVariant?.contentUnit ?? "g");
       setMaxBundleQuantity("");
       setMaxBundleListedPriceKrw("");
       return;
@@ -60,7 +54,7 @@ export function AdminStandardCatalogModal({ name, variants, coupangPrices, onClo
     if (coupangPrice.contentUnit) setContentUnit(coupangPrice.contentUnit);
     setMaxBundleQuantity(coupangPrice.maxBundleQuantity === null ? "" : String(coupangPrice.maxBundleQuantity));
     setMaxBundleListedPriceKrw(coupangPrice.maxBundleListedPriceKrw === null ? "" : String(coupangPrice.maxBundleListedPriceKrw));
-  }, [coupangPrice, selectedVariant]);
+  }, [coupangPrice, defaultVariant?.contentAmount, defaultVariant?.contentUnit]);
 
   useEffect(() => {
     const previousOverflow = document.body.style.overflow;
@@ -72,7 +66,6 @@ export function AdminStandardCatalogModal({ name, variants, coupangPrices, onClo
 
   async function submit(event: React.FormEvent) {
     event.preventDefault();
-    if (!catalogProductId) { setMessage("쿠팡가를 연결할 판매 규격을 선택하세요."); return; }
     const amount = Number(contentAmount);
     if (!/^https?:\/\//.test(productUrl) || !Number.isFinite(amount) || amount <= 0) { setMessage("쿠팡 링크와 개당 내용량을 올바르게 입력하세요."); return; }
     const requiredPrice = parseRequiredCoupangPrice(listedPriceKrw, quantity);
@@ -80,7 +73,7 @@ export function AdminStandardCatalogModal({ name, variants, coupangPrices, onClo
     const bundle = parseOptionalCoupangBundle(maxBundleQuantity, maxBundleListedPriceKrw);
     if (!bundle.value) { setMessage(bundle.error); return; }
     setSaving(true);
-    const result = await onSubmitCoupangPrice(catalogProductId, productUrl.trim(), requiredPrice.value.listedPriceKrw, requiredPrice.value.quantity, amount, contentUnit, bundle.value.maxBundleQuantity, bundle.value.maxBundleListedPriceKrw);
+    const result = await onSubmitCoupangPrice(productUrl.trim(), requiredPrice.value.listedPriceKrw, requiredPrice.value.quantity, amount, contentUnit, bundle.value.maxBundleQuantity, bundle.value.maxBundleListedPriceKrw);
     setSaving(false);
     setMessage(result.message);
   }
@@ -92,9 +85,8 @@ export function AdminStandardCatalogModal({ name, variants, coupangPrices, onClo
       <h2 id="admin-standard-title">{name}</h2>
       <p className={styles.storeInfo}>하위 상품 {variants.length}개</p>
       <div className={styles.coupangPriceSection}>
-        <label>쿠팡가 연결 규격<select value={catalogProductId} onChange={(event) => { setCatalogProductId(event.target.value); setMessage(""); }} required><option value="">판매 규격을 선택하세요</option>{variants.map((variant) => <option key={variant.id} value={variant.id}>{variant.canonicalName} · {variant.specLabel}</option>)}</select></label>
         {coupangPrice ? <><span>현재 쿠팡가</span>{coupangPrice.requiredOffer.referenceLabel && coupangPrice.requiredOffer.unitPriceKrw !== null ? <strong>필수 판매 · {coupangPrice.requiredOffer.referenceLabel} {formatKrw(coupangPrice.requiredOffer.unitPriceKrw)}</strong> : <strong>필수 판매 기준 용량 미입력</strong>}<small>{coupangPrice.requiredOffer.quantity}개 총 {formatKrw(coupangPrice.requiredOffer.listedPriceKrw)} · 개당 {formatKrw(coupangPrice.requiredOffer.pricePerItemKrw)}{coupangPrice.contentAmount !== null && coupangPrice.contentUnit !== null ? ` · 개당 ${coupangPrice.contentAmount}${coupangPrice.contentUnit === "each" ? "개" : coupangPrice.contentUnit}` : ""}</small>{coupangPrice.maxBundleOffer && <small>최대 {coupangPrice.maxBundleOffer.quantity}개 · 총 {formatKrw(coupangPrice.maxBundleOffer.listedPriceKrw)} · 개당 {formatKrw(coupangPrice.maxBundleOffer.pricePerItemKrw)}</small>}<a href={coupangPrice.productUrl} target="_blank" rel="noreferrer">쿠팡에서 보기</a></> : <><span>현재 쿠팡가</span><small>아직 등록된 쿠팡 가격이 없습니다.</small></>}
-        <p className={styles.muted}>선택한 판매 규격에만 쿠팡 가격을 연결합니다. 최대 묶음 가격은 선택 사항입니다.</p>
+        <p className={styles.muted}>판매 가격, 판매 개수, 개당 내용량을 기준으로 표준 상품 전체의 비교 가격을 계산합니다. 최대 묶음 가격은 선택 사항입니다.</p>
         <form className={styles.inline} onSubmit={submit}>
           <label>쿠팡 링크<input type="url" required placeholder="https://" value={productUrl} onChange={(event) => setProductUrl(event.target.value)} /></label>
           <label>필수 판매 가격<input inputMode="numeric" required value={listedPriceKrw} onChange={(event) => setListedPriceKrw(event.target.value)} /></label>

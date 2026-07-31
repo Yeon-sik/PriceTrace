@@ -395,13 +395,13 @@ begin
   end if;
 
   if position(
-    'price.catalog_product_id is null'
+    'price.standard_product_id'
     in lower(pg_get_functiondef(
       'public.get_public_exact_standard_product_catalog_v2()'::regprocedure
     ))
-  ) > 0
+  ) = 0
   then
-    raise exception 'The public exact catalog still contains a family-price fallback.';
+    raise exception 'The public exact catalog does not resolve Coupang observations by standard product.';
   end if;
 
   if has_function_privilege(
