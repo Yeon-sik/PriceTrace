@@ -31,13 +31,17 @@ export type ProductGroup = {
   latestPriceKrw: number;
   minimumPriceKrw: number;
   officialProduct?: OfficialProductRecord;
-  /** Same explicit shared catalog, code, and normalized receipt name. */
+  /** Same mart tag, exact whitespace-normalized name, and compatible product code. */
   sharedCatalogProduct?: boolean;
   sourceStoreLabel?: string;
 };
 
 export function normalizeReceiptProductName(value: string) {
   return value.toLocaleLowerCase("ko-KR").replace(/\([^)]*\)|\[[^\]]*\]/g, " ").replace(/\s+/g, " ").trim();
+}
+
+export function normalizeExactReceiptProductName(value: string) {
+  return value.replace(/\p{White_Space}+/gu, "");
 }
 
 export function normalizeSellerLabel(value: string) {
@@ -198,18 +202,31 @@ export function groupProductObservations(listings: ProductObservationListing[]):
 }
 
 export function mergeOfficialProductGroups(groups: ProductGroup[]): ProductGroup[] {
+  const codesByMartAndName = new Map<string, Set<string>>();
+  for (const group of groups) {
+    const base = `${martTagFor(group).toLocaleLowerCase("ko-KR")}:${normalizeExactReceiptProductName(group.productName)}`;
+    const code = group.sourceProductCode.trim();
+    if (code) codesByMartAndName.set(base, new Set([...(codesByMartAndName.get(base) ?? []), code]));
+  }
+
   const merged = new Map<string, ProductGroup>();
   for (const group of groups) {
-    const sharedCatalogKey = group.catalogNamespace
-      ? `catalog:${group.catalogNamespace}:${group.sourceProductCode}:${normalizeReceiptProductName(group.productName)}`
+    const sharedBase = `${martTagFor(group).toLocaleLowerCase("ko-KR")}:${normalizeExactReceiptProductName(group.productName)}`;
+    const knownCodes = codesByMartAndName.get(sharedBase) ?? new Set<string>();
+    const ownCode = group.sourceProductCode.trim();
+    const resolvedCode = ownCode || (knownCodes.size === 1 ? [...knownCodes][0] : "");
+    const sharedMartKey = resolvedCode || knownCodes.size === 0
+      ? `mart:${sharedBase}:${resolvedCode || "no-code"}`
       : null;
-    const key = group.officialProduct ? `official:${group.officialProduct.officialUrl}` : sharedCatalogKey ?? `source:${group.id}`;
+    const key = group.officialProduct
+      ? `official:${group.officialProduct.officialUrl}`
+      : sharedMartKey ?? `source:${group.id}`;
     const existing = merged.get(key);
-    if (!existing) { merged.set(key, { ...group, sourceStoreLabel: group.storeLabel, sharedCatalogProduct: Boolean(sharedCatalogKey) }); continue; }
+    if (!existing) { merged.set(key, { ...group, sourceStoreLabel: group.storeLabel, sharedCatalogProduct: Boolean(sharedMartKey) }); continue; }
     const observations = [...existing.observations, ...group.observations].sort((left, right) => right.observedAt.localeCompare(left.observedAt));
     const latest = observations[0];
     const sellers = latestSellerRows(observations).map((seller) => seller.storeLabel);
-    merged.set(key, { ...existing, id: key, storeLabel: sellers.join(", "), sellerKey: sellerIdentityKey(latest), observations, latest, latestPriceKrw: latest.item.unitPriceKrw, minimumPriceKrw: Math.min(...observations.map((observation) => observation.item.unitPriceKrw)), sharedCatalogProduct: existing.sharedCatalogProduct || Boolean(sharedCatalogKey) });
+    merged.set(key, { ...existing, id: key, storeLabel: sellers.join(", "), sellerKey: sellerIdentityKey(latest), observations, latest, latestPriceKrw: latest.item.unitPriceKrw, minimumPriceKrw: Math.min(...observations.map((observation) => observation.item.unitPriceKrw)), sharedCatalogProduct: existing.sharedCatalogProduct || Boolean(sharedMartKey) });
   }
   return [...merged.values()];
 }

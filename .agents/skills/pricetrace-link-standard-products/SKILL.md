@@ -83,8 +83,10 @@ exception is the audited same-channel exact-name rule:
 
 Every new proposal must include the frozen receipt catalog namespace and a
 `sameChannelNameRule` evaluation, even when the outcome is `not_applicable`.
-Do not add representative-image changes unless they are an explicit planned
-effect.
+For an approval-ready positive link, retrieve the frozen official HTTPS image
+metadata, propose it as the standard-family representative image, and include
+`update_representative_image`. Never overwrite a different or uploaded image;
+report that collision instead.
 
 Run:
 
@@ -120,6 +122,7 @@ Present it as one compact block. Do not repeat the investigation narrative:
 공식 상품 기록: {sourceNameRaw} · {channelId}/{sourceProductCodeNamespace}:{sourceProductCode} · {specificationTextRaw}
 적용 상품: {brand} · {productFamilyName} · {variantName}
 쿠팡가: {totalPriceKrw}원/{quantity}개 · {observedDate} | 미등록
+대표 이미지: {action} · {full official image URL} · 표준 상품군
 연결 작업: {plannedEffects in Korean, comma-separated}
 승인 대상: {caseId} · {targetFingerprint}
 승인 문구: 위 영수증·공식 코드·적용 상품·연결 작업을 승인합니다.

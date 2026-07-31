@@ -1,8 +1,8 @@
 {
-  "schemaVersion": "pricetrace-link-proposal.v2",
+  "schemaVersion": "pricetrace-link-proposal.v3",
   "caseId": "case-20260731-demo",
   "status": "approval_requested",
-  "inputFingerprint": "sha256:5d18323b56898c370c19a1e7727981cc96e71e70f551a5402f94d756a960bd6c",
+  "inputFingerprint": "sha256:c4645b3119aec15356aea40beace604ffbcbc5d45464e87851a32cc12637f870",
   "receipt": {
     "receiptId": "receipt-demo",
     "receiptItemId": "item-demo",
@@ -25,7 +25,13 @@
     "specificationTextRaw": "500 ml, one bottle",
     "sourceRefs": [
       "private-data/official/demo.json#official-code-001"
-    ]
+    ],
+    "image": {
+      "url": "https://example.com/images/official-code-001.webp",
+      "contentHash": "sha256:2222222222222222222222222222222222222222222222222222222222222222",
+      "mediaType": "image/webp",
+      "byteLength": 12345
+    }
   },
   "sameChannelNameRule": {
     "sameChannel": true,
@@ -68,6 +74,16 @@
     "missingFields": []
   },
   "coupangOffer": null,
+  "representativeImage": {
+    "scope": "standard_product_family",
+    "action": "create",
+    "sourceType": "external_url",
+    "imageUrl": "https://example.com/images/official-code-001.webp",
+    "contentHash": "sha256:2222222222222222222222222222222222222222222222222222222222222222",
+    "mediaType": "image/webp",
+    "byteLength": 12345,
+    "expectedCurrent": null
+  },
   "evidence": [
     {
       "sourceType": "receipt",
@@ -92,7 +108,7 @@
         "Official listing confirms brand, family, 500 ml content, and one-bottle package."
       ],
       "sourceRefs": [
-        "snapshot:33333333-3333-4333-8333-333333333333"
+        "private-data/official/demo.json#official-code-001"
       ]
     }
   ],
@@ -113,14 +129,15 @@
     "reuse_standard_family",
     "reuse_catalog_variant",
     "link_official_listing",
-    "verify_receipt_mapping"
+    "verify_receipt_mapping",
+    "update_representative_image"
   ],
   "approval": {
     "status": "requested",
     "approvalRef": null,
     "userApprovalText": null,
     "approvedAt": null,
-    "targetFingerprint": "sha256:01a8ca6af3450799541e59ff58e3234d708eb851694d74cc39062a5125af4128"
+    "targetFingerprint": "sha256:11b8ec429fa0d4bdbe6ec5eee730a752f011424ade881c80eebf0f02c19e1baf"
   },
   "execution": {
     "status": "not_started",

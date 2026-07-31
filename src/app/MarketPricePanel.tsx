@@ -7,7 +7,8 @@ import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import styles from "./page.module.css";
 
 type ContentUnit = "g" | "ml" | "each";
-type CatalogProduct = { id: string; canonical_name: string; brand: string | null; specification: string | null; content_amount: number | null; content_unit: ContentUnit | null; package_count: number; listing_reference_url: string | null };
+type CatalogProduct = { id: string; standard_product_id: string; canonical_name: string; brand: string | null; specification: string | null; content_amount: number | null; content_unit: ContentUnit | null; package_count: number; listing_reference_url: string | null };
+type StandardBrand = { id: string; brand: string | null };
 type StoredObservation = { id: string; seller_name: string; product_url: string; listed_price_krw: number; shipping_fee_krw: number; minimum_order_quantity: number; observed_at: string; verification_status: "pending" | "verified" | "rejected" };
 
 const initialOffer = { sellerName: "", productUrl: "", listedPriceKrw: "", shippingFeeKrw: "0", minimumOrderQuantity: "1" };
@@ -32,9 +33,22 @@ export function MarketPricePanel() {
 
   const loadProducts = useCallback(async () => {
     if (!client) return;
-    const { data, error } = await client.from("catalog_products").select("id,canonical_name,brand,specification,content_amount,content_unit,package_count,listing_reference_url").eq("status", "active").order("canonical_name");
-    if (error) setMessage(error.message);
-    else setProducts((data ?? []) as CatalogProduct[]);
+    const [catalogResult, standardResult] = await Promise.all([
+      client.from("catalog_products").select("id,standard_product_id,canonical_name,specification,content_amount,content_unit,package_count,listing_reference_url").eq("status", "active").order("canonical_name"),
+      client.from("standard_products").select("id,brand").eq("status", "active"),
+    ]);
+    if (catalogResult.error || standardResult.error) {
+      setMessage(catalogResult.error?.message ?? standardResult.error?.message ?? "상품을 불러오지 못했습니다.");
+      return;
+    }
+    const brandByStandard = new Map((standardResult.data ?? []).map((standard) => {
+      const row = standard as StandardBrand;
+      return [row.id, row.brand] as const;
+    }));
+    setProducts((catalogResult.data ?? []).map((product) => ({
+      ...product,
+      brand: brandByStandard.get(product.standard_product_id) ?? null,
+    })) as CatalogProduct[]);
   }, [client]);
 
   useEffect(() => { if (client) void client.auth.getUser().then(({ data }) => setUserId(data.user?.id ?? null)); }, [client]);

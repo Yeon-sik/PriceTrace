@@ -21,7 +21,7 @@ One proposal covers exactly one receipt item and one official-channel listing.
 Raw inputs must be frozen before investigation. A change to either input makes
 the proposal stale.
 
-The schema version is `pricetrace-link-proposal.v2`.
+The schema version is `pricetrace-link-proposal.v3`.
 
 ## 2. Identity boundaries
 
@@ -77,6 +77,7 @@ Price equality is never part of this rule.
 - `normalizedIdentity`: extracted product attributes.
 - `decision`: proposed family and variant action.
 - `coupangOffer`: optional exact-option price observation.
+- `representativeImage`: official image proposed for the standard family.
 - `evidence`: provenance-bearing evidence list.
 - `review`: independent review result.
 - `plannedEffects`: exact effect allowlist.
@@ -115,9 +116,15 @@ Required fields are:
 - `sourceNameRaw`
 - `specificationTextRaw`
 - `sourceRefs`
+- `image`
 
 `snapshotHash` represents the immutable raw snapshot stored elsewhere. A URL is
 not an immutable snapshot by itself.
+
+`image` is nullable while research is incomplete. An approval-ready positive
+proposal requires the official listing's HTTPS image `url`, SHA-256
+`contentHash`, allowed image `mediaType`, and positive `byteLength`. Missing
+official image metadata is insufficient evidence for the strict linking path.
 
 ### Same-channel name rule
 
@@ -208,6 +215,23 @@ Allowed planned effects are:
 The effect list is an allowlist, not a description. The executor may perform
 only listed effects.
 
+### Representative image
+
+The approved image is family-scoped because `standard_product_images` has one
+row per standard product family. Required fields are:
+
+- `scope`: fixed to `standard_product_family`;
+- `action`: `create` or `reuse_exact`;
+- `sourceType`: fixed to `external_url`;
+- `imageUrl`, `contentHash`, `mediaType`, and `byteLength` copied exactly from
+  `officialListing.image`;
+- `expectedCurrent`: `null` for create, or the exact current external URL for
+  reuse.
+
+The strict link path never overwrites a different external URL or an uploaded
+image. Such a collision invalidates the proposal and requires a separate image
+replacement approval path.
+
 ## 5. Evidence and review gates
 
 Every evidence item declares:
@@ -260,6 +284,7 @@ not `decision.missingFields`.
 - `normalizedIdentity`
 - `decision`
 - `coupangOffer`
+- `representativeImage`
 - `plannedEffects`
 
 Canonical JSON recursively sorts object keys and preserves array order.
@@ -283,6 +308,8 @@ An approval request is presentation-ready only when:
 - decision and review conflicts are empty;
 - `decision.missingFields` is empty;
 - `plannedEffects` is non-empty and exactly matches the verified write path;
+- a positive link includes a frozen official image, the family-scoped
+  `representativeImage`, and `update_representative_image`;
 - `execution.status = not_started`;
 - validation and both fingerprints pass.
 
@@ -292,9 +319,10 @@ The user-facing approval block must be short and fixed in this order:
 2. `공식 상품 기록`
 3. `적용 상품`
 4. `쿠팡가` only when a Coupang effect is planned
-5. `연결 작업`
-6. `승인 대상`
-7. one copy-ready `승인 문구`
+5. `대표 이미지`
+6. `연결 작업`
+7. `승인 대상`
+8. one copy-ready `승인 문구`
 
 The full source codes and full target fingerprint are never abbreviated.
 Research details remain in the proposal artifact and are expanded only on
@@ -319,6 +347,11 @@ The executor must:
 5. Use the idempotency key.
 6. Re-read state before retrying an unknown result.
 7. Verify applied effects after the write.
+
+For `update_representative_image`, the executor inserts a new HTTPS external
+image or verifies an exact existing URL in the same transaction as the core
+link. It does not overwrite. Any image collision or replay drift rolls back the
+whole transaction.
 
 No automatic next-item execution is permitted.
 

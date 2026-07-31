@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { discoverOfficialProduct, mergeOfficialProductCandidates, resolveStandardProductMapping } from "./official-product";
+import { discoverOfficialProduct, mergeOfficialProductCandidates, resolveExactStandardProductMapping, resolveMartTaggedStandardProductMapping, resolveStandardProductMapping } from "./official-product";
 
 describe("official product discovery", () => {
   it("matches a verified PX catalog product code", () => {
@@ -53,5 +53,46 @@ describe("existing standard product mappings", () => {
 
   it("does not reuse a seller-owned code from another known seller", () => {
     expect(resolveStandardProductMapping({ ...candidate, storeLabel: "일반 마트" }, [{ sourceLabel: "PX", sourceProductCode: "00123", product: "햇반" }])).toBeUndefined();
+  });
+
+  it("keeps another shared-catalog seller visible until its exact mapping is approved", () => {
+    const sharedCandidate = { ...candidate, storeLabel: "매장 B", catalogNamespace: "shared-catalog" };
+    const mappings = [{ sourceLabel: "매장 A", sourceProductCode: "00123", product: "햇반" }];
+    expect(resolveStandardProductMapping(sharedCandidate, mappings)).toBe("햇반");
+    expect(resolveExactStandardProductMapping(sharedCandidate, mappings)).toBeUndefined();
+  });
+
+  it("reuses one verified target across PX sellers when name and code match", () => {
+    const mappings = [{ sourceLabel: "와마트 일산점", sourceProductCode: "250428", martTag: "PX", productName: "베리베리스트로베리큐브", product: "berry" }];
+    expect(resolveMartTaggedStandardProductMapping({
+      sourceProductCode: "250428",
+      productName: "베리베리 스트로베리 큐브",
+      storeLabel: "국군복지단 바다마을마트",
+      martTag: "PX",
+      catalogNamespace: null,
+    }, mappings)).toBe("berry");
+  });
+
+  it("does not cross-link a different tag, name text, code, or ambiguous target", () => {
+    const mapping = { sourceLabel: "PX A", sourceProductCode: "250428", martTag: "PX", productName: "베리베리스트로베리큐브", product: "berry" };
+    const candidate = { sourceProductCode: "250428", productName: "베리베리스트로베리큐브", storeLabel: "PX B", martTag: "PX", catalogNamespace: null };
+    expect(resolveMartTaggedStandardProductMapping({ ...candidate, martTag: "일반마트" }, [mapping])).toBeUndefined();
+    expect(resolveMartTaggedStandardProductMapping({ ...candidate, productName: "베리베리스트로베리 큐브!" }, [mapping])).toBeUndefined();
+    expect(resolveMartTaggedStandardProductMapping({ ...candidate, sourceProductCode: "999999" }, [mapping])).toBeUndefined();
+    expect(resolveMartTaggedStandardProductMapping({ ...candidate, sourceProductCode: "" }, [
+      mapping,
+      { ...mapping, sourceLabel: "PX C", sourceProductCode: "999999", product: "other" },
+    ])).toBeUndefined();
+  });
+
+  it("allows a missing code only when tag and exact name identify one target", () => {
+    const mappings = [{ sourceLabel: "PX A", sourceProductCode: "250428", martTag: "PX", productName: "베리베리스트로베리큐브", product: "berry" }];
+    expect(resolveMartTaggedStandardProductMapping({
+      sourceProductCode: "",
+      productName: "베리베리 스트로베리 큐브",
+      storeLabel: "PX B",
+      martTag: "PX",
+      catalogNamespace: null,
+    }, mappings)).toBe("berry");
   });
 });

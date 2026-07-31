@@ -7,11 +7,12 @@ import { formatKrw } from "@/domain/settlement";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import { AdminReceiptRepository, localReceiptsToAdminRecords, type AdminReceiptRecord } from "@/repositories/admin-receipt.repository";
 import { AdminQualityPanel } from "./AdminQualityPanel";
+import { AdminApprovalExecutionPanel } from "./AdminApprovalExecutionPanel";
 import { StandardProductWorkspace } from "./OfficialProductPanel";
 import { MarketPricePanel } from "./MarketPricePanel";
 import styles from "./page.module.css";
 
-type AdminTab = "receipts" | "official" | "market" | "quality";
+type AdminTab = "receipts" | "official" | "approvals" | "market" | "quality";
 export function AdminPage({ candidates, receipts }: { candidates: OfficialProductCandidate[]; receipts: Receipt[] }) {
   const [tab, setTab] = useState<AdminTab>("receipts");
   return <section className={styles.browser}>
@@ -19,11 +20,13 @@ export function AdminPage({ candidates, receipts }: { candidates: OfficialProduc
     <div className={styles.adminTabs} role="tablist" aria-label="관리자 기능">
       <button role="tab" aria-selected={tab === "receipts"} onClick={() => setTab("receipts")}>영수증 기록</button>
       <button role="tab" aria-selected={tab === "official"} onClick={() => setTab("official")}>표준 상품 관리</button>
+      <button role="tab" aria-selected={tab === "approvals"} onClick={() => setTab("approvals")}>승인 실행</button>
       <button role="tab" aria-selected={tab === "market"} onClick={() => setTab("market")}>시장가</button>
       <button role="tab" aria-selected={tab === "quality"} onClick={() => setTab("quality")}>품질 검토</button>
     </div>
     {tab === "receipts" && <AdminReceiptHistory receipts={receipts} />}
     {tab === "official" && <StandardProductWorkspace candidates={candidates} revision={0} />}
+    {tab === "approvals" && <AdminApprovalExecutionPanel />}
     {tab === "market" && <MarketPricePanel />}
     {tab === "quality" && <AdminQualityPanel />}
   </section>;
