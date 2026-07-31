@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { compareCoupangPrice, distinctSellerCount, filterAndSortProductGroups, groupProductObservations, latestSellerRows, martTagFor, martTypeFor, mergeOfficialProductGroups, normalizeSellerLabel, type ProductObservationListing } from "./product-browser";
+import { categoryForProduct, compareCoupangPrice, distinctSellerCount, filterAndSortProductGroups, groupProductObservations, latestSellerRows, martTagFor, martTypeFor, mergeOfficialProductGroups, normalizeSellerLabel, type ProductObservationListing } from "./product-browser";
 import type { ReceiptItem } from "./types";
 import { createUniversalReceipt } from "./receipt.fixture";
 import { mapReceipt } from "./receipt";
@@ -10,6 +10,28 @@ function listing(date: string, price: number, code = "A1", name = "product", cat
 }
 
 describe("product browser domain", () => {
+  it.each([
+    ["월드콘 쿠키앤크림", "간식"],
+    ["더위사냥 커피", "간식"],
+    ["라라스윗 저당 생우유 모나카", "간식"],
+    ["상쾌한아침우유식빵", "식품"],
+    ["크림우동", "식품"],
+    ["순살바3종 1세트", "간식"],
+    ["닭가슴살단백질바너츠", "간식"],
+    ["즉석 해물 칼국수", "식품"],
+    ["황금밥알새우&갈릭", "식품"],
+    ["대전도시락김", "식품"],
+    ["급냉삼겹살", "신선식품"],
+    ["손질바지락", "신선식품"],
+    ["닥터지 모이스처 인 바디 5.0 바", "생활용품"],
+    ["삼각 로스트비프 40g", "식품"],
+    ["요맘때 딸기 콘", "간식"],
+    ["테이크핏 맥스 초코맛", "음료"],
+    ["네파 페넥스남드로우", "생활용품"],
+  ] as const)("classifies %s as %s without generic-word collisions", (name, category) => {
+    expect(categoryForProduct(name)).toBe(category);
+  });
+
   it("uses the explicit receipt retail channel", () => {
     const source = createUniversalReceipt(); source.merchant.retail_channel = "px";
     expect(martTypeFor(mapReceipt(source))).toBe("px");

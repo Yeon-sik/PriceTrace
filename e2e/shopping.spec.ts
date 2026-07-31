@@ -1,5 +1,31 @@
 import { expect, test } from "@playwright/test";
 
+test("전체 상품에서 공식 상품을 함께 보여 주고 상품 계층과 마트 범위를 따로 거른다", async ({ page }) => {
+  await page.goto("/PriceTrace");
+  await page.getByRole("button", { name: "상품 둘러보기 →" }).click();
+
+  const catalogTabs = page.getByRole("group", { name: "상품 데이터 계층" });
+  await expect(catalogTabs.getByRole("button", { name: "전체 상품", exact: true })).toHaveAttribute("aria-pressed", "true");
+  await expect(catalogTabs.getByRole("button", { name: "표준 상품만", exact: true })).toBeVisible();
+  await expect(catalogTabs.getByRole("button", { name: /공식 상품만/ })).toBeVisible();
+  await expect(page.getByRole("region", { name: "PX 공식 판매상품" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "표준 상품 연결 전 공식 판매상품", exact: true })).toBeVisible();
+
+  await catalogTabs.getByRole("button", { name: /공식 상품만/ }).click();
+  await expect(page.getByRole("region", { name: "PX 공식 판매상품" })).toBeVisible();
+  await expect(page.getByText("PX 공식 등재", { exact: true }).first()).toBeVisible();
+
+  await page.getByRole("button", { name: "일반 마트", exact: true }).click();
+  await expect(page.getByRole("region", { name: "PX 공식 판매상품" })).toHaveCount(0);
+  await expect(page.getByText("일반 마트 조건에 해당하는 공식 상품 컬렉션이 없습니다.", { exact: true })).toBeVisible();
+
+  await page.getByRole("button", { name: "PX (군마트)", exact: true }).click();
+  await expect(page.getByRole("region", { name: "PX 공식 판매상품" })).toBeVisible();
+
+  await catalogTabs.getByRole("button", { name: "표준 상품만", exact: true }).click();
+  await expect(page.getByRole("region", { name: "PX 공식 판매상품" })).toHaveCount(0);
+});
+
 test("공개 관측 상품을 보여 주고 새로고침 뒤에도 장바구니를 유지한다", async ({ page }) => {
   const productName = "하겐다즈 미니컵 스트로베리";
 

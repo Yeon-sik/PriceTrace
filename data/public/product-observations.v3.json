@@ -1,8 +1,8 @@
 {
   "schemaVersion": 3,
   "privacyPolicyVersion": 2,
-  "receiptIndexRevision": "bf548eaec2e76176",
-  "revision": "b06bbebf10f74f79",
+  "receiptIndexRevision": "d6a8e90a96aed71a",
+  "revision": "ad11eca5ef544b25",
   "observations": [
     {
       "id": "9f3022229e6111ae",
@@ -357,22 +357,6 @@
       "confidence": "medium"
     },
     {
-      "id": "7d8423d5a49f0fb9",
-      "receiptId": "2026-06-12_001",
-      "receiptItemId": "line_b110829a44798184",
-      "storeId": "store_e97bfaca12d23460",
-      "storeLabel": "국군복지단 바다마을마트",
-      "retailChannel": "unknown",
-      "catalogNamespace": null,
-      "observedAt": "2026-06-12",
-      "productName": "동원 안심유 야채사각 225g*2",
-      "sourceProductCode": "250351",
-      "quantity": 2,
-      "unitPriceKrw": 1390,
-      "totalPriceKrw": 2780,
-      "confidence": "medium"
-    },
-    {
       "id": "77146b10f50b7912",
       "receiptId": "2026-05-08_001",
       "receiptItemId": "line_49cbfec42e118762",
@@ -386,6 +370,22 @@
       "quantity": 1,
       "unitPriceKrw": 1390,
       "totalPriceKrw": 1390,
+      "confidence": "medium"
+    },
+    {
+      "id": "7d8423d5a49f0fb9",
+      "receiptId": "2026-06-12_001",
+      "receiptItemId": "line_b110829a44798184",
+      "storeId": "store_e97bfaca12d23460",
+      "storeLabel": "국군복지단 바다마을마트",
+      "retailChannel": "unknown",
+      "catalogNamespace": null,
+      "observedAt": "2026-06-12",
+      "productName": "동원 안심유 야채사각 225g*2",
+      "sourceProductCode": "250361",
+      "quantity": 2,
+      "unitPriceKrw": 1390,
+      "totalPriceKrw": 2780,
       "confidence": "medium"
     },
     {
@@ -446,7 +446,7 @@
       "catalogNamespace": null,
       "observedAt": "2026-05-08",
       "productName": "라라스윗 저당 생우유 모나카 14",
-      "sourceProductCode": "260084",
+      "sourceProductCode": "260384",
       "quantity": 2,
       "unitPriceKrw": 1200,
       "totalPriceKrw": 2400,

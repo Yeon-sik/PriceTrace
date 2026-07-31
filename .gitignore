@@ -55,7 +55,10 @@ vitest.config.ts
 eslint.config.mjs
 src/**/*.test.ts
 !src/domain/official-product.test.ts
+!src/domain/official-product-category.test.ts
+!src/domain/public-official-channel-catalog.test.ts
 !src/domain/standard-product-image.test.ts
+!src/repositories/public-official-channel-catalog.repository.test.ts
 tsconfig.tsbuildinfo
 .env.example
 
