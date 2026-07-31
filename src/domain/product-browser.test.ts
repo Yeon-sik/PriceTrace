@@ -105,12 +105,43 @@ describe("product browser domain", () => {
     expect(merged[0].storeLabel).toBe("PX A, PX B");
   });
 
-  it("does not merge the same code without a shared catalog namespace", () => {
+  it("keeps the same code separate when mart tags differ", () => {
     const groups = groupProductObservations([
       listing("2026-07-01", 3440, "210157", "golden rice pork", null, "Store A"),
       listing("2026-07-02", 3440, "210157", "golden rice pork", null, "Store B"),
     ]);
     expect(mergeOfficialProductGroups(groups)).toHaveLength(2);
+  });
+
+  it("merges PX sellers without a shared namespace when exact name and code match", () => {
+    const groups = groupProductObservations([
+      listing("2026-07-01", 3440, "250428", "베리베리스트로베리큐브", null, "와마트 일산점"),
+      listing("2026-07-02", 3440, "250428", "베리베리 스트로베리 큐브", null, "국군복지단 바다마을마트"),
+    ]).map((group) => ({ ...group, martType: "px" as const }));
+    const merged = mergeOfficialProductGroups(groups);
+    expect(merged).toHaveLength(1);
+    expect(merged[0].observations).toHaveLength(2);
+  });
+
+  it("keeps PX products separate when non-whitespace name text or codes differ", () => {
+    const nameMismatch = groupProductObservations([
+      listing("2026-07-01", 3440, "250428", "베리베리스트로베리큐브", null, "PX A"),
+      listing("2026-07-02", 3440, "250428", "베리베리스트로베리큐브!", null, "PX B"),
+    ]).map((group) => ({ ...group, martType: "px" as const }));
+    const codeMismatch = groupProductObservations([
+      listing("2026-07-01", 3440, "250428", "베리베리스트로베리큐브", null, "PX A"),
+      listing("2026-07-02", 3440, "999999", "베리베리스트로베리큐브", null, "PX B"),
+    ]).map((group) => ({ ...group, martType: "px" as const }));
+    expect(mergeOfficialProductGroups(nameMismatch)).toHaveLength(2);
+    expect(mergeOfficialProductGroups(codeMismatch)).toHaveLength(2);
+  });
+
+  it("merges a code-less PX record only when one compatible code exists", () => {
+    const groups = groupProductObservations([
+      listing("2026-07-01", 3440, "250428", "베리베리스트로베리큐브", null, "PX A"),
+      listing("2026-07-02", 3440, "", "베리베리 스트로베리 큐브", null, "PX B"),
+    ]).map((group) => ({ ...group, martType: "px" as const }));
+    expect(mergeOfficialProductGroups(groups)).toHaveLength(1);
   });
 
   it("keeps official variants merged by their official URL", () => {

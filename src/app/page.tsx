@@ -1,10 +1,12 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { groupProductObservations, PRODUCT_CATEGORIES, type MartType, type ProductCategory, type ProductGroup, type ProductSort } from "@/domain/product-browser";
+import { groupProductObservations, martTagFor, PRODUCT_CATEGORIES, type MartType, type ProductCategory, type ProductGroup, type ProductSort } from "@/domain/product-browser";
 import { formatKrw } from "@/domain/settlement";
+import { findUniqueOfficialExactNameMatch } from "@/domain/standard-product-registration";
 import { useAdminAccess } from "@/hooks/use-admin-access";
 import { PublicReceiptRepository } from "@/repositories/public-receipt.repository";
+import { PublicOfficialChannelCatalogRepository } from "@/repositories/public-official-channel-catalog.repository";
 import { useCartStore } from "@/stores/cart.store";
 import { AdminPage } from "./AdminPage";
 import { AuthPanel } from "./AuthPanel";
@@ -16,6 +18,8 @@ import { MarketBrowser } from "./MarketBrowser";
 import styles from "./page.module.css";
 
 const publicReceiptData = new PublicReceiptRepository().loadAll();
+const publicOfficialCatalog = new PublicOfficialChannelCatalogRepository().loadPxCatalog();
+const publicReceiptById = new Map(publicReceiptData.receipts.map((receipt) => [receipt.id, receipt]));
 type Page = "home" | "products" | "markets" | "cart" | "admin";
 
 export default function Home() {
@@ -52,7 +56,50 @@ export default function Home() {
   const cartGroups = useMemo(() => productGroups.filter((group) => lines[group.id] > 0), [lines, productGroups]);
   const cartTotal = cartGroups.reduce((sum, group) => sum + group.latestPriceKrw * lines[group.id], 0);
   const cartQuantityTotal = cartGroups.reduce((sum, group) => sum + lines[group.id], 0);
-  const officialCandidates = useMemo(() => productGroups.map((group) => ({ sourceProductCode: group.sourceProductCode, productName: group.productName, storeLabel: group.storeLabel, catalogNamespace: group.catalogNamespace })), [productGroups]);
+  const officialCandidates = useMemo(() => productGroups.map((group) => {
+    const receipt = publicReceiptById.get(group.latest.item.receiptId);
+    const officialListing = group.catalogNamespace === publicOfficialCatalog.channel.id
+      ? findUniqueOfficialExactNameMatch(publicOfficialCatalog.listings, group.productName) ?? undefined
+      : undefined;
+    const receiptRevision = [
+      "receipt-v1",
+      receipt?.publicReceiptFileName ?? group.latest.item.receiptId,
+      group.latest.item.id,
+      group.latest.observedAt,
+      group.latest.item.productName,
+      group.latest.item.sourceProductCode,
+      group.latest.item.unitPriceKrw,
+      group.latest.item.quantityValue,
+      group.latest.item.totalPriceKrw,
+    ].join(":");
+    return {
+      sourceProductCode: group.sourceProductCode,
+      productName: group.productName,
+      storeLabel: group.storeLabel,
+      martTag: martTagFor(group),
+      catalogNamespace: group.catalogNamespace,
+      receiptId: group.latest.item.receiptId,
+      receiptItemId: group.latest.item.id,
+      receiptRevision,
+      receiptObservedAt: group.latest.observedAt,
+      receiptUnitPriceKrw: group.latest.item.unitPriceKrw,
+      receiptQuantity: group.latest.item.quantityValue,
+      receiptTotalPriceKrw: group.latest.item.totalPriceKrw,
+      officialChannelId: officialListing ? publicOfficialCatalog.channel.id : undefined,
+      officialSourceProductCodeNamespace: officialListing?.sourceProductCodeNamespace,
+      officialSourceProductCode: officialListing?.sourceProductCode,
+      officialSnapshotId: officialListing ? publicOfficialCatalog.sourceSnapshot.id : undefined,
+      officialSnapshotHash: officialListing ? publicOfficialCatalog.sourceSnapshot.contentHash : undefined,
+      officialSourceNameRaw: officialListing?.sourceNameRaw,
+      officialVendorNameRaw: officialListing?.vendorNameRaw ?? undefined,
+      officialSpecificationTextRaw: officialListing?.specificationTextRaw ?? undefined,
+      officialSourceRefs: officialListing?.sourceRefs,
+      officialImageUrl: officialListing?.image?.url,
+      officialImageContentHash: officialListing?.image?.contentHash,
+      officialImageMediaType: officialListing?.image?.mediaType,
+      officialImageByteLength: officialListing?.image?.byteLength,
+    };
+  }), [productGroups]);
 
   function openCartModal(group: ProductGroup) {
     setCartGroupToAdd(group);

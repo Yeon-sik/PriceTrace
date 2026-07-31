@@ -2,19 +2,100 @@ export type OfficialProductCandidate = {
   sourceProductCode: string;
   productName: string;
   storeLabel: string;
+  /** User-facing channel tag used for tightly scoped cross-seller reuse (for example PX). */
+  martTag?: string;
   /** Explicit shared catalog only. Null means this seller owns the code namespace. */
   catalogNamespace: string | null;
   storeLabels?: string[];
+  receiptId?: string;
+  receiptItemId?: string;
+  receiptRevision?: string;
+  receiptObservedAt?: string;
+  receiptUnitPriceKrw?: number;
+  receiptQuantity?: number;
+  receiptTotalPriceKrw?: number;
+  officialChannelId?: string;
+  officialSourceProductCodeNamespace?: string;
+  officialSourceProductCode?: string;
+  officialSnapshotId?: string;
+  officialSnapshotHash?: string;
+  officialSourceNameRaw?: string;
+  officialVendorNameRaw?: string;
+  officialSpecificationTextRaw?: string;
+  officialSourceRefs?: string[];
+  officialImageUrl?: string;
+  officialImageContentHash?: string;
+  officialImageMediaType?: string;
+  officialImageByteLength?: number;
 };
 
 export type StandardProductMapping<T> = {
   sourceLabel: string;
   sourceProductCode: string;
+  martTag?: string;
+  productName?: string;
   product: T;
 };
 
 function sourceMappingKey(sourceLabel: string, sourceProductCode: string) {
   return `${sourceLabel.trim().toLocaleLowerCase("ko-KR")}:${sourceProductCode.trim()}`;
+}
+
+export function resolveExactStandardProductMapping<T>(
+  candidate: OfficialProductCandidate,
+  mappings: StandardProductMapping<T>[],
+) {
+  const exact = new Map(
+    mappings.map((mapping) => [
+      sourceMappingKey(mapping.sourceLabel, mapping.sourceProductCode),
+      mapping.product,
+    ]),
+  );
+  return exact.get(sourceMappingKey(candidate.storeLabel, candidate.sourceProductCode));
+}
+
+export function normalizeExactProductName(value: string) {
+  return value.replace(/\p{White_Space}+/gu, "");
+}
+
+function normalizedMartTag(value: string | undefined) {
+  return value?.trim().toLocaleLowerCase("ko-KR") ?? "";
+}
+
+/**
+ * Reuses an already verified target across seller branches only when the mart
+ * tag and whitespace-only-normalized name match. Product codes must also match
+ * when both observations provide one. An ambiguous target is never selected.
+ */
+export function resolveMartTaggedStandardProductMapping<T>(
+  candidate: OfficialProductCandidate,
+  mappings: StandardProductMapping<T>[],
+) {
+  const sellerLabels = candidate.storeLabels?.length
+    ? candidate.storeLabels
+    : [candidate.storeLabel];
+  for (const sellerLabel of sellerLabels) {
+    const exactCandidate = { ...candidate, storeLabel: sellerLabel };
+    const exact = resolveExactStandardProductMapping(exactCandidate, mappings);
+    if (exact !== undefined) return exact;
+  }
+
+  const candidateMartTag = normalizedMartTag(candidate.martTag);
+  const candidateName = normalizeExactProductName(candidate.productName);
+  if (!candidateMartTag || !candidateName) return undefined;
+
+  const candidateCode = candidate.sourceProductCode.trim();
+  const matchedProducts = new Map<T, T>();
+  for (const mapping of mappings) {
+    const mappingCode = mapping.sourceProductCode.trim();
+    if (
+      normalizedMartTag(mapping.martTag) !== candidateMartTag
+      || normalizeExactProductName(mapping.productName ?? "") !== candidateName
+      || (candidateCode && mappingCode && candidateCode !== mappingCode)
+    ) continue;
+    matchedProducts.set(mapping.product, mapping.product);
+  }
+  return matchedProducts.size === 1 ? [...matchedProducts.values()][0] : undefined;
 }
 
 /**

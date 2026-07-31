@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   filterAndSortOfficialChannelListings,
+  officialChannelRepresentativeImageUrl,
   partitionOfficialChannelListingsByStandardProduct,
   PublicOfficialChannelCatalogSchema,
   PublicOfficialChannelStandardLinkRegistrySchema,
@@ -137,6 +138,20 @@ describe("public official channel catalog", () => {
     expect(partitioned.linkedByStandardProduct.get("11111111-1111-4111-8111-111111111111")?.map(
       (listing) => listing.sourceProductCode,
     )).toEqual(["2"]);
+  });
+
+  it("selects the linked official product image as the representative image", () => {
+    const listings = catalog().listings;
+    listings[0].image = {
+      url: "https://www.welfare.mil.kr/shop/imgView.do?p_code=2&type=1",
+      contentHash: `sha256:${"b".repeat(64)}`,
+      mediaType: "image/jpeg",
+      byteLength: 1234,
+    };
+
+    expect(officialChannelRepresentativeImageUrl(listings)).toBe(
+      "https://www.welfare.mil.kr/shop/imgView.do?p_code=2&type=1",
+    );
   });
 
   it("rejects duplicate source identities in the manual standard link registry", () => {

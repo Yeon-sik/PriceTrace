@@ -33,7 +33,13 @@ const officialListingSchema = z
     snapshotHash: fingerprintSchema,
     sourceNameRaw: z.string().trim().min(1),
     specificationTextRaw: nullableText,
-    sourceRefs: z.array(z.string().trim().min(1)).min(1)
+    sourceRefs: z.array(z.string().trim().min(1)).min(1),
+    image: z.object({
+      url: z.string().url().startsWith("https://"),
+      contentHash: fingerprintSchema,
+      mediaType: z.enum(["image/jpeg", "image/png", "image/webp"]),
+      byteLength: z.number().int().positive()
+    }).nullable()
   })
   .strict();
 
@@ -150,6 +156,20 @@ const effectSchema = z.enum([
   "update_representative_image"
 ]);
 
+const representativeImageSchema = z.object({
+  scope: z.literal("standard_product_family"),
+  action: z.enum(["create", "reuse_exact"]),
+  sourceType: z.literal("external_url"),
+  imageUrl: z.string().url().startsWith("https://"),
+  contentHash: fingerprintSchema,
+  mediaType: z.enum(["image/jpeg", "image/png", "image/webp"]),
+  byteLength: z.number().int().positive(),
+  expectedCurrent: z.object({
+    sourceType: z.literal("external_url"),
+    imageUrl: z.string().url().startsWith("https://")
+  }).strict().nullable()
+}).strict();
+
 const approvalSchema = z
   .object({
     status: z.enum(["not_requested", "requested", "approved", "expired"]),
@@ -171,7 +191,7 @@ const executionSchema = z
 
 const proposalSchema = z
   .object({
-    schemaVersion: z.literal("pricetrace-link-proposal.v2"),
+    schemaVersion: z.literal("pricetrace-link-proposal.v3"),
     caseId: z.string().trim().min(1),
     status: z.enum([
       "draft",
@@ -190,6 +210,7 @@ const proposalSchema = z
     normalizedIdentity: normalizedIdentitySchema,
     decision: decisionSchema,
     coupangOffer: coupangOfferSchema.nullable(),
+    representativeImage: representativeImageSchema.nullable(),
     evidence: z.array(evidenceSchema).min(1),
     review: reviewSchema,
     plannedEffects: z.array(effectSchema),
@@ -413,6 +434,80 @@ const proposalSchema = z
       );
     }
 
+    const imageEffect = proposal.plannedEffects.includes(
+      "update_representative_image"
+    );
+    if (positiveDecision && proposal.status === "approval_requested") {
+      if (!proposal.officialListing.image || !proposal.representativeImage) {
+        issue(
+          ["representativeImage"],
+          "approval_requested requires a frozen official image and family representative-image target"
+        );
+      }
+      if (!imageEffect) {
+        issue(
+          ["plannedEffects"],
+          "approval_requested requires update_representative_image"
+        );
+      }
+      const officialSourceId = [
+        proposal.officialListing.channelId,
+        proposal.officialListing.sourceProductCodeNamespace,
+        proposal.officialListing.sourceProductCode
+      ].join(":");
+      const hasImageProvenance = proposal.evidence.some((item) =>
+        item.sourceType === "official_channel" &&
+        item.authority === "primary" &&
+        item.sourceId === officialSourceId &&
+        item.sourceRefs.some((sourceRef) =>
+          proposal.officialListing.sourceRefs.includes(sourceRef)
+        )
+      );
+      if (!hasImageProvenance) {
+        issue(
+          ["evidence"],
+          "official representative image requires matching primary snapshot provenance"
+        );
+      }
+    }
+    if (imageEffect && (!proposal.officialListing.image || !proposal.representativeImage)) {
+      issue(
+        ["representativeImage"],
+        "update_representative_image requires frozen official image metadata"
+      );
+    }
+    if (proposal.officialListing.image && proposal.representativeImage) {
+      const image = proposal.officialListing.image;
+      const targetImage = proposal.representativeImage;
+      if (
+        targetImage.imageUrl !== image.url ||
+        targetImage.contentHash !== image.contentHash ||
+        targetImage.mediaType !== image.mediaType ||
+        targetImage.byteLength !== image.byteLength
+      ) {
+        issue(
+          ["representativeImage"],
+          "representative image must exactly match the frozen official image"
+        );
+      }
+      if (targetImage.action === "create" && targetImage.expectedCurrent !== null) {
+        issue(
+          ["representativeImage", "expectedCurrent"],
+          "create requires expectedCurrent = null"
+        );
+      }
+      if (
+        targetImage.action === "reuse_exact" &&
+        (!targetImage.expectedCurrent ||
+          targetImage.expectedCurrent.imageUrl !== targetImage.imageUrl)
+      ) {
+        issue(
+          ["representativeImage", "expectedCurrent"],
+          "reuse_exact requires the same existing external image URL"
+        );
+      }
+    }
+
     if (proposal.coupangOffer) {
       const hasMaxQuantity = proposal.coupangOffer.maxBundleQuantity !== null;
       const hasMaxPrice =
@@ -562,6 +657,7 @@ function calculateFingerprints(proposal) {
     normalizedIdentity: proposal.normalizedIdentity,
     decision: proposal.decision,
     coupangOffer: proposal.coupangOffer,
+    representativeImage: proposal.representativeImage,
     plannedEffects: proposal.plannedEffects
   });
 

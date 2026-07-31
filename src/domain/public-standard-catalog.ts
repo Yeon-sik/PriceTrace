@@ -110,6 +110,7 @@ export function buildPublicStandardCatalogIndex(rows: PublicStandardCatalogRow[]
   const catalogSpecs = new Map<string, ProductSpecification & { standardProductId: string }>();
   const standardNames = new Map<string, string>();
   const coupangByStandard = new Map<string, PublicCoupangPrice>();
+  const coupangByCatalog = new Map<string, PublicCoupangPrice>();
 
   for (const row of rows) {
     if (row.source_label) {
@@ -136,20 +137,25 @@ export function buildPublicStandardCatalogIndex(rows: PublicStandardCatalogRow[]
       || row.coupang_observed_at === null
     ) continue;
 
-    const existing = coupangByStandard.get(row.standard_product_id);
-    if (!existing || row.coupang_observed_at > existing.observedAt) {
-      coupangByStandard.set(row.standard_product_id, {
-        listedPriceKrw: row.coupang_listed_price_krw,
-        quantity: row.coupang_quantity,
-        maxBundleQuantity: row.coupang_max_bundle_quantity,
-        maxBundleListedPriceKrw: row.coupang_max_bundle_listed_price_krw,
-        contentAmount: row.coupang_content_amount,
-        contentUnit: row.coupang_content_unit,
-        productUrl: row.coupang_product_url,
-        observedAt: row.coupang_observed_at,
-      });
+    const observation = {
+      listedPriceKrw: row.coupang_listed_price_krw,
+      quantity: row.coupang_quantity,
+      maxBundleQuantity: row.coupang_max_bundle_quantity,
+      maxBundleListedPriceKrw: row.coupang_max_bundle_listed_price_krw,
+      contentAmount: row.coupang_content_amount,
+      contentUnit: row.coupang_content_unit,
+      productUrl: row.coupang_product_url,
+      observedAt: row.coupang_observed_at,
+    };
+    const existingCatalogPrice = coupangByCatalog.get(row.catalog_product_id);
+    if (!existingCatalogPrice || row.coupang_observed_at > existingCatalogPrice.observedAt) {
+      coupangByCatalog.set(row.catalog_product_id, observation);
+    }
+    const existingStandardPrice = coupangByStandard.get(row.standard_product_id);
+    if (!existingStandardPrice || row.coupang_observed_at > existingStandardPrice.observedAt) {
+      coupangByStandard.set(row.standard_product_id, observation);
     }
   }
 
-  return { standardMappings, exactStandardMappings, catalogSpecs, standardNames, coupangByStandard };
+  return { standardMappings, exactStandardMappings, catalogSpecs, standardNames, coupangByCatalog, coupangByStandard };
 }

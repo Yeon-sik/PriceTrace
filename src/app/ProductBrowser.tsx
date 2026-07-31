@@ -1,15 +1,16 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { categoryForProduct, compareCoupangPrice, distinctSellerCount, filterAndSortProductGroups, latestSellerRows, mergeOfficialProductGroups, PRODUCT_CATEGORIES, type CoupangPriceComparison, type MartType, type ProductCategory, type ProductGroup, type ProductSort } from "@/domain/product-browser";
+import { categoryForProduct, compareCoupangPrice, distinctSellerCount, filterAndSortProductGroups, latestSellerRows, martTagFor, mergeOfficialProductGroups, PRODUCT_CATEGORIES, type CoupangPriceComparison, type MartType, type ProductCategory, type ProductGroup, type ProductSort } from "@/domain/product-browser";
 import { buildPublicStandardCatalogIndex, publicStandardMappingKey, PublicStandardCatalogRowsSchema, type PublicCoupangPrice } from "@/domain/public-standard-catalog";
 import { resolveCoupangPrice, type ResolvedCoupangPrice } from "@/domain/coupang-price";
 import { sellerPricePointsFromGroup, summarizeSellerPrices } from "@/domain/seller-price-insights";
 import { formatKrw } from "@/domain/settlement";
-import { officialProductCandidateKey, seededOfficialProducts, type OfficialProductRecord } from "@/domain/official-product";
+import { officialProductCandidateKey, resolveMartTaggedStandardProductMapping, seededOfficialProducts, type OfficialProductRecord, type StandardProductMapping } from "@/domain/official-product";
 import { normalizeMarketPrice, type ProductSpecification } from "@/domain/canonical-price";
 import {
   filterAndSortOfficialChannelListings,
+  officialChannelRepresentativeImageUrl,
   partitionOfficialChannelListingsByStandardProduct,
   type PublicOfficialChannelListing,
 } from "@/domain/public-official-channel-catalog";
@@ -27,7 +28,7 @@ const officialProductRepository = new OfficialProductRepository();
 const publicPxCatalog = new PublicOfficialChannelCatalogRepository().loadPxCatalog();
 type CatalogView = "all" | "standard" | "official";
 
-export type StandardProductItem = ProductGroup & { unitPriceLabel: string; unitPriceKrw: number; packageLabel: string; referenceUnit: number };
+export type StandardProductItem = ProductGroup & { catalogProductId: string; unitPriceLabel: string; unitPriceKrw: number; packageLabel: string; referenceUnit: number };
 
 export type CoupangPrice = ResolvedCoupangPrice;
 
@@ -146,7 +147,7 @@ export function ProductBrowser({ groups, query, setQuery, category, setCategory,
   const [catalogSpecs, setCatalogSpecs] = useState<Map<string, ProductSpecification & { standardProductId: string }>>(new Map());
   const [standardNames, setStandardNames] = useState<Map<string, string>>(new Map());
   const [standardImages, setStandardImages] = useState<Map<string, string>>(new Map());
-  const [coupangByStandard, setCoupangByStandard] = useState<Map<string, PublicCoupangPrice>>(new Map());
+  const [coupangByCatalog, setCoupangByCatalog] = useState<Map<string, PublicCoupangPrice>>(new Map());
   const [catalogNotice, setCatalogNotice] = useState("");
   const [catalogView, setCatalogView] = useState<CatalogView>("all");
   const [openStandardId, setOpenStandardId] = useState<string | null>(null);
@@ -187,7 +188,7 @@ export function ProductBrowser({ groups, query, setQuery, category, setCategory,
           }
           specs = publicIndex.catalogSpecs;
           names = publicIndex.standardNames;
-          coupangPrices = publicIndex.coupangByStandard;
+          coupangPrices = publicIndex.coupangByCatalog;
           publicCatalogReady = true;
           coupangReady = true;
         }
@@ -204,7 +205,7 @@ export function ProductBrowser({ groups, query, setQuery, category, setCategory,
           client.from("source_product_mappings").select("source_label,source_product_code,catalog_product_id").eq("review_status", "verified"),
           client.from("catalog_products").select("id,standard_product_id,content_amount,content_unit,package_count,reference_unit").eq("status", "active").eq("specification_status", "verified"),
           client.from("standard_products").select("id,canonical_name").eq("status", "active"),
-          client.from("standard_product_coupang_prices").select("standard_product_id,listed_price_krw,quantity,content_amount,content_unit,max_bundle_quantity,max_bundle_listed_price_krw,product_url,observed_at").order("observed_at", { ascending: false }),
+          client.from("standard_product_coupang_prices").select("catalog_product_id,listed_price_krw,quantity,content_amount,content_unit,max_bundle_quantity,max_bundle_listed_price_krw,product_url,observed_at").not("catalog_product_id", "is", null).order("observed_at", { ascending: false }),
         ]);
         if (!mappingResult.error) {
           for (const mapping of mappingResult.data ?? []) {
@@ -228,9 +229,10 @@ export function ProductBrowser({ groups, query, setQuery, category, setCategory,
         if (!coupangResult.error) {
           const mergedCoupang = new Map(coupangPrices);
           for (const row of coupangResult.data ?? []) {
-            const standardProductId = row.standard_product_id as string;
-            const existing = mergedCoupang.get(standardProductId);
-            if (!existing || (row.observed_at as string) > existing.observedAt) mergedCoupang.set(standardProductId, {
+            const catalogProductId = row.catalog_product_id as string | null;
+            if (!catalogProductId) continue;
+            const existing = mergedCoupang.get(catalogProductId);
+            if (!existing || (row.observed_at as string) > existing.observedAt) mergedCoupang.set(catalogProductId, {
               listedPriceKrw: row.listed_price_krw as number,
               quantity: row.quantity as number,
               maxBundleQuantity: row.max_bundle_quantity as number | null,
@@ -253,7 +255,7 @@ export function ProductBrowser({ groups, query, setQuery, category, setCategory,
       setCatalogSpecs(specs);
       setStandardNames(names);
       setStandardImages(images);
-      setCoupangByStandard(coupangPrices);
+      setCoupangByCatalog(coupangPrices);
       setCatalogNotice(
         !publicCatalogReady && !signedInCatalogReady
           ? "표준 상품 정보를 불러오지 못해 현재는 개별 상품으로 표시합니다."
@@ -271,15 +273,35 @@ export function ProductBrowser({ groups, query, setQuery, category, setCategory,
     const standardBuckets = new Map<string, StandardProductItem[]>();
     const historyBuckets = new Map<string, PriceHistoryPoint[]>();
     const regular: ProductGroup[] = [];
+    const identityAwareMappings: StandardProductMapping<string>[] = groups.flatMap((group) => {
+      const catalogProductId = exactStandardMappings.get(
+        publicStandardMappingKey(group.storeLabel, group.sourceProductCode),
+      );
+      return catalogProductId
+        ? [{
+            sourceLabel: group.storeLabel,
+            sourceProductCode: group.sourceProductCode,
+            martTag: martTagFor(group),
+            productName: group.productName,
+            product: catalogProductId,
+          }]
+        : [];
+    });
     for (const group of groups) {
       const key = officialProductCandidateKey(group);
       const withOfficial = officialProducts[key] ? { ...group, officialProduct: officialProducts[key] } : group;
-      const catalogProductId = exactStandardMappings.get(publicStandardMappingKey(group.storeLabel, group.sourceProductCode))
+      const catalogProductId = resolveMartTaggedStandardProductMapping({
+        sourceProductCode: group.sourceProductCode,
+        productName: group.productName,
+        storeLabel: group.storeLabel,
+        martTag: martTagFor(group),
+        catalogNamespace: group.catalogNamespace,
+      }, identityAwareMappings)
         ?? (group.catalogNamespace ? standardMappings.get(group.sourceProductCode) : undefined);
       const spec = catalogProductId ? catalogSpecs.get(catalogProductId) : undefined;
-      if (!spec) { regular.push(withOfficial); continue; }
+      if (!catalogProductId || !spec) { regular.push(withOfficial); continue; }
       const unitPrice = normalizeMarketPrice({ sellerName: group.storeLabel, listedPriceKrw: group.latestPriceKrw, shippingFeeKrw: 0, minimumOrderQuantity: 1, observedAt: group.latest.observedAt, verificationStatus: "verified" }, spec);
-      const item: StandardProductItem = { ...withOfficial, unitPriceLabel: unitPrice.referenceLabel, unitPriceKrw: unitPrice.pricePerReferenceUnitKrw, packageLabel: formatPackageLabel(spec), referenceUnit: spec.referenceUnit ?? 100 };
+      const item: StandardProductItem = { ...withOfficial, catalogProductId, unitPriceLabel: unitPrice.referenceLabel, unitPriceKrw: unitPrice.pricePerReferenceUnitKrw, packageLabel: formatPackageLabel(spec), referenceUnit: spec.referenceUnit ?? 100 };
       standardBuckets.set(spec.standardProductId, [...(standardBuckets.get(spec.standardProductId) ?? []), item]);
       const historyPoints = group.observations.map((observation): PriceHistoryPoint => {
         const normalized = normalizeMarketPrice({ sellerName: group.storeLabel, listedPriceKrw: observation.item.unitPriceKrw, shippingFeeKrw: 0, minimumOrderQuantity: 1, observedAt: observation.observedAt, verificationStatus: "verified" }, spec);
@@ -291,7 +313,7 @@ export function ProductBrowser({ groups, query, setQuery, category, setCategory,
       const ordered = [...items].sort((a, b) => a.unitPriceKrw - b.unitPriceKrw);
       const lowest = ordered[0];
       const name = standardNames.get(standardProductId) ?? lowest.productName;
-      const coupangEntry = coupangByStandard.get(standardProductId);
+      const coupangEntry = coupangByCatalog.get(lowest.catalogProductId);
       const coupangPrice = coupangEntry ? buildCoupangPrice(coupangEntry, lowest.referenceUnit) : null;
       const coupangComparison = compareCoupangPrice(lowest, coupangPrice?.requiredOffer ?? null);
       const comparableItems = ordered.filter((item) => item.unitPriceLabel === lowest.unitPriceLabel);
@@ -301,10 +323,12 @@ export function ProductBrowser({ groups, query, setQuery, category, setCategory,
         if (!existing || point.unitPriceKrw < existing.unitPriceKrw) bestByDate.set(point.date, point);
       }
       const priceHistory = [...bestByDate.values()].sort((a, b) => b.date.localeCompare(a.date)).slice(0, 7);
+      const officialListings = linkedByStandardProduct.get(standardProductId) ?? [];
       return {
         id: `standard:${standardProductId}`,
         name,
-        imageUrl: standardImages.get(standardProductId),
+        imageUrl: officialChannelRepresentativeImageUrl(officialListings)
+          ?? standardImages.get(standardProductId),
         category: categoryForProduct(name),
         items: ordered,
         lowestUnitPriceKrw: lowest.unitPriceKrw,
@@ -317,11 +341,11 @@ export function ProductBrowser({ groups, query, setQuery, category, setCategory,
         coupangPrice,
         coupangComparison,
         priceHistory,
-        officialListings: linkedByStandardProduct.get(standardProductId) ?? [],
+        officialListings,
       };
     });
     return { productGroups: regular, standardGroups: standards };
-  }, [groups, officialProducts, standardMappings, exactStandardMappings, catalogSpecs, standardNames, standardImages, coupangByStandard, linkedByStandardProduct]);
+  }, [groups, officialProducts, standardMappings, exactStandardMappings, catalogSpecs, standardNames, standardImages, coupangByCatalog, linkedByStandardProduct]);
 
   const stores = useMemo(() => [...new Set([
     ...productGroups.filter((group) => martType === "all" || group.martType === martType).map((group) => group.storeLabel),
@@ -339,7 +363,8 @@ export function ProductBrowser({ groups, query, setQuery, category, setCategory,
         id: `official-standard:${standardProductId}`,
         standardProductId,
         name,
-        imageUrl: standardImages.get(standardProductId) ?? listings.find((listing) => listing.image)?.image?.url,
+        imageUrl: officialChannelRepresentativeImageUrl(listings)
+          ?? standardImages.get(standardProductId),
         category: inferredCategory === "미분류" ? listings[0].category : inferredCategory,
         listings,
       };
@@ -364,7 +389,7 @@ export function ProductBrowser({ groups, query, setQuery, category, setCategory,
         const items = standard.items.filter((item) => (martType === "all" || item.martType === martType) && (selectedStore === "all" || item.storeLabel === selectedStore));
         if (items.length === 0) return { ...standard, items, officialListings };
         const lowest = [...items].sort((left, right) => left.unitPriceKrw - right.unitPriceKrw || right.latest.observedAt.localeCompare(left.latest.observedAt))[0];
-        const coupangEntry = coupangByStandard.get(standard.id.replace("standard:", ""));
+        const coupangEntry = coupangByCatalog.get(lowest.catalogProductId);
         const coupangPrice = coupangEntry ? buildCoupangPrice(coupangEntry, lowest.referenceUnit) : standard.coupangPrice;
         const coupangComparison = compareCoupangPrice(lowest, coupangPrice?.requiredOffer ?? null);
         const comparableItems = items.filter((item) => item.unitPriceLabel === lowest.unitPriceLabel);
@@ -395,7 +420,7 @@ export function ProductBrowser({ groups, query, setQuery, category, setCategory,
         if (sort === "sellers") return b.sellerCount - a.sellerCount || a.name.localeCompare(b.name);
         return a.lowestUnitPriceKrw - b.lowestUnitPriceKrw || a.name.localeCompare(b.name);
       });
-  }, [standardGroups, coupangByStandard, query, category, martType, officialListingsEligible, selectedStore, sort]);
+  }, [standardGroups, coupangByCatalog, query, category, martType, officialListingsEligible, selectedStore, sort]);
 
   const gridEntries = useMemo(() => {
     type Entry =

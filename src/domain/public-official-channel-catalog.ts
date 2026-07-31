@@ -231,6 +231,12 @@ export function partitionOfficialChannelListingsByStandardProduct(
   return { linkedByStandardProduct, standaloneListings };
 }
 
+export function officialChannelRepresentativeImageUrl(
+  listings: PublicOfficialChannelListing[],
+) {
+  return listings.find((listing) => listing.image !== null)?.image?.url;
+}
+
 export function filterAndSortOfficialChannelListings(
   listings: PublicOfficialChannelListing[],
   query: string,

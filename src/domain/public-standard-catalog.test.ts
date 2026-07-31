@@ -143,4 +143,33 @@ describe("public standard catalog", () => {
       contentUnit: "g",
     });
   });
+
+  it("keeps Coupang observations isolated by exact catalog variant", () => {
+    const firstCatalogProductId = "22222222-2222-4222-8222-222222222222";
+    const secondCatalogProductId = "33333333-3333-4333-8333-333333333333";
+    const parsed = PublicStandardCatalogRowsSchema.parse([
+      row({
+        catalog_product_id: firstCatalogProductId,
+        coupang_listed_price_krw: 4_380,
+        coupang_quantity: 3,
+        coupang_content_amount: 52,
+        coupang_content_unit: "g",
+        coupang_product_url: "https://www.coupang.com/vp/products/52",
+        coupang_observed_at: "2026-07-31T00:00:00Z",
+      }),
+      row({
+        source_product_code: "other",
+        catalog_product_id: secondCatalogProductId,
+        coupang_listed_price_krw: 7_900,
+        coupang_quantity: 1,
+        coupang_content_amount: 104,
+        coupang_content_unit: "g",
+        coupang_product_url: "https://www.coupang.com/vp/products/104",
+        coupang_observed_at: "2026-07-31T00:00:00Z",
+      }),
+    ]);
+    const index = buildPublicStandardCatalogIndex(parsed);
+    expect(index.coupangByCatalog.get(firstCatalogProductId)?.listedPriceKrw).toBe(4_380);
+    expect(index.coupangByCatalog.get(secondCatalogProductId)?.listedPriceKrw).toBe(7_900);
+  });
 });

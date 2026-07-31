@@ -11,6 +11,23 @@ export const placeholderCatalogSpecification = {
   referenceUnit: 100 as ReferenceUnit,
 };
 
+const officialPackageCountPatterns = [
+  /(\d+)\s*(?:개입|개|입|팩)(?![가-힣A-Za-z0-9])/u,
+  /(?:^|\d(?:\.\d+)?\s*(?:kg|g|ml|l)|[^A-Za-z0-9])[x×]\s*(\d+)(?!\d)/iu,
+];
+
+export function inferOfficialPackageCount(sourceNameRaw: string): number {
+  const normalizedName = sourceNameRaw.normalize("NFKC");
+  for (const pattern of officialPackageCountPatterns) {
+    const matchedCount = pattern.exec(normalizedName)?.[1];
+    if (!matchedCount) continue;
+
+    const packageCount = Number(matchedCount);
+    if (Number.isSafeInteger(packageCount) && packageCount > 0) return packageCount;
+  }
+  return 1;
+}
+
 export function resolveCatalogSpecification(
   status: CatalogSpecificationStatus,
   values: {
