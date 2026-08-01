@@ -205,7 +205,7 @@ export function ProductBrowser({ groups, query, setQuery, category, setCategory,
           client.from("source_product_mappings").select("source_label,source_product_code,catalog_product_id").eq("review_status", "verified"),
           client.from("catalog_products").select("id,standard_product_id,content_amount,content_unit,package_count,reference_unit").eq("status", "active").eq("specification_status", "verified"),
           client.from("standard_products").select("id,canonical_name").eq("status", "active"),
-          client.from("standard_product_coupang_prices").select("catalog_product_id,listed_price_krw,quantity,content_amount,content_unit,max_bundle_quantity,max_bundle_listed_price_krw,product_url,observed_at").not("catalog_product_id", "is", null).order("observed_at", { ascending: false }),
+          client.from("standard_product_coupang_prices").select("standard_product_id,listed_price_krw,quantity,content_amount,content_unit,max_bundle_quantity,max_bundle_listed_price_krw,product_url,observed_at").order("observed_at", { ascending: false }),
         ]);
         if (!mappingResult.error) {
           for (const mapping of mappingResult.data ?? []) {
@@ -229,10 +229,10 @@ export function ProductBrowser({ groups, query, setQuery, category, setCategory,
         if (!coupangResult.error) {
           const mergedCoupang = new Map(coupangPrices);
           for (const row of coupangResult.data ?? []) {
-            const catalogProductId = row.catalog_product_id as string | null;
-            if (!catalogProductId) continue;
-            const existing = mergedCoupang.get(catalogProductId);
-            if (!existing || (row.observed_at as string) > existing.observedAt) mergedCoupang.set(catalogProductId, {
+            const standardProductId = row.standard_product_id as string | null;
+            if (!standardProductId) continue;
+            const existing = mergedCoupang.get(standardProductId);
+            if (!existing || (row.observed_at as string) > existing.observedAt) mergedCoupang.set(standardProductId, {
               listedPriceKrw: row.listed_price_krw as number,
               quantity: row.quantity as number,
               maxBundleQuantity: row.max_bundle_quantity as number | null,

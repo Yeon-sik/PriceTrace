@@ -38,6 +38,7 @@ declare
   v_source_namespace text := '__strict_probe_namespace';
   v_source_label text := '__strict_probe_store';
   v_brand text := '__strict_probe_brand';
+  v_variant_name text := p_official_name || ' 52g';
   v_case_token text := md5(p_case_id);
   v_image_url text := coalesce(
     p_image_url,
@@ -136,8 +137,7 @@ begin
       'importedOfficialFields', jsonb_build_array(
         'brand',
         'contentAmount',
-        'contentUnit',
-        'packageCount'
+        'contentUnit'
       )
     ),
     'officialSpecificationCheck', jsonb_build_object(
@@ -151,7 +151,7 @@ begin
     'normalizedIdentity', jsonb_build_object(
       'brand', v_brand,
       'productFamilyName', p_official_name,
-      'variantName', p_official_name,
+      'variantName', v_variant_name,
       'specificationStatus', 'verified',
       'contentAmount', 52,
       'contentUnit', 'g',
@@ -173,7 +173,7 @@ begin
       'proposedStandardName', case
         when p_standard_product_id is null then p_official_name else null end,
       'proposedVariantName', case
-        when p_catalog_product_id is null then p_official_name else null end,
+        when p_catalog_product_id is null then v_variant_name else null end,
       'confidence', 'high',
       'matchedFields', coalesce(
         p_matched_fields,
@@ -276,7 +276,7 @@ begin
     || ' · 공식 ' || v_channel_id || '/' || v_source_namespace || ':'
     || p_official_source_code
     || ' · ' || v_brand || ' ' || p_official_name
-    || ' / ' || p_official_name
+    || ' / ' || v_variant_name
     || ' · ' || (
       select string_agg(value, ',' order by ordinal)
       from jsonb_array_elements_text(v_effects)
@@ -308,7 +308,7 @@ begin
     v_brand,
     'example.com',
     'https://example.com/official/' || v_case_token,
-    p_official_name,
+    v_variant_name,
     p_receipt_name,
     'verified',
     52,
@@ -523,6 +523,17 @@ begin
     or v_first.catalog_product_id is null
   then
     raise exception 'The first V6 registration did not create an applied result.';
+  end if;
+
+  if not exists (
+    select 1
+    from public.standard_product_coupang_prices as price
+    where price.link_execution_id = v_first.execution_id
+      and price.standard_product_id = v_first.standard_product_id
+      and price.catalog_product_id is null
+  )
+  then
+    raise exception 'The strict registration did not record a family-owned Coupang observation.';
   end if;
 
   if not exists (
