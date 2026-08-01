@@ -13,6 +13,8 @@ import {
   findUniqueOfficialExactNameMatch,
   parseOfficialSpecification,
   parseReviewedLinkProposal,
+  parseReviewedLinkProposalForLiveCandidate,
+  parseReviewedLinkProposalEnvelope,
   receiptAndOfficialNamesMatch,
   reviewedLinkProposalTargetFingerprint,
 } from "./standard-product-registration";
@@ -90,6 +92,8 @@ describe("strict standard product registration", () => {
     expect(receiptAndOfficialNamesMatch("베리베리 스트로베리 큐브", "베리베리 스트로베리 바")).toBe(false);
     expect(receiptAndOfficialNamesMatch("베리베리\t스트로베리큐브", "베리베리스트로베리큐브")).toBe(true);
     expect(receiptAndOfficialNamesMatch("\u00e9", "e\u0301")).toBe(false);
+    expect(receiptAndOfficialNamesMatch("빕스 미트 라자냐", "빕스 미트 라자냐")).toBe(true);
+    expect(receiptAndOfficialNamesMatch("빕스 미트 라자냐", "빕스 미트 라자냐 405g")).toBe(false);
   });
 
   it("parses only an exact official content specification", () => {
@@ -248,6 +252,21 @@ describe("strict standard product registration", () => {
     };
     const first = await buildStrictRegistrationIdentity(base);
     const repeated = await buildStrictRegistrationIdentity(base);
+    const explicitPackageCount = await buildStrictRegistrationIdentity({
+      ...base,
+      receipt: {
+        ...base.receipt,
+        sourceNameRaw: "베리베리스트로베리큐브 1개입",
+      },
+      officialListing: {
+        ...base.officialListing,
+        sourceNameRaw: "베리베리스트로베리큐브 1개입",
+      },
+      target: {
+        ...base.target,
+        listingName: "베리베리스트로베리큐브 1개입",
+      },
+    });
     const changedSnapshot = await buildStrictRegistrationIdentity({
       ...base,
       officialListing: { ...base.officialListing, snapshotHash: `sha256:${"2".repeat(64)}` },
@@ -270,12 +289,21 @@ describe("strict standard product registration", () => {
     expect(first.inputFingerprint).not.toBe(changedImage.inputFingerprint);
     expect(first.targetFingerprint).not.toBe(changedImage.targetFingerprint);
     expect(first.idempotencyKey).not.toBe(changedPrice.idempotencyKey);
+    expect(JSON.parse(explicitPackageCount.targetCanonicalJson)).toMatchObject({
+      sameChannelNameRule: {
+        importedOfficialFields: ["brand", "contentAmount", "contentUnit", "packageCount"],
+      },
+      officialSpecificationCheck: { packageCountBasis: "explicit" },
+    });
     expect(JSON.parse(first.targetCanonicalJson)).toMatchObject({
       approvalPolicy: {
         mode: "authenticated_admin_explicit_second_step",
         requiredStatementPrefix: "APPROVE_STANDARD_PRODUCT_LINK",
       },
-      sameChannelNameRule: { outcome: "apply_official_identity" },
+      sameChannelNameRule: {
+        outcome: "apply_official_identity",
+        importedOfficialFields: ["brand", "contentAmount", "contentUnit"],
+      },
       officialSpecificationCheck: {
         parsedContentAmount: 52,
         parsedContentUnit: "g",
@@ -349,6 +377,24 @@ describe("strict standard product registration", () => {
     reviewedProposal.approval.targetFingerprint = await reviewedLinkProposalTargetFingerprint(
       reviewedProposal,
     );
+    expect(parseReviewedLinkProposalEnvelope(JSON.stringify(reviewedProposal))).toMatchObject({
+      caseId: base.caseId,
+      decision: { proposedVariantName: executionTarget.decision.proposedVariantName },
+    });
+    expect(parseReviewedLinkProposalEnvelope(JSON.stringify({
+      ...reviewedProposal,
+      status: "approved",
+      approval: {
+        ...reviewedProposal.approval,
+        status: "approved",
+        approvalRef: "codex-task:user-message:test",
+        userApprovalText: "이 정확한 대상을 승인합니다.",
+        approvedAt: "2026-08-01T00:00:00+09:00",
+      },
+    }))).toMatchObject({
+      status: "approved",
+      approval: { status: "approved" },
+    });
     const imported = await parseReviewedLinkProposal(JSON.stringify(reviewedProposal), {
       caseId: base.caseId,
       receipt: base.receipt,
@@ -358,6 +404,16 @@ describe("strict standard product registration", () => {
       imported,
       first.targetCanonicalJson,
     )).not.toThrow();
+    await expect(parseReviewedLinkProposalForLiveCandidate(JSON.stringify(reviewedProposal), {
+      receipt: { ...base.receipt, observedAt: "2026-04-28" },
+      officialListing: {
+        ...base.officialListing,
+        sourceRefs: [base.officialListing.sourceRefs[0]],
+      },
+    })).resolves.toMatchObject({
+      receipt: { observedAt: base.receipt.observedAt },
+      officialListing: { sourceRefs: base.officialListing.sourceRefs },
+    });
     await expect(parseReviewedLinkProposal(JSON.stringify({
       ...reviewedProposal,
       receipt: { ...reviewedProposal.receipt, sourceProductCode: "tampered" },

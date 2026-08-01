@@ -147,7 +147,7 @@ export function ProductBrowser({ groups, query, setQuery, category, setCategory,
   const [catalogSpecs, setCatalogSpecs] = useState<Map<string, ProductSpecification & { standardProductId: string }>>(new Map());
   const [standardNames, setStandardNames] = useState<Map<string, string>>(new Map());
   const [standardImages, setStandardImages] = useState<Map<string, string>>(new Map());
-  const [coupangByCatalog, setCoupangByCatalog] = useState<Map<string, PublicCoupangPrice>>(new Map());
+  const [coupangByStandard, setCoupangByStandard] = useState<Map<string, PublicCoupangPrice>>(new Map());
   const [catalogNotice, setCatalogNotice] = useState("");
   const [catalogView, setCatalogView] = useState<CatalogView>("all");
   const [openStandardId, setOpenStandardId] = useState<string | null>(null);
@@ -188,7 +188,7 @@ export function ProductBrowser({ groups, query, setQuery, category, setCategory,
           }
           specs = publicIndex.catalogSpecs;
           names = publicIndex.standardNames;
-          coupangPrices = publicIndex.coupangByCatalog;
+          coupangPrices = publicIndex.coupangByStandard;
           publicCatalogReady = true;
           coupangReady = true;
         }
@@ -205,7 +205,7 @@ export function ProductBrowser({ groups, query, setQuery, category, setCategory,
           client.from("source_product_mappings").select("source_label,source_product_code,catalog_product_id").eq("review_status", "verified"),
           client.from("catalog_products").select("id,standard_product_id,content_amount,content_unit,package_count,reference_unit").eq("status", "active").eq("specification_status", "verified"),
           client.from("standard_products").select("id,canonical_name").eq("status", "active"),
-          client.from("standard_product_coupang_prices").select("catalog_product_id,listed_price_krw,quantity,content_amount,content_unit,max_bundle_quantity,max_bundle_listed_price_krw,product_url,observed_at").not("catalog_product_id", "is", null).order("observed_at", { ascending: false }),
+          client.from("standard_product_coupang_prices").select("standard_product_id,listed_price_krw,quantity,content_amount,content_unit,max_bundle_quantity,max_bundle_listed_price_krw,product_url,observed_at").order("observed_at", { ascending: false }),
         ]);
         if (!mappingResult.error) {
           for (const mapping of mappingResult.data ?? []) {
@@ -229,10 +229,10 @@ export function ProductBrowser({ groups, query, setQuery, category, setCategory,
         if (!coupangResult.error) {
           const mergedCoupang = new Map(coupangPrices);
           for (const row of coupangResult.data ?? []) {
-            const catalogProductId = row.catalog_product_id as string | null;
-            if (!catalogProductId) continue;
-            const existing = mergedCoupang.get(catalogProductId);
-            if (!existing || (row.observed_at as string) > existing.observedAt) mergedCoupang.set(catalogProductId, {
+            const standardProductId = row.standard_product_id as string | null;
+            if (!standardProductId) continue;
+            const existing = mergedCoupang.get(standardProductId);
+            if (!existing || (row.observed_at as string) > existing.observedAt) mergedCoupang.set(standardProductId, {
               listedPriceKrw: row.listed_price_krw as number,
               quantity: row.quantity as number,
               maxBundleQuantity: row.max_bundle_quantity as number | null,
@@ -255,7 +255,7 @@ export function ProductBrowser({ groups, query, setQuery, category, setCategory,
       setCatalogSpecs(specs);
       setStandardNames(names);
       setStandardImages(images);
-      setCoupangByCatalog(coupangPrices);
+      setCoupangByStandard(coupangPrices);
       setCatalogNotice(
         !publicCatalogReady && !signedInCatalogReady
           ? "표준 상품 정보를 불러오지 못해 현재는 개별 상품으로 표시합니다."
@@ -313,7 +313,7 @@ export function ProductBrowser({ groups, query, setQuery, category, setCategory,
       const ordered = [...items].sort((a, b) => a.unitPriceKrw - b.unitPriceKrw);
       const lowest = ordered[0];
       const name = standardNames.get(standardProductId) ?? lowest.productName;
-      const coupangEntry = coupangByCatalog.get(lowest.catalogProductId);
+      const coupangEntry = coupangByStandard.get(standardProductId);
       const coupangPrice = coupangEntry ? buildCoupangPrice(coupangEntry, lowest.referenceUnit) : null;
       const coupangComparison = compareCoupangPrice(lowest, coupangPrice?.requiredOffer ?? null);
       const comparableItems = ordered.filter((item) => item.unitPriceLabel === lowest.unitPriceLabel);
@@ -345,7 +345,7 @@ export function ProductBrowser({ groups, query, setQuery, category, setCategory,
       };
     });
     return { productGroups: regular, standardGroups: standards };
-  }, [groups, officialProducts, standardMappings, exactStandardMappings, catalogSpecs, standardNames, standardImages, coupangByCatalog, linkedByStandardProduct]);
+  }, [groups, officialProducts, standardMappings, exactStandardMappings, catalogSpecs, standardNames, standardImages, coupangByStandard, linkedByStandardProduct]);
 
   const stores = useMemo(() => [...new Set([
     ...productGroups.filter((group) => martType === "all" || group.martType === martType).map((group) => group.storeLabel),
@@ -389,7 +389,8 @@ export function ProductBrowser({ groups, query, setQuery, category, setCategory,
         const items = standard.items.filter((item) => (martType === "all" || item.martType === martType) && (selectedStore === "all" || item.storeLabel === selectedStore));
         if (items.length === 0) return { ...standard, items, officialListings };
         const lowest = [...items].sort((left, right) => left.unitPriceKrw - right.unitPriceKrw || right.latest.observedAt.localeCompare(left.latest.observedAt))[0];
-        const coupangEntry = coupangByCatalog.get(lowest.catalogProductId);
+        const standardProductId = standard.id.replace("standard:", "");
+        const coupangEntry = coupangByStandard.get(standardProductId);
         const coupangPrice = coupangEntry ? buildCoupangPrice(coupangEntry, lowest.referenceUnit) : standard.coupangPrice;
         const coupangComparison = compareCoupangPrice(lowest, coupangPrice?.requiredOffer ?? null);
         const comparableItems = items.filter((item) => item.unitPriceLabel === lowest.unitPriceLabel);
@@ -420,7 +421,7 @@ export function ProductBrowser({ groups, query, setQuery, category, setCategory,
         if (sort === "sellers") return b.sellerCount - a.sellerCount || a.name.localeCompare(b.name);
         return a.lowestUnitPriceKrw - b.lowestUnitPriceKrw || a.name.localeCompare(b.name);
       });
-  }, [standardGroups, coupangByCatalog, query, category, martType, officialListingsEligible, selectedStore, sort]);
+  }, [standardGroups, coupangByStandard, query, category, martType, officialListingsEligible, selectedStore, sort]);
 
   const gridEntries = useMemo(() => {
     type Entry =

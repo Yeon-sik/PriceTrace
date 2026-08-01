@@ -28,7 +28,8 @@ import {
   assertReviewedProposalMatchesExecutionTarget,
   buildStrictRegistrationIdentity,
   findExpectedCatalogProductId,
-  parseReviewedLinkProposal,
+  parseReviewedLinkProposalForLiveCandidate,
+  parseReviewedLinkProposalEnvelope,
   receiptAndOfficialNamesMatch,
 } from "@/domain/standard-product-registration";
 import { availableProductCategories, categoryForProduct, type ProductCategory } from "@/domain/product-browser";
@@ -219,10 +220,19 @@ function StandardProductConnectionModal({ candidate, legacy, brands, standards, 
       setMessage("영수증 revision 또는 공식 카탈로그 스냅샷이 없어 연결할 수 없습니다.");
       return;
     }
-    const resolvedListingName = candidate.officialSourceNameRaw;
+    let reviewedProposalEnvelope;
+    try {
+      reviewedProposalEnvelope = parseReviewedLinkProposalEnvelope(reviewedProposalJson);
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "검토된 LinkProposal을 확인하세요.");
+      return;
+    }
+    const caseId = reviewedProposalEnvelope.caseId;
+    const resolvedListingName = reviewedProposalEnvelope.decision.proposedVariantName
+      ?? reusedListingName;
     const resolvedProductUrl = selectedStandard ? reusedProductUrl : productUrl.trim();
     if (!client || !resolvedListingName || !/^https?:\/\//.test(resolvedProductUrl)) { setMessage("상품명과 확인 URL을 확인하세요."); return; }
-    if (!receiptAndOfficialNamesMatch(candidate.productName, resolvedListingName)) {
+    if (!receiptAndOfficialNamesMatch(candidate.productName, candidate.officialSourceNameRaw)) {
       setMessage("영수증명과 공식 상품명이 공백 제거 후 일치하지 않아 연결할 수 없습니다.");
       return;
     }
@@ -291,8 +301,7 @@ function StandardProductConnectionModal({ candidate, legacy, brands, standards, 
             },
           )
         : null;
-      const caseId = `${candidate.receiptId}:${candidate.receiptItemId}:${candidate.storeLabel}:${candidate.sourceProductCode}`;
-      const receiptInput = {
+      const currentReceiptInput = {
         receiptId: candidate.receiptId,
         receiptItemId: candidate.receiptItemId,
         receiptRevision: candidate.receiptRevision,
@@ -304,7 +313,7 @@ function StandardProductConnectionModal({ candidate, legacy, brands, standards, 
         unitPriceKrw: candidate.receiptUnitPriceKrw,
         quantity: candidate.receiptQuantity,
       };
-      const officialListingInput = {
+      const currentOfficialListingInput = {
         channelId: candidate.officialChannelId,
         sourceProductCodeNamespace: candidate.officialSourceProductCodeNamespace,
         sourceProductCode: candidate.officialSourceProductCode,
@@ -320,11 +329,19 @@ function StandardProductConnectionModal({ candidate, legacy, brands, standards, 
           byteLength: candidate.officialImageByteLength,
         },
       };
-      const reviewedProposal = await parseReviewedLinkProposal(reviewedProposalJson, {
-        caseId,
-        receipt: receiptInput,
-        officialListing: officialListingInput,
+      const reviewedProposal = await parseReviewedLinkProposalForLiveCandidate(reviewedProposalJson, {
+        receipt: currentReceiptInput,
+        officialListing: currentOfficialListingInput,
       });
+      const approvedCatalogNamespace = reviewedProposal.receipt.sourceCatalogNamespace;
+      if (!approvedCatalogNamespace) {
+        throw new Error("승인된 영수증 카탈로그 채널이 없습니다.");
+      }
+      const receiptInput = {
+        ...reviewedProposal.receipt,
+        sourceCatalogNamespace: approvedCatalogNamespace,
+      };
+      const officialListingInput = reviewedProposal.officialListing;
       const identity = await buildStrictRegistrationIdentity({
         caseId,
         receipt: receiptInput,
@@ -390,9 +407,9 @@ function StandardProductConnectionModal({ candidate, legacy, brands, standards, 
         p_input_canonical_json: identity.inputCanonicalJson,
         p_target_canonical_json: identity.targetCanonicalJson,
         p_approval_statement: identity.approvalStatement,
-        p_receipt_id: candidate.receiptId,
-        p_receipt_item_id: candidate.receiptItemId,
-        p_receipt_observed_at: candidate.receiptObservedAt,
+        p_receipt_id: receiptInput.receiptId,
+        p_receipt_item_id: receiptInput.receiptItemId,
+        p_receipt_observed_at: receiptInput.observedAt,
         p_standard_product_id: standardProductId || null,
         p_catalog_product_id: expectedCatalogProductId,
         p_standard_name: resolvedStandardName,
@@ -402,14 +419,14 @@ function StandardProductConnectionModal({ candidate, legacy, brands, standards, 
         p_official_brand_source_label: brandRegistration.value.officialSourceLabel,
         p_product_reference_url: resolvedProductUrl,
         p_listing_name: resolvedListingName,
-        p_receipt_product_name: candidate.productName,
+        p_receipt_product_name: receiptInput.sourceNameRaw,
         p_specification_status: specificationStatus,
         p_content_amount: specification.contentAmount,
         p_content_unit: specification.contentUnit,
         p_package_count: specification.packageCount,
         p_reference_unit: specification.referenceUnit,
-        p_source_product_code: candidate.sourceProductCode,
-        p_source_labels: [candidate.storeLabel],
+        p_source_product_code: receiptInput.sourceProductCode,
+        p_source_labels: [receiptInput.sourceLabel],
         p_coupang_product_url: coupangProductUrl.trim(),
         p_coupang_listed_price_krw: parsedCoupangRequiredPrice.value.listedPriceKrw,
         p_coupang_quantity: parsedCoupangRequiredPrice.value.quantity,

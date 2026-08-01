@@ -168,7 +168,7 @@ const decisionSchema = z.object({
 const reviewedLinkProposalSchema = z.object({
   schemaVersion: z.literal("pricetrace-link-proposal.v3"),
   caseId: z.string().min(1),
-  status: z.literal("approval_requested"),
+  status: z.enum(["approval_requested", "approved"]),
   inputFingerprint: fingerprintSchema,
   receipt: z.object({
     receiptId: z.string().min(1),
@@ -253,7 +253,10 @@ const reviewedLinkProposalSchema = z.object({
     "update_representative_image",
   ])).min(1),
   approval: z.object({
-    status: z.literal("requested"),
+    status: z.enum(["requested", "approved"]),
+    approvalRef: z.string().min(1).nullable().optional(),
+    userApprovalText: z.string().min(1).nullable().optional(),
+    approvedAt: z.string().min(1).nullable().optional(),
     targetFingerprint: fingerprintSchema,
   }).passthrough(),
   execution: z.object({
@@ -262,7 +265,23 @@ const reviewedLinkProposalSchema = z.object({
     appliedAt: z.null(),
     result: z.null(),
   }).passthrough(),
-}).passthrough();
+}).passthrough().superRefine((proposal, context) => {
+  const approved = proposal.status === "approved";
+  if (
+    approved !== (proposal.approval.status === "approved")
+    || (approved && (
+      !proposal.approval.approvalRef
+      || !proposal.approval.userApprovalText
+      || !proposal.approval.approvedAt
+    ))
+  ) {
+    context.addIssue({
+      code: "custom",
+      message: "LinkProposal의 승인 상태와 승인 메타데이터가 일치하지 않습니다.",
+      path: ["approval"],
+    });
+  }
+});
 
 export type ReviewedLinkProposal = z.infer<typeof reviewedLinkProposalSchema>;
 type ReviewedLinkProposalTarget = Pick<
@@ -359,6 +378,82 @@ export async function parseReviewedLinkProposal(
   rawJson: string,
   expected: Pick<StrictRegistrationIdentityInput, "caseId" | "receipt" | "officialListing">,
 ): Promise<ReviewedLinkProposal> {
+  const proposal = parseReviewedLinkProposalEnvelope(rawJson);
+  const expectedInputCanonicalJson = canonicalJson({
+    receipt: expected.receipt,
+    officialListing: expected.officialListing,
+  });
+  const proposalInputCanonicalJson = canonicalJson({
+    receipt: proposal.receipt,
+    officialListing: proposal.officialListing,
+  });
+  const proposalInputFingerprint = await sha256CanonicalJson(proposalInputCanonicalJson);
+  if (
+    proposal.caseId !== expected.caseId
+    || proposalInputCanonicalJson !== expectedInputCanonicalJson
+    || proposal.inputFingerprint !== proposalInputFingerprint
+  ) {
+    throw new Error("LinkProposal의 동결 입력이 현재 영수증·공식 상품 기록과 일치하지 않습니다.");
+  }
+
+  const reviewedTargetFingerprint = await reviewedLinkProposalTargetFingerprint(proposal);
+  if (proposal.approval.targetFingerprint !== reviewedTargetFingerprint) {
+    throw new Error("LinkProposal의 검토 대상 지문이 유효하지 않습니다.");
+  }
+  return proposal;
+}
+
+export async function parseReviewedLinkProposalForLiveCandidate(
+  rawJson: string,
+  current: Pick<StrictRegistrationIdentityInput, "receipt" | "officialListing">,
+): Promise<ReviewedLinkProposal> {
+  const proposal = parseReviewedLinkProposalEnvelope(rawJson);
+  const proposalInputCanonicalJson = canonicalJson({
+    receipt: proposal.receipt,
+    officialListing: proposal.officialListing,
+  });
+  const proposalInputFingerprint = await sha256CanonicalJson(proposalInputCanonicalJson);
+  const reviewedTargetFingerprint = await reviewedLinkProposalTargetFingerprint(proposal);
+  const sameReceipt = (
+    proposal.receipt.receiptId === current.receipt.receiptId
+    && proposal.receipt.receiptItemId === current.receipt.receiptItemId
+    && proposal.receipt.receiptRevision === current.receipt.receiptRevision
+    && proposal.receipt.sourceCatalogNamespace === current.receipt.sourceCatalogNamespace
+    && proposal.receipt.sourceLabel === current.receipt.sourceLabel
+    && proposal.receipt.sourceProductCode === current.receipt.sourceProductCode
+    && proposal.receipt.sourceNameRaw === current.receipt.sourceNameRaw
+    && proposal.receipt.observedAt.slice(0, 10) === current.receipt.observedAt.slice(0, 10)
+    && proposal.receipt.unitPriceKrw === current.receipt.unitPriceKrw
+    && proposal.receipt.quantity === current.receipt.quantity
+  );
+  const sameOfficialListing = (
+    proposal.officialListing.channelId === current.officialListing.channelId
+    && proposal.officialListing.sourceProductCodeNamespace
+      === current.officialListing.sourceProductCodeNamespace
+    && proposal.officialListing.sourceProductCode === current.officialListing.sourceProductCode
+    && proposal.officialListing.snapshotId === current.officialListing.snapshotId
+    && proposal.officialListing.snapshotHash === current.officialListing.snapshotHash
+    && proposal.officialListing.sourceNameRaw === current.officialListing.sourceNameRaw
+    && proposal.officialListing.specificationTextRaw
+      === current.officialListing.specificationTextRaw
+    && current.officialListing.sourceRefs.every((sourceRef) => (
+      proposal.officialListing.sourceRefs.includes(sourceRef)
+    ))
+    && canonicalJson(proposal.officialListing.image)
+      === canonicalJson(current.officialListing.image)
+  );
+  if (
+    proposal.inputFingerprint !== proposalInputFingerprint
+    || proposal.approval.targetFingerprint !== reviewedTargetFingerprint
+    || !sameReceipt
+    || !sameOfficialListing
+  ) {
+    throw new Error("LinkProposal의 동결 입력이 현재 영수증·공식 상품 기록과 일치하지 않습니다.");
+  }
+  return proposal;
+}
+
+export function parseReviewedLinkProposalEnvelope(rawJson: string): ReviewedLinkProposal {
   let raw: unknown;
   try {
     raw = JSON.parse(rawJson);
@@ -382,27 +477,6 @@ export async function parseReviewedLinkProposal(
         || proposal.representativeImage.expectedCurrent?.imageUrl !== proposal.representativeImage.imageUrl)
   ) {
     throw new Error("LinkProposal의 공식 이미지·대표 이미지 효과가 일치하지 않습니다.");
-  }
-  const expectedInputCanonicalJson = canonicalJson({
-    receipt: expected.receipt,
-    officialListing: expected.officialListing,
-  });
-  const proposalInputCanonicalJson = canonicalJson({
-    receipt: proposal.receipt,
-    officialListing: proposal.officialListing,
-  });
-  const proposalInputFingerprint = await sha256CanonicalJson(proposalInputCanonicalJson);
-  if (
-    proposal.caseId !== expected.caseId
-    || proposalInputCanonicalJson !== expectedInputCanonicalJson
-    || proposal.inputFingerprint !== proposalInputFingerprint
-  ) {
-    throw new Error("LinkProposal의 동결 입력이 현재 영수증·공식 상품 기록과 일치하지 않습니다.");
-  }
-
-  const reviewedTargetFingerprint = await reviewedLinkProposalTargetFingerprint(proposal);
-  if (proposal.approval.targetFingerprint !== reviewedTargetFingerprint) {
-    throw new Error("LinkProposal의 검토 대상 지문이 유효하지 않습니다.");
   }
   return proposal;
 }
@@ -591,6 +665,9 @@ export async function buildStrictRegistrationIdentity(input: StrictRegistrationI
   };
   const inputCanonicalJson = canonicalJson({ receipt, officialListing });
   const inputFingerprint = await sha256CanonicalJson(inputCanonicalJson);
+  const officialHasExplicitPackageCount = hasExplicitPackageCount(
+    input.officialListing.sourceNameRaw,
+  );
   const sameChannelNameRule = {
     sameChannel: true,
     normalization: "remove_unicode_whitespace_only",
@@ -598,14 +675,16 @@ export async function buildStrictRegistrationIdentity(input: StrictRegistrationI
     normalizedOfficialName,
     exactNameMatch: true,
     outcome: "apply_official_identity",
-    importedOfficialFields: ["brand", "contentAmount", "contentUnit", "packageCount"],
+    importedOfficialFields: officialHasExplicitPackageCount
+      ? ["brand", "contentAmount", "contentUnit", "packageCount"]
+      : ["brand", "contentAmount", "contentUnit"],
   };
   const officialSpecificationCheck = {
     specificationTextRaw: input.officialListing.specificationTextRaw,
     parsedContentAmount: parsedOfficialSpecification.contentAmount,
     parsedContentUnit: parsedOfficialSpecification.contentUnit,
     parsedPackageCount: officialPackageCount,
-    packageCountBasis: hasExplicitPackageCount(input.officialListing.sourceNameRaw)
+    packageCountBasis: officialHasExplicitPackageCount
       ? "explicit"
       : "default_one_absent_count",
     matchesTarget: true,
