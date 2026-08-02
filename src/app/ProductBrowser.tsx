@@ -1,21 +1,25 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
-import { categoryForProduct, compareCoupangPrice, distinctSellerCount, filterAndSortProductGroups, latestSellerRows, martTagFor, mergeOfficialProductGroups, PRODUCT_CATEGORIES, type CoupangPriceComparison, type MartType, type ProductCategory, type ProductGroup, type ProductSort } from "@/domain/product-browser";
-import { buildPublicStandardCatalogIndex, publicStandardMappingKey, PublicStandardCatalogRowsSchema, type PublicCoupangPrice } from "@/domain/public-standard-catalog";
-import { resolveCoupangPrice, type ResolvedCoupangPrice } from "@/domain/coupang-price";
-import { sellerPricePointsFromGroup, summarizeSellerPrices } from "@/domain/seller-price-insights";
+import { useMemo, useState } from "react";
+import { distinctSellerCount, latestSellerRows, PRODUCT_CATEGORIES, type MartType, type ProductCategory, type ProductGroup, type ProductSort } from "@/domain/product-browser";
 import { formatKrw } from "@/domain/settlement";
-import { officialProductCandidateKey, resolveMartTaggedStandardProductMapping, seededOfficialProducts, type OfficialProductRecord, type StandardProductMapping } from "@/domain/official-product";
-import { normalizeMarketPrice, type ProductSpecification } from "@/domain/canonical-price";
 import {
   filterAndSortOfficialChannelListings,
-  officialChannelRepresentativeImageUrl,
   partitionOfficialChannelListingsByStandardProduct,
-  type PublicOfficialChannelListing,
 } from "@/domain/public-official-channel-catalog";
-import { getSupabaseBrowserClient } from "@/lib/supabase/client";
-import { OfficialProductRepository } from "@/repositories/official-product.repository";
+import {
+  officialListingsAreEligible,
+  selectGridEntries,
+  selectLinkedStandardSummaries,
+  selectProductCatalogGroups,
+  selectStoreOptions,
+  selectVisibleLinkedStandardSummaries,
+  selectVisibleProductGroups,
+  selectVisibleStandardGroups,
+  type CatalogView,
+  type OfficialLinkedStandardSummary,
+} from "@/features/product-browser/product-browser.selectors";
+import { useProductCatalog } from "@/features/product-browser/use-product-catalog";
 import { PublicOfficialChannelCatalogRepository } from "@/repositories/public-official-channel-catalog.repository";
 import { CoupangComparisonMessage } from "./CoupangComparisonMessage";
 import { ProductImage } from "./ProductImage";
@@ -24,74 +28,16 @@ import { StandardProductDetailModal } from "./StandardProductDetailModal";
 import { StoreListModal } from "./StoreListModal";
 import styles from "./page.module.css";
 
-const officialProductRepository = new OfficialProductRepository();
 const publicPxCatalog = new PublicOfficialChannelCatalogRepository().loadPxCatalog();
-type CatalogView = "all" | "standard" | "official";
 
-export type StandardProductItem = ProductGroup & { catalogProductId: string; unitPriceLabel: string; unitPriceKrw: number; packageLabel: string; referenceUnit: number };
-
-export type CoupangPrice = ResolvedCoupangPrice;
-
-export type PriceHistoryPoint = { date: string; unitPriceKrw: number; unitPriceLabel: string; actualPriceKrw: number; storeLabel: string };
-
-export type StandardProductGroup = {
-  id: string;
-  name: string;
-  imageUrl?: string;
-  category: ProductCategory;
-  items: StandardProductItem[];
-  lowestUnitPriceKrw: number;
-  highestUnitPriceKrw: number;
-  unitPriceLabel: string;
-  lowestPriceKrw: number;
-  sellerCount: number;
-  latestObservedAt: string;
-  observationCount: number;
-  coupangPrice: CoupangPrice | null;
-  coupangComparison: CoupangPriceComparison | null;
-  priceHistory: PriceHistoryPoint[];
-  officialListings: PublicOfficialChannelListing[];
-};
-
-type OfficialLinkedStandardSummary = {
-  id: string;
-  standardProductId: string;
-  name: string;
-  imageUrl?: string;
-  category: ProductCategory;
-  listings: PublicOfficialChannelListing[];
-};
-
-function formatPackageLabel(spec: ProductSpecification) {
-  const unitLabel = spec.contentUnit === "each" ? "개" : spec.contentUnit;
-  const base = `${spec.contentAmount}${unitLabel}`;
-  return spec.packageCount > 1 ? `${base} x ${spec.packageCount}` : base;
-}
+export type { StandardProductGroup, StandardProductItem } from "@/features/product-browser/product-browser.selectors";
 
 function StoreInfo({ sellerCount, martTypeLabel, onOpen }: { sellerCount: number; martTypeLabel?: string; onOpen: () => void }) {
   return <p className={styles.storeInfo}>판매처 {sellerCount}곳{martTypeLabel && <em>{martTypeLabel}</em>}<button type="button" className={styles.storeInfoButton} aria-label="판매처 정보 보기" onClick={onOpen}>›</button></p>;
 }
 
-function buildCoupangPrice(entry: PublicCoupangPrice, referenceUnit: number): CoupangPrice {
-  return resolveCoupangPrice(entry, referenceUnit as 10 | 100 | 1000);
-}
-
-function isMissingCatalogRpc(error: { code?: string; message?: string } | null) {
-  return error?.code === "PGRST202"
-    || error?.message?.includes("Could not find the function") === true;
-}
-
 function RecordedPriceBlock({ group }: { group: ProductGroup }) {
   return <div className={styles.listedPrice}><strong>{formatKrw(group.latestPriceKrw)}</strong></div>;
-}
-
-function officialListingSearchText(listing: PublicOfficialChannelListing) {
-  return [
-    listing.sourceNameRaw,
-    listing.vendorNameRaw,
-    listing.specificationTextRaw,
-    listing.sourceProductCode,
-  ].filter(Boolean).join(" ");
 }
 
 function OfficialLinkedStandardCard({
@@ -136,336 +82,80 @@ function OfficialLinkedStandardCard({
 export function ProductBrowser({ groups, query, setQuery, category, setCategory, martType, setMartType, selectedStore, setSelectedStore, sort, setSort, authRevision, onAdd, onTrend, onOpenStore }: {
   groups: ProductGroup[]; query: string; setQuery: (value: string) => void; category: ProductCategory; setCategory: (value: ProductCategory) => void; martType: MartType; setMartType: (value: MartType) => void; selectedStore: string; setSelectedStore: (value: string) => void; sort: ProductSort; setSort: (value: ProductSort) => void; authRevision: number; onAdd: (group: ProductGroup) => void; onTrend: (group: ProductGroup) => void; onOpenStore: (store: string) => void;
 }) {
-  const client = getSupabaseBrowserClient();
   const { linkedByStandardProduct, standaloneListings } = useMemo(
     () => partitionOfficialChannelListingsByStandardProduct(publicPxCatalog.listings),
     [],
   );
-  const [officialProducts, setOfficialProducts] = useState<Record<string, OfficialProductRecord>>(seededOfficialProducts);
-  const [standardMappings, setStandardMappings] = useState<Map<string, string>>(new Map());
-  const [exactStandardMappings, setExactStandardMappings] = useState<Map<string, string>>(new Map());
-  const [catalogSpecs, setCatalogSpecs] = useState<Map<string, ProductSpecification & { standardProductId: string }>>(new Map());
-  const [standardNames, setStandardNames] = useState<Map<string, string>>(new Map());
-  const [standardImages, setStandardImages] = useState<Map<string, string>>(new Map());
-  const [coupangByStandard, setCoupangByStandard] = useState<Map<string, PublicCoupangPrice>>(new Map());
-  const [catalogNotice, setCatalogNotice] = useState("");
+  const {
+    officialProducts,
+    standardMappings,
+    exactStandardMappings,
+    catalogSpecs,
+    standardNames,
+    standardImages,
+    coupangByStandard,
+    catalogNotice,
+  } = useProductCatalog(authRevision);
   const [catalogView, setCatalogView] = useState<CatalogView>("all");
   const [openStandardId, setOpenStandardId] = useState<string | null>(null);
   const [storeListTarget, setStoreListTarget] = useState<{ title: string; rows: { storeLabel: string; observedAt: string }[] } | null>(null);
-  useEffect(() => setOfficialProducts({ ...seededOfficialProducts, ...officialProductRepository.loadAll() }), []);
-  useEffect(() => {
-    let active = true;
-    if (!client) {
-      setCatalogNotice("표준 상품 정보를 불러오지 못해 현재는 개별 상품으로 표시합니다.");
-      return () => { active = false; };
-    }
 
-    const loadStandardCatalog = async () => {
-      let publicCatalogReady = false;
-      let signedInCatalogReady = false;
-      let coupangReady = false;
-      let sharedMappings = new Map<string, string>();
-      const exactMappings = new Map<string, string>();
-      let specs = new Map<string, ProductSpecification & { standardProductId: string }>();
-      let names = new Map<string, string>();
-      let images = new Map<string, string>();
-      let coupangPrices = new Map<string, PublicCoupangPrice>();
+  const { productGroups, standardGroups } = useMemo(() => selectProductCatalogGroups({
+    groups,
+    officialProducts,
+    standardMappings,
+    exactStandardMappings,
+    catalogSpecs,
+    standardNames,
+    standardImages,
+    coupangByStandard,
+    linkedByStandardProduct,
+  }), [groups, officialProducts, standardMappings, exactStandardMappings, catalogSpecs, standardNames, standardImages, coupangByStandard, linkedByStandardProduct]);
 
-      const v2PublicResult = await client.rpc("get_public_exact_standard_product_catalog_v2");
-      const exactPublicResult = v2PublicResult.error && isMissingCatalogRpc(v2PublicResult.error)
-        ? await client.rpc("get_public_exact_standard_product_catalog")
-        : v2PublicResult;
-      const publicResult = exactPublicResult.error && isMissingCatalogRpc(exactPublicResult.error)
-        ? await client.rpc("get_public_standard_product_catalog")
-        : exactPublicResult;
-      if (!publicResult.error) {
-        const parsed = PublicStandardCatalogRowsSchema.safeParse(publicResult.data ?? []);
-        if (parsed.success) {
-          const publicIndex = buildPublicStandardCatalogIndex(parsed.data);
-          sharedMappings = publicIndex.standardMappings;
-          for (const [key, catalogProductId] of publicIndex.exactStandardMappings) {
-            exactMappings.set(key, catalogProductId);
-          }
-          specs = publicIndex.catalogSpecs;
-          names = publicIndex.standardNames;
-          coupangPrices = publicIndex.coupangByStandard;
-          publicCatalogReady = true;
-          coupangReady = true;
-        }
-      }
+  const stores = useMemo(
+    () => selectStoreOptions({ productGroups, standardGroups, martType }),
+    [martType, productGroups, standardGroups],
+  );
 
-      const imageResult = await client.from("standard_product_images").select("standard_product_id,image_url");
-      if (!imageResult.error) {
-        images = new Map((imageResult.data ?? []).map((row) => [row.standard_product_id as string, row.image_url as string]));
-      }
+  const visibleGroups = useMemo(() => selectVisibleProductGroups(productGroups, {
+    query,
+    category,
+    martType,
+    selectedStore,
+    sort,
+  }), [category, martType, query, selectedStore, sort, productGroups]);
+  const officialListingsEligible = officialListingsAreEligible(martType, selectedStore);
 
-      const { data: authData } = await client.auth.getUser();
-      if (authData.user) {
-        const [mappingResult, catalogResult, standardResult, coupangResult] = await Promise.all([
-          client.from("source_product_mappings").select("source_label,source_product_code,catalog_product_id").eq("review_status", "verified"),
-          client.from("catalog_products").select("id,standard_product_id,content_amount,content_unit,package_count,reference_unit").eq("status", "active").eq("specification_status", "verified"),
-          client.from("standard_products").select("id,canonical_name").eq("status", "active"),
-          client.from("standard_product_coupang_prices").select("standard_product_id,listed_price_krw,quantity,content_amount,content_unit,max_bundle_quantity,max_bundle_listed_price_krw,product_url,observed_at").order("observed_at", { ascending: false }),
-        ]);
-        if (!mappingResult.error) {
-          for (const mapping of mappingResult.data ?? []) {
-            exactMappings.set(
-              publicStandardMappingKey(mapping.source_label, mapping.source_product_code),
-              mapping.catalog_product_id as string,
-            );
-          }
-        }
-        if (!catalogResult.error) {
-          specs = new Map([
-            ...specs,
-            ...(catalogResult.data ?? [])
-              .filter((row) => row.content_amount && row.content_unit)
-              .map((row) => [row.id as string, { contentAmount: row.content_amount as number, contentUnit: row.content_unit as ProductSpecification["contentUnit"], packageCount: row.package_count as number, referenceUnit: row.reference_unit as 10 | 100 | 1000, standardProductId: row.standard_product_id as string }] as const),
-          ]);
-        }
-        if (!standardResult.error) {
-          names = new Map([...names, ...(standardResult.data ?? []).map((row) => [row.id as string, row.canonical_name as string] as const)]);
-        }
-        if (!coupangResult.error) {
-          const mergedCoupang = new Map(coupangPrices);
-          for (const row of coupangResult.data ?? []) {
-            const standardProductId = row.standard_product_id as string | null;
-            if (!standardProductId) continue;
-            const existing = mergedCoupang.get(standardProductId);
-            if (!existing || (row.observed_at as string) > existing.observedAt) mergedCoupang.set(standardProductId, {
-              listedPriceKrw: row.listed_price_krw as number,
-              quantity: row.quantity as number,
-              maxBundleQuantity: row.max_bundle_quantity as number | null,
-              maxBundleListedPriceKrw: row.max_bundle_listed_price_krw as number | null,
-              contentAmount: row.content_amount as number | null,
-              contentUnit: row.content_unit as ProductSpecification["contentUnit"] | null,
-              productUrl: row.product_url as string,
-              observedAt: row.observed_at as string,
-            });
-          }
-          coupangPrices = mergedCoupang;
-          coupangReady = true;
-        }
-        signedInCatalogReady = !mappingResult.error && !catalogResult.error && !standardResult.error;
-      }
+  const linkedStandardSummaries = useMemo<OfficialLinkedStandardSummary[]>(
+    () => selectLinkedStandardSummaries({ linkedByStandardProduct, standardNames, standardImages }),
+    [linkedByStandardProduct, standardImages, standardNames],
+  );
 
-      if (!active) return;
-      setStandardMappings(sharedMappings);
-      setExactStandardMappings(exactMappings);
-      setCatalogSpecs(specs);
-      setStandardNames(names);
-      setStandardImages(images);
-      setCoupangByStandard(coupangPrices);
-      setCatalogNotice(
-        !publicCatalogReady && !signedInCatalogReady
-          ? "표준 상품 정보를 불러오지 못해 현재는 개별 상품으로 표시합니다."
-          : !coupangReady
-            ? "표준 상품은 표시하지만 쿠팡 가격 정보를 불러오지 못했습니다."
-            : "",
-      );
-    };
+  const visibleLinkedStandardSummaries = useMemo(() => selectVisibleLinkedStandardSummaries({
+    summaries: linkedStandardSummaries,
+    eligible: officialListingsEligible,
+    query,
+    category,
+  }), [category, linkedStandardSummaries, officialListingsEligible, query]);
 
-    void loadStandardCatalog();
-    return () => { active = false; };
-  }, [authRevision, client]);
+  const visibleStandardGroups = useMemo(() => selectVisibleStandardGroups({
+    standardGroups,
+    coupangByStandard,
+    query,
+    category,
+    martType,
+    officialListingsEligible,
+    selectedStore,
+    sort,
+  }), [standardGroups, coupangByStandard, query, category, martType, officialListingsEligible, selectedStore, sort]);
 
-  const { productGroups, standardGroups } = useMemo(() => {
-    const standardBuckets = new Map<string, StandardProductItem[]>();
-    const historyBuckets = new Map<string, PriceHistoryPoint[]>();
-    const regular: ProductGroup[] = [];
-    const identityAwareMappings: StandardProductMapping<string>[] = groups.flatMap((group) => {
-      const catalogProductId = exactStandardMappings.get(
-        publicStandardMappingKey(group.storeLabel, group.sourceProductCode),
-      );
-      return catalogProductId
-        ? [{
-            sourceLabel: group.storeLabel,
-            sourceProductCode: group.sourceProductCode,
-            martTag: martTagFor(group),
-            productName: group.productName,
-            product: catalogProductId,
-          }]
-        : [];
-    });
-    for (const group of groups) {
-      const key = officialProductCandidateKey(group);
-      const withOfficial = officialProducts[key] ? { ...group, officialProduct: officialProducts[key] } : group;
-      const catalogProductId = resolveMartTaggedStandardProductMapping({
-        sourceProductCode: group.sourceProductCode,
-        productName: group.productName,
-        storeLabel: group.storeLabel,
-        martTag: martTagFor(group),
-        catalogNamespace: group.catalogNamespace,
-      }, identityAwareMappings)
-        ?? (group.catalogNamespace ? standardMappings.get(group.sourceProductCode) : undefined);
-      const spec = catalogProductId ? catalogSpecs.get(catalogProductId) : undefined;
-      if (!catalogProductId || !spec) { regular.push(withOfficial); continue; }
-      const unitPrice = normalizeMarketPrice({ sellerName: group.storeLabel, listedPriceKrw: group.latestPriceKrw, shippingFeeKrw: 0, minimumOrderQuantity: 1, observedAt: group.latest.observedAt, verificationStatus: "verified" }, spec);
-      const item: StandardProductItem = { ...withOfficial, catalogProductId, unitPriceLabel: unitPrice.referenceLabel, unitPriceKrw: unitPrice.pricePerReferenceUnitKrw, packageLabel: formatPackageLabel(spec), referenceUnit: spec.referenceUnit ?? 100 };
-      standardBuckets.set(spec.standardProductId, [...(standardBuckets.get(spec.standardProductId) ?? []), item]);
-      const historyPoints = group.observations.map((observation): PriceHistoryPoint => {
-        const normalized = normalizeMarketPrice({ sellerName: group.storeLabel, listedPriceKrw: observation.item.unitPriceKrw, shippingFeeKrw: 0, minimumOrderQuantity: 1, observedAt: observation.observedAt, verificationStatus: "verified" }, spec);
-        return { date: observation.observedAt, unitPriceKrw: normalized.pricePerReferenceUnitKrw, unitPriceLabel: normalized.referenceLabel, actualPriceKrw: observation.item.unitPriceKrw, storeLabel: group.storeLabel };
-      });
-      historyBuckets.set(spec.standardProductId, [...(historyBuckets.get(spec.standardProductId) ?? []), ...historyPoints]);
-    }
-    const standards: StandardProductGroup[] = [...standardBuckets.entries()].map(([standardProductId, items]) => {
-      const ordered = [...items].sort((a, b) => a.unitPriceKrw - b.unitPriceKrw);
-      const lowest = ordered[0];
-      const name = standardNames.get(standardProductId) ?? lowest.productName;
-      const coupangEntry = coupangByStandard.get(standardProductId);
-      const coupangPrice = coupangEntry ? buildCoupangPrice(coupangEntry, lowest.referenceUnit) : null;
-      const coupangComparison = compareCoupangPrice(lowest, coupangPrice?.requiredOffer ?? null);
-      const comparableItems = ordered.filter((item) => item.unitPriceLabel === lowest.unitPriceLabel);
-      const bestByDate = new Map<string, PriceHistoryPoint>();
-      for (const point of historyBuckets.get(standardProductId) ?? []) {
-        const existing = bestByDate.get(point.date);
-        if (!existing || point.unitPriceKrw < existing.unitPriceKrw) bestByDate.set(point.date, point);
-      }
-      const priceHistory = [...bestByDate.values()].sort((a, b) => b.date.localeCompare(a.date)).slice(0, 7);
-      const officialListings = linkedByStandardProduct.get(standardProductId) ?? [];
-      return {
-        id: `standard:${standardProductId}`,
-        name,
-        imageUrl: officialChannelRepresentativeImageUrl(officialListings)
-          ?? standardImages.get(standardProductId),
-        category: categoryForProduct(name),
-        items: ordered,
-        lowestUnitPriceKrw: lowest.unitPriceKrw,
-        highestUnitPriceKrw: Math.max(...comparableItems.map((item) => item.unitPriceKrw)),
-        unitPriceLabel: lowest.unitPriceLabel,
-        lowestPriceKrw: lowest.latestPriceKrw,
-        sellerCount: distinctSellerCount(items.flatMap((item) => item.observations)),
-        latestObservedAt: items.reduce((latest, item) => (item.latest.observedAt > latest ? item.latest.observedAt : latest), items[0].latest.observedAt),
-        observationCount: items.reduce((sum, item) => sum + item.observations.length, 0),
-        coupangPrice,
-        coupangComparison,
-        priceHistory,
-        officialListings,
-      };
-    });
-    return { productGroups: regular, standardGroups: standards };
-  }, [groups, officialProducts, standardMappings, exactStandardMappings, catalogSpecs, standardNames, standardImages, coupangByStandard, linkedByStandardProduct]);
-
-  const stores = useMemo(() => [...new Set([
-    ...productGroups.filter((group) => martType === "all" || group.martType === martType).map((group) => group.storeLabel),
-    ...standardGroups.flatMap((standard) => standard.items).filter((item) => martType === "all" || item.martType === martType).map((item) => item.storeLabel),
-  ])].sort(), [martType, productGroups, standardGroups]);
-
-  const visibleGroups = useMemo(() => mergeOfficialProductGroups(filterAndSortProductGroups(productGroups, { query, category, martType, storeLabel: selectedStore, sort })), [category, martType, query, selectedStore, sort, productGroups]);
-  const officialListingsEligible = martType !== "regular" && selectedStore === "all";
-
-  const linkedStandardSummaries = useMemo<OfficialLinkedStandardSummary[]>(() =>
-    [...linkedByStandardProduct.entries()].map(([standardProductId, listings]) => {
-      const name = standardNames.get(standardProductId) ?? listings[0].sourceNameRaw;
-      const inferredCategory = categoryForProduct(name);
-      return {
-        id: `official-standard:${standardProductId}`,
-        standardProductId,
-        name,
-        imageUrl: officialChannelRepresentativeImageUrl(listings)
-          ?? standardImages.get(standardProductId),
-        category: inferredCategory === "미분류" ? listings[0].category : inferredCategory,
-        listings,
-      };
-    }), [linkedByStandardProduct, standardImages, standardNames]);
-
-  const visibleLinkedStandardSummaries = useMemo(() => {
-    if (!officialListingsEligible) return [];
-    const normalizedQuery = query.trim().toLocaleLowerCase("ko-KR");
-    return linkedStandardSummaries
-      .filter((standard) => category === "전체" || standard.category === category)
-      .filter((standard) => !normalizedQuery || [
-        standard.name,
-        ...standard.listings.map(officialListingSearchText),
-      ].join(" ").toLocaleLowerCase("ko-KR").includes(normalizedQuery));
-  }, [category, linkedStandardSummaries, officialListingsEligible, query]);
-
-  const visibleStandardGroups = useMemo(() => {
-    const normalizedQuery = query.trim().toLowerCase();
-    return standardGroups
-      .map((standard) => {
-        const officialListings = officialListingsEligible ? standard.officialListings : [];
-        const items = standard.items.filter((item) => (martType === "all" || item.martType === martType) && (selectedStore === "all" || item.storeLabel === selectedStore));
-        if (items.length === 0) return { ...standard, items, officialListings };
-        const lowest = [...items].sort((left, right) => left.unitPriceKrw - right.unitPriceKrw || right.latest.observedAt.localeCompare(left.latest.observedAt))[0];
-        const standardProductId = standard.id.replace("standard:", "");
-        const coupangEntry = coupangByStandard.get(standardProductId);
-        const coupangPrice = coupangEntry ? buildCoupangPrice(coupangEntry, lowest.referenceUnit) : standard.coupangPrice;
-        const coupangComparison = compareCoupangPrice(lowest, coupangPrice?.requiredOffer ?? null);
-        const comparableItems = items.filter((item) => item.unitPriceLabel === lowest.unitPriceLabel);
-        return {
-          ...standard,
-          items,
-          lowestUnitPriceKrw: lowest.unitPriceKrw,
-          highestUnitPriceKrw: Math.max(...comparableItems.map((item) => item.unitPriceKrw)),
-          unitPriceLabel: lowest.unitPriceLabel,
-          lowestPriceKrw: lowest.latestPriceKrw,
-          sellerCount: distinctSellerCount(items.flatMap((item) => item.observations)),
-          latestObservedAt: items.reduce((latest, item) => item.latest.observedAt > latest ? item.latest.observedAt : latest, items[0].latest.observedAt),
-          observationCount: items.reduce((sum, item) => sum + item.observations.length, 0),
-          coupangPrice,
-          coupangComparison,
-          officialListings,
-        };
-      })
-      .filter((standard) => standard.items.length > 0)
-      .filter((standard) => category === "전체" || standard.category === category)
-      .filter((standard) => !normalizedQuery || [
-        standard.name,
-        ...standard.items.map((item) => `${item.productName} ${item.sourceProductCode} ${item.storeLabel}`),
-        ...standard.officialListings.map(officialListingSearchText),
-      ].join(" ").toLowerCase().includes(normalizedQuery))
-      .sort((a, b) => {
-        if (sort === "expensive") return b.lowestUnitPriceKrw - a.lowestUnitPriceKrw || a.name.localeCompare(b.name);
-        if (sort === "sellers") return b.sellerCount - a.sellerCount || a.name.localeCompare(b.name);
-        return a.lowestUnitPriceKrw - b.lowestUnitPriceKrw || a.name.localeCompare(b.name);
-      });
-  }, [standardGroups, coupangByStandard, query, category, martType, officialListingsEligible, selectedStore, sort]);
-
-  const gridEntries = useMemo(() => {
-    type Entry =
-      | { kind: "standard"; standard: StandardProductGroup }
-      | { kind: "official-standard"; standard: OfficialLinkedStandardSummary }
-      | { kind: "product"; group: ProductGroup };
-    const standardEntries: Entry[] = visibleStandardGroups.map((standard) => ({ kind: "standard" as const, standard }));
-    const representedStandardIds = new Set(
-      visibleStandardGroups.map((standard) => standard.id.replace("standard:", "")),
-    );
-    const linkedStandardEntries: Entry[] = visibleLinkedStandardSummaries
-      .filter((standard) => catalogView === "official" || !representedStandardIds.has(standard.standardProductId))
-      .map((standard) => ({ kind: "official-standard" as const, standard }));
-    const entries: Entry[] = catalogView === "official"
-      ? linkedStandardEntries
-      : catalogView === "standard"
-        ? [...standardEntries, ...linkedStandardEntries]
-        : [
-          ...standardEntries,
-          ...linkedStandardEntries,
-          ...visibleGroups.map((group) => ({ kind: "product" as const, group })),
-        ];
-    const priceOf = (entry: Entry) => {
-      if (entry.kind === "standard") return entry.standard.lowestUnitPriceKrw;
-      if (entry.kind === "official-standard") {
-        return Math.min(...entry.standard.listings.map((listing) => listing.officialPrice.amountKrw));
-      }
-      const latestOffers = summarizeSellerPrices(sellerPricePointsFromGroup(entry.group));
-      return sort === "expensive"
-        ? Math.max(...latestOffers.map((offer) => offer.latestPriceKrw))
-        : latestOffers[0]?.latestPriceKrw ?? entry.group.latestPriceKrw;
-    };
-    const sellersOf = (entry: Entry) => entry.kind === "standard"
-      ? entry.standard.sellerCount
-      : entry.kind === "official-standard"
-        ? 1
-        : distinctSellerCount(entry.group.observations);
-    const nameOf = (entry: Entry) => entry.kind === "product" ? entry.group.productName : entry.standard.name;
-    return entries.sort((a, b) => {
-      if (sort === "sellers") return sellersOf(b) - sellersOf(a) || nameOf(a).localeCompare(nameOf(b));
-      if (sort === "expensive") return priceOf(b) - priceOf(a) || nameOf(a).localeCompare(nameOf(b));
-      return priceOf(a) - priceOf(b) || nameOf(a).localeCompare(nameOf(b));
-    });
-  }, [visibleStandardGroups, visibleGroups, visibleLinkedStandardSummaries, catalogView, sort]);
+  const gridEntries = useMemo(() => selectGridEntries({
+    visibleStandardGroups,
+    visibleProductGroups: visibleGroups,
+    visibleLinkedStandardSummaries,
+    catalogView,
+    sort,
+  }), [visibleStandardGroups, visibleGroups, visibleLinkedStandardSummaries, catalogView, sort]);
 
   const standaloneOfficialListingCount = useMemo(
     () => officialListingsEligible

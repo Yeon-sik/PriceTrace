@@ -68,6 +68,7 @@ e2e/*
 !e2e/shopping.spec.ts
 !playwright.config.ts
 !src/domain/product-browser.test.ts
+!src/features/product-browser/product-browser.selectors.test.ts
 !src/domain/coupang-price.test.ts
 !src/domain/public-observation.test.ts
 !src/domain/public-receipt.test.ts
