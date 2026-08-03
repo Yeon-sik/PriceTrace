@@ -33,11 +33,27 @@ function validateFixture(name, proposal) {
   );
 }
 
+function validateFinalFixture(name, proposal) {
+  const fixturePath = join(temporaryDirectory, `${name}.json`);
+  return writeFile(fixturePath, JSON.stringify(proposal, null, 2), "utf8").then(
+    () =>
+      spawnSync(
+        process.execPath,
+        [validatorPath, fixturePath],
+        { encoding: "utf8" }
+      )
+  );
+}
+
 try {
   const whitespaceOnlyDifference = structuredClone(template);
   whitespaceOnlyDifference.receipt.sourceNameRaw = "Demo  Product\t500 ml";
   whitespaceOnlyDifference.officialListing.sourceNameRaw =
     "Demo Product500ml";
+  whitespaceOnlyDifference.executionTarget.sameChannelNameRule.normalizedReceiptName =
+    "DemoProduct500ml";
+  whitespaceOnlyDifference.executionTarget.sameChannelNameRule.normalizedOfficialName =
+    "DemoProduct500ml";
 
   const whitespaceResult = await validateFixture(
     "whitespace-only-difference",
@@ -77,6 +93,7 @@ try {
     notes: ["Candidate is discovery-only and cannot be linked."]
   };
   validDiscoveryOnly.plannedEffects = [];
+  validDiscoveryOnly.executionTarget = null;
   validDiscoveryOnly.approval = {
     ...validDiscoveryOnly.approval,
     status: "not_requested"
@@ -151,8 +168,42 @@ try {
     "approval failure should identify the empty effect allowlist"
   );
 
+  const validFinalResult = await validateFinalFixture("valid-final", template);
+  assert.equal(
+    validFinalResult.status,
+    0,
+    `the template must pass final fingerprint validation:\n${validFinalResult.stderr}`
+  );
+
+  const invalidExecutionEvidence = structuredClone(template);
+  invalidExecutionEvidence.executionTarget.evidence =
+    invalidExecutionEvidence.executionTarget.evidence.slice(0, 2);
+  const executionEvidenceResult = await validateFixture(
+    "execution-target-evidence-drift",
+    invalidExecutionEvidence
+  );
+  assert.notEqual(
+    executionEvidenceResult.status,
+    0,
+    "the frozen strict-v6 target must include the exact reviewed evidence"
+  );
+  assert.match(executionEvidenceResult.stderr, /reviewed evidence/);
+
+  const invalidIdempotencyKey = structuredClone(template);
+  invalidIdempotencyKey.execution.idempotencyKey = "standard-product-link:wrong";
+  const idempotencyResult = await validateFinalFixture(
+    "invalid-idempotency-key",
+    invalidIdempotencyKey
+  );
+  assert.notEqual(
+    idempotencyResult.status,
+    0,
+    "the idempotency key must be derived from the approved strict-v6 target"
+  );
+  assert.match(idempotencyResult.stderr, /idempotencyKey/);
+
   process.stdout.write(
-    "Validated exact-name rules and blocked non-executable approval requests.\n"
+    "Validated strict-v6 target alignment, exact-name rules, and approval gates.\n"
   );
 } finally {
   await rm(temporaryDirectory, { recursive: true, force: true });

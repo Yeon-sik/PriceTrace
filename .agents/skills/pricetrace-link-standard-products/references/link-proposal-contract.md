@@ -78,6 +78,8 @@ Price equality is never part of this rule.
 - `decision`: proposed family and variant action.
 - `coupangOffer`: optional exact-option price observation.
 - `representativeImage`: official image proposed for the standard family.
+- `executionTarget`: the exact canonical target consumed by the current
+  `strict_v6` RPC; nullable only before an approval-ready positive decision.
 - `evidence`: provenance-bearing evidence list.
 - `review`: independent review result.
 - `plannedEffects`: exact effect allowlist.
@@ -232,6 +234,35 @@ The strict link path never overwrites a different external URL or an uploaded
 image. Such a collision invalidates the proposal and requires a separate image
 replacement approval path.
 
+### Strict execution target
+
+An approval-ready positive proposal freezes one non-null `executionTarget`.
+This object is the single canonical target for review, fingerprinting, UI
+comparison, idempotency, and the `p_target_canonical_json` RPC parameter. Do
+not rebuild a second approval target from form state or a reduced proposal
+summary.
+
+It contains exactly the current strict-write contract fields:
+
+- `caseId` and `inputFingerprint`;
+- fixed `approvalPolicy` values required by `strict_v6`;
+- `sameChannelNameRule`;
+- `officialSpecificationCheck`;
+- the full `normalizedIdentity`, including `specificationStatus` and
+  `referenceUnit`;
+- `brandEvidence`;
+- `decision`;
+- the RPC-shaped exact `coupangOffer`;
+- `representativeImage`;
+- `evidence`, `review`, and ordered `plannedEffects`.
+
+The human-readable top-level identity, decision, Coupang observation, image,
+evidence, review, and effect fields remain the investigation summary. The
+validator requires every duplicated value to equal `executionTarget` exactly.
+For the current `strict_v6` path, an approval-ready target must include the
+ordered family action, variant action, official link, receipt mapping, Coupang
+offer, and representative-image effects.
+
 ## 5. Evidence and review gates
 
 Every evidence item declares:
@@ -276,16 +307,11 @@ not `decision.missingFields`.
 `inputFingerprint` is SHA-256 over canonical JSON containing `receipt` and
 `officialListing`.
 
-`targetFingerprint` is SHA-256 over canonical JSON containing:
-
-- `caseId`
-- `inputFingerprint`
-- `sameChannelNameRule`
-- `normalizedIdentity`
-- `decision`
-- `coupangOffer`
-- `representativeImage`
-- `plannedEffects`
+`targetFingerprint` is SHA-256 over the canonical JSON of the complete
+`executionTarget`. This is the exact same JSON sent as
+`p_target_canonical_json`; evidence, independent review, approval policy,
+official specification checks, and brand evidence are therefore covered by
+the user's approval fingerprint.
 
 Canonical JSON recursively sorts object keys and preserves array order.
 
@@ -308,6 +334,8 @@ An approval request is presentation-ready only when:
 - decision and review conflicts are empty;
 - `decision.missingFields` is empty;
 - `plannedEffects` is non-empty and exactly matches the verified write path;
+- `executionTarget` is present, equals every reviewed summary field, and its
+  canonical hash equals `approval.targetFingerprint`;
 - a positive link includes a frozen official image, the family-scoped
   `representativeImage`, and `update_representative_image`;
 - `execution.status = not_started`;
@@ -341,12 +369,13 @@ Execution fields are:
 The executor must:
 
 1. Revalidate the proposal and fingerprints.
-2. Re-read current mappings and candidates.
-3. Stop on stale inputs or unapproved effects.
-4. Use a verified atomic write path.
-5. Use the idempotency key.
-6. Re-read state before retrying an unknown result.
-7. Verify applied effects after the write.
+2. Send the approved canonical `executionTarget` unchanged; never rebuild it.
+3. Re-read current mappings and candidates.
+4. Stop on stale inputs or unapproved effects.
+5. Use a verified atomic write path.
+6. Use `standard-product-link:<target fingerprint hex>` as the idempotency key.
+7. Re-read state before retrying an unknown result.
+8. Verify applied effects after the write.
 
 For `update_representative_image`, the executor inserts a new HTTPS external
 image or verifies an exact existing URL in the same transaction as the core

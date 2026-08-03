@@ -1,8 +1,8 @@
 {
   "schemaVersion": 3,
   "privacyPolicyVersion": 2,
-  "receiptIndexRevision": "e426fad6cbf661ae",
-  "revision": "f68101a374d59601",
+  "receiptIndexRevision": "21ec4de82bda3546",
+  "revision": "f2320f9f813a0e25",
   "observations": [
     {
       "id": "9f3022229e6111ae",
@@ -750,7 +750,7 @@
       "catalogNamespace": "korean-military-px",
       "observedAt": "2026-05-08",
       "productName": "새우깡",
-      "sourceProductCode": "120367",
+      "sourceProductCode": "120987",
       "quantity": 3,
       "unitPriceKrw": 930,
       "totalPriceKrw": 2790,

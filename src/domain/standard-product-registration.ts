@@ -165,6 +165,89 @@ const decisionSchema = z.object({
   conflictingFields: z.array(z.string()),
   missingFields: z.array(z.string()),
 }).passthrough();
+const sameChannelNameRuleSchema = z.object({
+  sameChannel: z.boolean(),
+  normalization: z.literal("remove_unicode_whitespace_only"),
+  normalizedReceiptName: z.string().min(1),
+  normalizedOfficialName: z.string().min(1),
+  exactNameMatch: z.boolean(),
+  outcome: z.enum(["apply_official_identity", "discovery_only", "not_applicable"]),
+  importedOfficialFields: z.array(z.string()),
+}).passthrough();
+const representativeImageSchema = z.object({
+  scope: z.literal("standard_product_family"),
+  action: z.enum(["create", "reuse_exact"]),
+  sourceType: z.literal("external_url"),
+  imageUrl: z.string().url().refine((url) => url.startsWith("https://")),
+  contentHash: fingerprintSchema,
+  mediaType: z.string().regex(/^image\/(?:jpeg|png|webp)$/),
+  byteLength: z.number().int().positive(),
+  expectedCurrent: z.object({
+    sourceType: z.literal("external_url"),
+    imageUrl: z.string().url().refine((url) => url.startsWith("https://")),
+  }).nullable(),
+}).passthrough();
+const effectSchema = z.enum([
+  "reuse_standard_family",
+  "create_standard_family",
+  "reuse_catalog_variant",
+  "create_catalog_variant",
+  "link_official_listing",
+  "verify_receipt_mapping",
+  "register_coupang_offer",
+  "update_representative_image",
+]);
+const strictExecutionTargetSchema = z.object({
+  caseId: z.string().min(1),
+  inputFingerprint: fingerprintSchema,
+  approvalPolicy: z.object({
+    mode: z.literal("authenticated_admin_explicit_second_step"),
+    requiredStatementPrefix: z.literal("APPROVE_STANDARD_PRODUCT_LINK"),
+    statementTemplateVersion: z.literal("link-approval-ko-v1"),
+    oneTimeTargetFingerprint: z.literal(true),
+  }).passthrough(),
+  sameChannelNameRule: sameChannelNameRuleSchema,
+  officialSpecificationCheck: z.object({
+    specificationTextRaw: z.string().min(1),
+    parsedContentAmount: z.number().positive(),
+    parsedContentUnit: z.enum(["g", "ml", "each"]),
+    parsedPackageCount: z.number().int().positive(),
+    packageCountBasis: z.enum(["explicit", "default_one_absent_count"]),
+    matchesTarget: z.literal(true),
+  }).passthrough(),
+  normalizedIdentity: z.object({
+    brand: z.string().min(1),
+    productFamilyName: z.string().min(1),
+    variantName: z.string().min(1),
+    specificationStatus: z.literal("verified"),
+    contentAmount: z.number().positive(),
+    contentUnit: z.enum(["g", "ml", "each"]),
+    packageCount: z.number().int().positive(),
+    referenceUnit: z.union([z.literal(10), z.literal(100), z.literal(1000)]),
+    gtin: z.null(),
+  }).passthrough(),
+  brandEvidence: z.object({
+    canonicalName: z.string().min(1),
+    receiptObservedName: z.string().min(1).nullable(),
+    officialObservedName: z.string().min(1),
+    officialSourceLabel: z.string().min(1),
+    productReferenceUrl: z.string().url(),
+  }).passthrough(),
+  decision: decisionSchema,
+  coupangOffer: z.object({
+    productUrl: z.string().url(),
+    listedPriceKrw: z.number().int().positive(),
+    quantity: z.number().int().positive(),
+    contentAmount: z.number().positive(),
+    contentUnit: z.enum(["g", "ml", "each"]),
+    maxBundleQuantity: z.number().int().positive().nullable(),
+    maxBundleListedPriceKrw: z.number().int().positive().nullable(),
+  }).passthrough(),
+  representativeImage: representativeImageSchema,
+  evidence: z.array(evidenceSchema).min(1),
+  review: reviewSchema,
+  plannedEffects: z.array(effectSchema).min(1),
+}).passthrough();
 const reviewedLinkProposalSchema = z.object({
   schemaVersion: z.literal("pricetrace-link-proposal.v3"),
   caseId: z.string().min(1),
@@ -198,15 +281,7 @@ const reviewedLinkProposalSchema = z.object({
       byteLength: z.number().int().positive(),
     }),
   }).passthrough(),
-  sameChannelNameRule: z.object({
-    sameChannel: z.boolean(),
-    normalization: z.literal("remove_unicode_whitespace_only"),
-    normalizedReceiptName: z.string().min(1),
-    normalizedOfficialName: z.string().min(1),
-    exactNameMatch: z.boolean(),
-    outcome: z.enum(["apply_official_identity", "discovery_only", "not_applicable"]),
-    importedOfficialFields: z.array(z.string()),
-  }).passthrough(),
+  sameChannelNameRule: sameChannelNameRuleSchema,
   normalizedIdentity: z.object({
     brand: z.string().nullable(),
     productFamilyName: z.string().nullable(),
@@ -227,31 +302,11 @@ const reviewedLinkProposalSchema = z.object({
     maxBundleQuantity: z.number().int().positive().nullable(),
     maxBundleTotalPriceKrw: z.number().int().positive().nullable(),
   }).passthrough(),
-  representativeImage: z.object({
-    scope: z.literal("standard_product_family"),
-    action: z.enum(["create", "reuse_exact"]),
-    sourceType: z.literal("external_url"),
-    imageUrl: z.string().url().refine((url) => url.startsWith("https://")),
-    contentHash: fingerprintSchema,
-    mediaType: z.string().regex(/^image\/(?:jpeg|png|webp)$/),
-    byteLength: z.number().int().positive(),
-    expectedCurrent: z.object({
-      sourceType: z.literal("external_url"),
-      imageUrl: z.string().url().refine((url) => url.startsWith("https://")),
-    }).nullable(),
-  }),
+  representativeImage: representativeImageSchema,
+  executionTarget: strictExecutionTargetSchema,
   evidence: z.array(evidenceSchema).min(1),
   review: reviewSchema,
-  plannedEffects: z.array(z.enum([
-    "reuse_standard_family",
-    "create_standard_family",
-    "reuse_catalog_variant",
-    "create_catalog_variant",
-    "link_official_listing",
-    "verify_receipt_mapping",
-    "register_coupang_offer",
-    "update_representative_image",
-  ])).min(1),
+  plannedEffects: z.array(effectSchema).min(1),
   approval: z.object({
     status: z.enum(["requested", "approved"]),
     approvalRef: z.string().min(1).nullable().optional(),
@@ -286,14 +341,7 @@ const reviewedLinkProposalSchema = z.object({
 export type ReviewedLinkProposal = z.infer<typeof reviewedLinkProposalSchema>;
 type ReviewedLinkProposalTarget = Pick<
   ReviewedLinkProposal,
-  | "caseId"
-  | "inputFingerprint"
-  | "sameChannelNameRule"
-  | "normalizedIdentity"
-  | "decision"
-  | "coupangOffer"
-  | "representativeImage"
-  | "plannedEffects"
+  "executionTarget"
 >;
 
 export function normalizeProductNameForExactMatch(value: string) {
@@ -362,16 +410,7 @@ export async function sha256CanonicalJson(value: string) {
 export async function reviewedLinkProposalTargetFingerprint(
   proposal: ReviewedLinkProposalTarget,
 ) {
-  return sha256CanonicalJson(canonicalJson({
-    caseId: proposal.caseId,
-    inputFingerprint: proposal.inputFingerprint,
-    sameChannelNameRule: proposal.sameChannelNameRule,
-    normalizedIdentity: proposal.normalizedIdentity,
-    decision: proposal.decision,
-    coupangOffer: proposal.coupangOffer,
-    representativeImage: proposal.representativeImage,
-    plannedEffects: proposal.plannedEffects,
-  }));
+  return sha256CanonicalJson(canonicalJson(proposal.executionTarget));
 }
 
 export async function parseReviewedLinkProposal(
@@ -465,6 +504,24 @@ export function parseReviewedLinkProposalEnvelope(rawJson: string): ReviewedLink
     throw new Error("검토된 LinkProposal v3의 필수 필드가 완전하지 않습니다.");
   }
   const proposal = parsed.data;
+  const targetIdentity = {
+    brand: proposal.executionTarget.normalizedIdentity.brand,
+    productFamilyName: proposal.executionTarget.normalizedIdentity.productFamilyName,
+    variantName: proposal.executionTarget.normalizedIdentity.variantName,
+    contentAmount: proposal.executionTarget.normalizedIdentity.contentAmount,
+    contentUnit: proposal.executionTarget.normalizedIdentity.contentUnit,
+    packageCount: proposal.executionTarget.normalizedIdentity.packageCount,
+    gtin: proposal.executionTarget.normalizedIdentity.gtin,
+  };
+  const targetCoupangOffer = {
+    productUrl: proposal.coupangOffer.url,
+    listedPriceKrw: proposal.coupangOffer.totalPriceKrw,
+    quantity: proposal.coupangOffer.quantity,
+    contentAmount: proposal.coupangOffer.contentAmount,
+    contentUnit: proposal.coupangOffer.contentUnit,
+    maxBundleQuantity: proposal.coupangOffer.maxBundleQuantity,
+    maxBundleListedPriceKrw: proposal.coupangOffer.maxBundleTotalPriceKrw,
+  };
   if (
     proposal.representativeImage.imageUrl !== proposal.officialListing.image.url
     || proposal.representativeImage.contentHash !== proposal.officialListing.image.contentHash
@@ -478,6 +535,29 @@ export function parseReviewedLinkProposalEnvelope(rawJson: string): ReviewedLink
   ) {
     throw new Error("LinkProposal의 공식 이미지·대표 이미지 효과가 일치하지 않습니다.");
   }
+  if (
+    proposal.executionTarget.caseId !== proposal.caseId
+    || proposal.executionTarget.inputFingerprint !== proposal.inputFingerprint
+    || canonicalJson(proposal.executionTarget.sameChannelNameRule)
+      !== canonicalJson(proposal.sameChannelNameRule)
+    || canonicalJson(targetIdentity) !== canonicalJson(proposal.normalizedIdentity)
+    || canonicalJson(proposal.executionTarget.decision) !== canonicalJson(proposal.decision)
+    || canonicalJson(proposal.executionTarget.coupangOffer) !== canonicalJson(targetCoupangOffer)
+    || canonicalJson(proposal.executionTarget.representativeImage)
+      !== canonicalJson(proposal.representativeImage)
+    || canonicalJson(proposal.executionTarget.evidence) !== canonicalJson(proposal.evidence)
+    || canonicalJson(proposal.executionTarget.review) !== canonicalJson(proposal.review)
+    || canonicalJson(proposal.executionTarget.plannedEffects)
+      !== canonicalJson(proposal.plannedEffects)
+    || proposal.executionTarget.officialSpecificationCheck.specificationTextRaw
+      !== proposal.officialListing.specificationTextRaw
+    || proposal.executionTarget.brandEvidence.canonicalName
+      !== proposal.normalizedIdentity.brand
+    || proposal.execution.idempotencyKey
+      !== `standard-product-link:${proposal.approval.targetFingerprint.slice("sha256:".length)}`
+  ) {
+    throw new Error("LinkProposal 요약과 strict-v6 실행 대상이 일치하지 않습니다.");
+  }
   return proposal;
 }
 
@@ -485,49 +565,7 @@ export function assertReviewedProposalMatchesExecutionTarget(
   proposal: ReviewedLinkProposal,
   targetCanonicalJson: string,
 ) {
-  const target = JSON.parse(targetCanonicalJson) as {
-    sameChannelNameRule: unknown;
-    normalizedIdentity: Record<string, unknown>;
-    decision: unknown;
-    coupangOffer: unknown;
-    representativeImage: unknown;
-    plannedEffects: unknown;
-  };
-  const targetIdentity = {
-    brand: target.normalizedIdentity.brand,
-    productFamilyName: target.normalizedIdentity.productFamilyName,
-    variantName: target.normalizedIdentity.variantName,
-    contentAmount: target.normalizedIdentity.contentAmount,
-    contentUnit: target.normalizedIdentity.contentUnit,
-    packageCount: target.normalizedIdentity.packageCount,
-    gtin: target.normalizedIdentity.gtin,
-  };
-  const targetCoupangOffer = target.coupangOffer as {
-    productUrl: string;
-    listedPriceKrw: number;
-    quantity: number;
-    contentAmount: number;
-    contentUnit: CatalogContentUnit;
-    maxBundleQuantity: number | null;
-    maxBundleListedPriceKrw: number | null;
-  };
-  const proposalCoupangOffer = {
-    productUrl: proposal.coupangOffer.url,
-    listedPriceKrw: proposal.coupangOffer.totalPriceKrw,
-    quantity: proposal.coupangOffer.quantity,
-    contentAmount: proposal.coupangOffer.contentAmount,
-    contentUnit: proposal.coupangOffer.contentUnit,
-    maxBundleQuantity: proposal.coupangOffer.maxBundleQuantity,
-    maxBundleListedPriceKrw: proposal.coupangOffer.maxBundleTotalPriceKrw,
-  };
-  if (
-    canonicalJson(proposal.sameChannelNameRule) !== canonicalJson(target.sameChannelNameRule)
-    || canonicalJson(proposal.normalizedIdentity) !== canonicalJson(targetIdentity)
-    || canonicalJson(proposal.decision) !== canonicalJson(target.decision)
-    || canonicalJson(proposalCoupangOffer) !== canonicalJson(targetCoupangOffer)
-    || canonicalJson(proposal.representativeImage) !== canonicalJson(target.representativeImage)
-    || canonicalJson(proposal.plannedEffects) !== canonicalJson(target.plannedEffects)
-  ) {
+  if (canonicalJson(proposal.executionTarget) !== targetCanonicalJson) {
     throw new Error("독립 검토 대상과 현재 적용 대상·효과가 일치하지 않습니다.");
   }
 }

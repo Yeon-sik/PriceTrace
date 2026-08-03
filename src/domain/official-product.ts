@@ -135,6 +135,33 @@ export function mergeOfficialProductCandidates(candidates: OfficialProductCandid
   return [...grouped.values()];
 }
 
+/**
+ * Builds one UI identity per shared catalog item before resolving verified
+ * mappings. This keeps seller observations available through `storeLabels`
+ * without rendering duplicate React keys for the same shared item.
+ */
+export function resolveOfficialProductCandidates<T>(
+  candidates: OfficialProductCandidate[],
+  mappings: StandardProductMapping<T>[],
+) {
+  const mergedCandidates = mergeOfficialProductCandidates(candidates);
+  const identityAwareMappings = mappings.map((mapping) => {
+    const peer = mergedCandidates.find((candidate) => (
+      candidate.sourceProductCode.trim() === mapping.sourceProductCode.trim()
+      && (candidate.storeLabels?.length ? candidate.storeLabels : [candidate.storeLabel])
+        .some((seller) => seller.trim().toLocaleLowerCase("ko-KR") === mapping.sourceLabel.trim().toLocaleLowerCase("ko-KR"))
+    ));
+    return peer
+      ? { ...mapping, martTag: peer.martTag, productName: peer.productName }
+      : mapping;
+  });
+
+  return mergedCandidates.map((candidate) => ({
+    candidate,
+    product: resolveMartTaggedStandardProductMapping(candidate, identityAwareMappings),
+  }));
+}
+
 export type OfficialProductRecord = {
   officialName: string;
   officialUrl: string;

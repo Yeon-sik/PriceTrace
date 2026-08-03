@@ -24,6 +24,12 @@ below. Tell the user when agents are started or when this workflow pauses.
 
 ### 1. Freeze the case
 
+First read `.agents/registered-receipt-product-names.json` and compare the
+receipt `sourceNameRaw` with `names` by exact string equality. If present,
+report that the receipt product name is already registered and stop before
+starting investigation agents. This is a duplicate-work shortcut only:
+absence does not prove identity or authorize a write.
+
 Capture immutable receipt and official-listing inputs, including their distinct
 source namespaces, revision or snapshot identifiers, and snapshot hash. Assign
 one `caseId`. Do not infer that receipt and official codes share a namespace.
@@ -88,6 +94,15 @@ metadata, propose it as the standard-family representative image, and include
 `update_representative_image`. Never overwrite a different or uploaded image;
 report that collision instead.
 
+An approval-ready positive proposal must also freeze one non-null
+`executionTarget` whose shape exactly matches the current `strict_v6`
+canonical target: approval policy, same-channel rule, official specification
+check, full normalized identity, brand evidence, decision, RPC-shaped Coupang
+offer, representative image, evidence, independent review, and ordered six
+effects. `approval.targetFingerprint` is the SHA-256 hash of this exact object.
+The UI and executor must compare or send this object unchanged; they must not
+rebuild a second target from form values or a reduced proposal summary.
+
 Run:
 
 ```powershell
@@ -101,7 +116,14 @@ node .agents/skills/pricetrace-link-standard-products/scripts/validate-link-prop
 ```
 
 Update the proposal through the normal file-editing workflow, then validate
-again. Never ask for approval for an invalid proposal.
+again. For an approval-ready positive proposal, also prove that the application
+builder produces the identical strict target:
+
+```powershell
+npx.cmd vite-node scripts/verify-link-proposal-execution-target.ts <proposal.json>
+```
+
+Never ask for approval unless both checks pass.
 
 If review is `needs_more_evidence` or `reject`, stop and report the exact missing
 or conflicting fields in one short `제안 불가:` line. Do not show an approval
@@ -145,8 +167,10 @@ mark the proposal stale and request approval again.
 Only after valid item-specific approval, start
 `pricetrace_registration_executor` with the approved proposal and the verified
 write-path contract. The executor must re-read current state, check idempotency
-and collisions, require atomicity, apply only approved effects, and verify the
-result.
+and collisions, require atomicity, pass the approved `executionTarget`
+unchanged as `p_target_canonical_json`, apply only approved effects, and verify
+the result. The idempotency key is always
+`standard-product-link:<target fingerprint hex>`.
 
 If the outcome is unknown, inspect current state before retrying. Do not convert
 an unknown result into an automatic retry.
@@ -154,7 +178,10 @@ an unknown result into an automatic retry.
 ### 6. Close the case
 
 Report created and reused IDs, actual effects, audit references, and verification
-results. Stop after this case. The user must explicitly start the next case.
+results. After a verified successful registration, add the exact receipt
+`sourceNameRaw` to `.agents/registered-receipt-product-names.json`, sort and
+deduplicate `names`, and update `refreshedAt`. Stop after this case. The user
+must explicitly start the next case.
 
 ## Hard boundaries
 

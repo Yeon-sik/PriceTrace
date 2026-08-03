@@ -170,6 +170,58 @@ const representativeImageSchema = z.object({
   }).strict().nullable()
 }).strict();
 
+const strictExecutionTargetSchema = z.object({
+  caseId: z.string().trim().min(1),
+  inputFingerprint: fingerprintSchema,
+  approvalPolicy: z.object({
+    mode: z.literal("authenticated_admin_explicit_second_step"),
+    requiredStatementPrefix: z.literal("APPROVE_STANDARD_PRODUCT_LINK"),
+    statementTemplateVersion: z.literal("link-approval-ko-v1"),
+    oneTimeTargetFingerprint: z.literal(true)
+  }).strict(),
+  sameChannelNameRule: sameChannelNameRuleSchema,
+  officialSpecificationCheck: z.object({
+    specificationTextRaw: z.string().trim().min(1),
+    parsedContentAmount: z.number().positive(),
+    parsedContentUnit: z.enum(["g", "ml", "each"]),
+    parsedPackageCount: z.number().int().positive(),
+    packageCountBasis: z.enum(["explicit", "default_one_absent_count"]),
+    matchesTarget: z.literal(true)
+  }).strict(),
+  normalizedIdentity: z.object({
+    brand: z.string().trim().min(1),
+    productFamilyName: z.string().trim().min(1),
+    variantName: z.string().trim().min(1),
+    specificationStatus: z.literal("verified"),
+    contentAmount: z.number().positive(),
+    contentUnit: z.enum(["g", "ml", "each"]),
+    packageCount: z.number().int().positive(),
+    referenceUnit: z.union([z.literal(10), z.literal(100), z.literal(1000)]),
+    gtin: z.null()
+  }).strict(),
+  brandEvidence: z.object({
+    canonicalName: z.string().trim().min(1),
+    receiptObservedName: nullableText,
+    officialObservedName: z.string().trim().min(1),
+    officialSourceLabel: z.string().trim().min(1),
+    productReferenceUrl: z.string().url()
+  }).strict(),
+  decision: decisionSchema,
+  coupangOffer: z.object({
+    productUrl: z.string().url(),
+    listedPriceKrw: z.number().int().positive(),
+    quantity: z.number().int().positive(),
+    contentAmount: z.number().positive(),
+    contentUnit: z.enum(["g", "ml", "each"]),
+    maxBundleQuantity: z.number().int().positive().nullable(),
+    maxBundleListedPriceKrw: z.number().int().positive().nullable()
+  }).strict(),
+  representativeImage: representativeImageSchema,
+  evidence: z.array(evidenceSchema).min(1),
+  review: reviewSchema,
+  plannedEffects: z.array(effectSchema).min(1)
+}).strict();
+
 const approvalSchema = z
   .object({
     status: z.enum(["not_requested", "requested", "approved", "expired"]),
@@ -211,6 +263,7 @@ const proposalSchema = z
     decision: decisionSchema,
     coupangOffer: coupangOfferSchema.nullable(),
     representativeImage: representativeImageSchema.nullable(),
+    executionTarget: strictExecutionTargetSchema.nullable(),
     evidence: z.array(evidenceSchema).min(1),
     review: reviewSchema,
     plannedEffects: z.array(effectSchema),
@@ -413,6 +466,180 @@ const proposalSchema = z
     }
 
     const positiveDecision = !terminalNoWrite;
+    const requiresStrictExecutionTarget = positiveDecision && [
+      "approval_requested",
+      "approved",
+      "applied",
+      "failed",
+      "unknown"
+    ].includes(proposal.status);
+    if (requiresStrictExecutionTarget && !proposal.executionTarget) {
+      issue(
+        ["executionTarget"],
+        "approval and execution states require the exact strict-v6 canonical target"
+      );
+    }
+
+    if (proposal.executionTarget) {
+      const target = proposal.executionTarget;
+      const targetIdentitySummary = {
+        brand: target.normalizedIdentity.brand,
+        productFamilyName: target.normalizedIdentity.productFamilyName,
+        variantName: target.normalizedIdentity.variantName,
+        contentAmount: target.normalizedIdentity.contentAmount,
+        contentUnit: target.normalizedIdentity.contentUnit,
+        packageCount: target.normalizedIdentity.packageCount,
+        gtin: target.normalizedIdentity.gtin
+      };
+      const targetCoupangSummary = proposal.coupangOffer && {
+        productUrl: proposal.coupangOffer.url,
+        listedPriceKrw: proposal.coupangOffer.totalPriceKrw,
+        quantity: proposal.coupangOffer.quantity,
+        contentAmount: proposal.coupangOffer.contentAmount,
+        contentUnit: proposal.coupangOffer.contentUnit,
+        maxBundleQuantity: proposal.coupangOffer.maxBundleQuantity,
+        maxBundleListedPriceKrw:
+          proposal.coupangOffer.maxBundleTotalPriceKrw
+      };
+      const expectedEffects = [
+        decision.standardProductId
+          ? "reuse_standard_family"
+          : "create_standard_family",
+        decision.catalogProductId
+          ? "reuse_catalog_variant"
+          : "create_catalog_variant",
+        "link_official_listing",
+        "verify_receipt_mapping",
+        "register_coupang_offer",
+        "update_representative_image"
+      ];
+      const parsedSpecification = parseStrictSpecification(
+        proposal.officialListing.specificationTextRaw
+      );
+
+      if (target.caseId !== proposal.caseId) {
+        issue(["executionTarget", "caseId"], "must match caseId");
+      }
+      if (target.inputFingerprint !== proposal.inputFingerprint) {
+        issue(
+          ["executionTarget", "inputFingerprint"],
+          "must match inputFingerprint"
+        );
+      }
+      if (!sameCanonicalValue(target.sameChannelNameRule, nameRule)) {
+        issue(
+          ["executionTarget", "sameChannelNameRule"],
+          "must match the reviewed same-channel rule"
+        );
+      }
+      if (!sameCanonicalValue(targetIdentitySummary, proposal.normalizedIdentity)) {
+        issue(
+          ["executionTarget", "normalizedIdentity"],
+          "must match the reviewed identity summary"
+        );
+      }
+      if (!sameCanonicalValue(target.decision, decision)) {
+        issue(
+          ["executionTarget", "decision"],
+          "must match the reviewed decision"
+        );
+      }
+      if (!sameCanonicalValue(target.coupangOffer, targetCoupangSummary)) {
+        issue(
+          ["executionTarget", "coupangOffer"],
+          "must match the reviewed exact Coupang option"
+        );
+      }
+      if (!sameCanonicalValue(target.representativeImage, proposal.representativeImage)) {
+        issue(
+          ["executionTarget", "representativeImage"],
+          "must match the reviewed representative image"
+        );
+      }
+      if (!sameCanonicalValue(target.evidence, proposal.evidence)) {
+        issue(
+          ["executionTarget", "evidence"],
+          "must match the reviewed evidence"
+        );
+      }
+      if (!sameCanonicalValue(target.review, proposal.review)) {
+        issue(
+          ["executionTarget", "review"],
+          "must match the independent review"
+        );
+      }
+      if (
+        !sameCanonicalValue(target.plannedEffects, proposal.plannedEffects) ||
+        !sameCanonicalValue(target.plannedEffects, expectedEffects)
+      ) {
+        issue(
+          ["executionTarget", "plannedEffects"],
+          "must exactly match the strict-v6 effect order"
+        );
+      }
+      if (
+        target.officialSpecificationCheck.specificationTextRaw !==
+          proposal.officialListing.specificationTextRaw ||
+        !parsedSpecification ||
+        target.officialSpecificationCheck.parsedContentAmount !==
+          parsedSpecification.contentAmount ||
+        target.officialSpecificationCheck.parsedContentUnit !==
+          parsedSpecification.contentUnit ||
+        target.officialSpecificationCheck.parsedContentAmount !==
+          target.normalizedIdentity.contentAmount ||
+        target.officialSpecificationCheck.parsedContentUnit !==
+          target.normalizedIdentity.contentUnit ||
+        target.officialSpecificationCheck.parsedPackageCount !==
+          target.normalizedIdentity.packageCount
+      ) {
+        issue(
+          ["executionTarget", "officialSpecificationCheck"],
+          "must match the frozen official specification and target variant"
+        );
+      }
+      if (
+        target.officialSpecificationCheck.packageCountBasis ===
+          "default_one_absent_count" &&
+        (target.normalizedIdentity.packageCount !== 1 ||
+          nameRule.importedOfficialFields.includes("packageCount"))
+      ) {
+        issue(
+          ["executionTarget", "officialSpecificationCheck", "packageCountBasis"],
+          "default package count requires one and cannot import packageCount"
+        );
+      }
+      if (
+        target.officialSpecificationCheck.packageCountBasis === "explicit" &&
+        !nameRule.importedOfficialFields.includes("packageCount")
+      ) {
+        issue(
+          ["executionTarget", "officialSpecificationCheck", "packageCountBasis"],
+          "explicit package count must import packageCount"
+        );
+      }
+      if (target.brandEvidence.canonicalName !== proposal.normalizedIdentity.brand) {
+        issue(
+          ["executionTarget", "brandEvidence", "canonicalName"],
+          "must match normalizedIdentity.brand"
+        );
+      }
+      if (
+        target.review.reviewerAgent !== "pricetrace_independent_reviewer" ||
+        !sameCanonicalValue(target.decision.matchedFields, [
+          "brand",
+          "productFamilyName",
+          "contentAmount",
+          "contentUnit",
+          "packageCount"
+        ])
+      ) {
+        issue(
+          ["executionTarget"],
+          "must satisfy the current strict-v6 reviewer and matched-field contract"
+        );
+      }
+    }
+
     const sourceTypes = new Set(proposal.evidence.map((item) => item.sourceType));
     if (
       positiveDecision &&
@@ -623,6 +850,18 @@ function normalizeSameChannelName(value) {
   return value.replace(/\p{White_Space}+/gu, "");
 }
 
+function parseStrictSpecification(value) {
+  if (!value) return null;
+  const match = value.trim().match(/^(\d+(?:\.\d+)?)\s*(g|ml|each|개)$/iu);
+  if (!match) return null;
+  return {
+    contentAmount: Number(match[1]),
+    contentUnit: ["each", "개"].includes(match[2].toLocaleLowerCase("en-US"))
+      ? "each"
+      : match[2].toLocaleLowerCase("en-US")
+  };
+}
+
 function canonicalize(value) {
   if (Array.isArray(value)) {
     return value.map(canonicalize);
@@ -639,6 +878,10 @@ function canonicalize(value) {
   return value;
 }
 
+function sameCanonicalValue(left, right) {
+  return JSON.stringify(canonicalize(left)) === JSON.stringify(canonicalize(right));
+}
+
 function sha256Fingerprint(value) {
   const canonicalJson = JSON.stringify(canonicalize(value));
   return `sha256:${createHash("sha256").update(canonicalJson).digest("hex")}`;
@@ -650,16 +893,20 @@ function calculateFingerprints(proposal) {
     officialListing: proposal.officialListing
   });
 
-  const targetFingerprint = sha256Fingerprint({
-    caseId: proposal.caseId,
-    inputFingerprint,
-    sameChannelNameRule: proposal.sameChannelNameRule,
-    normalizedIdentity: proposal.normalizedIdentity,
-    decision: proposal.decision,
-    coupangOffer: proposal.coupangOffer,
-    representativeImage: proposal.representativeImage,
-    plannedEffects: proposal.plannedEffects
-  });
+  const targetFingerprint = sha256Fingerprint(
+    proposal.executionTarget ?? {
+      caseId: proposal.caseId,
+      inputFingerprint,
+      sameChannelNameRule: proposal.sameChannelNameRule,
+      normalizedIdentity: proposal.normalizedIdentity,
+      decision: proposal.decision,
+      coupangOffer: proposal.coupangOffer,
+      representativeImage: proposal.representativeImage,
+      evidence: proposal.evidence,
+      review: proposal.review,
+      plannedEffects: proposal.plannedEffects
+    }
+  );
 
   return { inputFingerprint, targetFingerprint };
 }
@@ -715,6 +962,15 @@ async function main() {
   ) {
     errors.push(
       `approval.targetFingerprint mismatch: expected ${calculated.targetFingerprint}`
+    );
+  }
+  if (
+    parsed.data.executionTarget &&
+    parsed.data.execution.idempotencyKey !==
+      `standard-product-link:${calculated.targetFingerprint.slice("sha256:".length)}`
+  ) {
+    errors.push(
+      "execution.idempotencyKey must be derived from approval.targetFingerprint"
     );
   }
 
