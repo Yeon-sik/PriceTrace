@@ -9,6 +9,7 @@ import { summarizeStandardProducts } from "./standard-product";
 import {
   assertReviewedProposalMatchesExecutionTarget,
   buildStrictRegistrationIdentity,
+  canonicalJson,
   findExpectedCatalogProductId,
   findUniqueOfficialExactNameMatch,
   parseOfficialSpecification,
@@ -360,6 +361,7 @@ describe("strict standard product registration", () => {
         maxBundleTotalPriceKrw: executionTarget.coupangOffer.maxBundleListedPriceKrw,
       },
       representativeImage: executionTarget.representativeImage,
+      executionTarget,
       evidence: base.assessment.evidence,
       review: base.assessment.review,
       plannedEffects: executionTarget.plannedEffects,
@@ -369,7 +371,7 @@ describe("strict standard product registration", () => {
       },
       execution: {
         status: "not_started" as const,
-        idempotencyKey: "link:merchant:와마트 일산점:35276:pending-approval",
+        idempotencyKey: first.idempotencyKey,
         appliedAt: null,
         result: null,
       },
@@ -377,6 +379,7 @@ describe("strict standard product registration", () => {
     reviewedProposal.approval.targetFingerprint = await reviewedLinkProposalTargetFingerprint(
       reviewedProposal,
     );
+    expect(reviewedProposal.approval.targetFingerprint).toBe(first.targetFingerprint);
     expect(parseReviewedLinkProposalEnvelope(JSON.stringify(reviewedProposal))).toMatchObject({
       caseId: base.caseId,
       decision: { proposedVariantName: executionTarget.decision.proposedVariantName },
@@ -404,6 +407,10 @@ describe("strict standard product registration", () => {
       imported,
       first.targetCanonicalJson,
     )).not.toThrow();
+    expect(() => assertReviewedProposalMatchesExecutionTarget(
+      imported,
+      canonicalJson({ ...executionTarget, evidence: executionTarget.evidence.slice(0, 2) }),
+    )).toThrow("독립 검토 대상");
     await expect(parseReviewedLinkProposalForLiveCandidate(JSON.stringify(reviewedProposal), {
       receipt: { ...base.receipt, observedAt: "2026-04-28" },
       officialListing: {

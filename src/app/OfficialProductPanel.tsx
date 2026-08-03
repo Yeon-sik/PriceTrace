@@ -1,8 +1,8 @@
 "use client";
 /* eslint-disable @next/next/no-img-element */
 
-import { useCallback, useEffect, useMemo, useState } from "react";
-import { discoverOfficialProduct, officialProductCandidateKey, officialSearchUrl, resolveMartTaggedStandardProductMapping, type OfficialProductCandidate, type StandardProductMapping } from "@/domain/official-product";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { discoverOfficialProduct, officialProductCandidateKey, officialSearchUrl, resolveOfficialProductCandidates, type OfficialProductCandidate, type StandardProductMapping } from "@/domain/official-product";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import { OfficialProductRepository } from "@/repositories/official-product.repository";
 import {
@@ -53,8 +53,9 @@ type PendingLinkProposal = {
 const legacyRepository = new OfficialProductRepository();
 const sellers = (candidate: OfficialProductCandidate) => candidate.storeLabels?.length ? candidate.storeLabels : [candidate.storeLabel];
 
-export function StandardProductWorkspace({ candidates, revision }: { candidates: OfficialProductCandidate[]; revision: number }) {
+export function StandardProductWorkspace({ candidates }: { candidates: OfficialProductCandidate[] }) {
   const client = getSupabaseBrowserClient();
+  const loadGeneration = useRef(0);
   const [userId, setUserId] = useState<string | null>(null);
   const [brands, setBrands] = useState<Brand[]>([]);
   const [standards, setStandards] = useState<StandardProduct[]>([]);
@@ -69,49 +70,76 @@ export function StandardProductWorkspace({ candidates, revision }: { candidates:
   const [selectedStandardCategory, setSelectedStandardCategory] = useState<ProductCategory | null>(null);
   const [lowerTab, setLowerTab] = useState<"connection" | "specification">("connection");
   const [catalogSelection, setCatalogSelection] = useState<CatalogExplorerSelectionRequest>();
+  const [refreshing, setRefreshing] = useState(false);
 
   const load = useCallback(async () => {
     if (!client) return;
-    const [{ data: brandData, error: brandError }, { data: standardData, error: standardError }, { data: imageData, error: imageError }, { data: variantData, error: variantError }, { data: mappingData, error: mappingError }] = await Promise.all([
-      client.from("brands").select("id,canonical_name").eq("status", "active").order("canonical_name"),
-      client.from("standard_products").select("id,canonical_name,brand_id,brand,product_reference_url,purchase_type").eq("status", "active").order("canonical_name"),
-      client.from("standard_product_images").select("standard_product_id,source_type,image_url,storage_path,mime_type,file_size_bytes,width,height"),
-      client.from("catalog_products").select("id,standard_product_id,canonical_name,specification_status,content_amount,content_unit,package_count,reference_unit,listing_reference_url").eq("status", "active"),
-      client.from("source_product_mappings").select("source_label,source_product_code,catalog_product_id").eq("review_status", "verified"),
-    ]);
-    if (brandError || standardError || imageError || variantError || mappingError) { setMessage(brandError?.message ?? standardError?.message ?? imageError?.message ?? variantError?.message ?? mappingError?.message ?? "표준 상품을 불러오지 못했습니다."); return; }
-    const byId = new Map((variantData ?? []).map((variant) => [variant.id, variant as Variant]));
-    setBrands((brandData ?? []) as Brand[]);
-    setStandards((standardData ?? []) as StandardProduct[]);
-    setStandardImages(new Map((imageData ?? []).map((image) => [image.standard_product_id, image as StandardProductImageRecord])));
-    setVariants((variantData ?? []) as Variant[]);
-    setVariantMappings((mappingData ?? []).flatMap((mapping) => {
-      const variant = byId.get(mapping.catalog_product_id);
-      return variant ? [{ sourceLabel: mapping.source_label, sourceProductCode: mapping.source_product_code, product: variant }] : [];
-    }));
-    setLegacy(legacyRepository.loadAll());
-    setMessage("");
+    const requestGeneration = ++loadGeneration.current;
+    setRefreshing(true);
+    try {
+      const [{ data: brandData, error: brandError }, { data: standardData, error: standardError }, { data: imageData, error: imageError }, { data: variantData, error: variantError }, { data: mappingData, error: mappingError }] = await Promise.all([
+        client.from("brands").select("id,canonical_name").eq("status", "active").order("canonical_name"),
+        client.from("standard_products").select("id,canonical_name,brand_id,brand,product_reference_url,purchase_type").eq("status", "active").order("canonical_name"),
+        client.from("standard_product_images").select("standard_product_id,source_type,image_url,storage_path,mime_type,file_size_bytes,width,height"),
+        client.from("catalog_products").select("id,standard_product_id,canonical_name,specification_status,content_amount,content_unit,package_count,reference_unit,listing_reference_url").eq("status", "active"),
+        client.from("source_product_mappings").select("source_label,source_product_code,catalog_product_id").eq("review_status", "verified"),
+      ]);
+      if (requestGeneration !== loadGeneration.current) return;
+      if (brandError || standardError || imageError || variantError || mappingError) {
+        setMessage(brandError?.message ?? standardError?.message ?? imageError?.message ?? variantError?.message ?? mappingError?.message ?? "표준 상품을 불러오지 못했습니다.");
+        return;
+      }
+      const byId = new Map((variantData ?? []).map((variant) => [variant.id, variant as Variant]));
+      setBrands((brandData ?? []) as Brand[]);
+      setStandards((standardData ?? []) as StandardProduct[]);
+      setStandardImages(new Map((imageData ?? []).map((image) => [image.standard_product_id, image as StandardProductImageRecord])));
+      setVariants((variantData ?? []) as Variant[]);
+      setVariantMappings((mappingData ?? []).flatMap((mapping) => {
+        const variant = byId.get(mapping.catalog_product_id);
+        return variant ? [{ sourceLabel: mapping.source_label, sourceProductCode: mapping.source_product_code, product: variant }] : [];
+      }));
+      setLegacy(legacyRepository.loadAll());
+      setMessage("");
+    } catch (reason) {
+      if (requestGeneration === loadGeneration.current) {
+        setMessage(reason instanceof Error ? reason.message : "표준 상품을 불러오지 못했습니다.");
+      }
+    } finally {
+      if (requestGeneration === loadGeneration.current) setRefreshing(false);
+    }
   }, [client]);
 
   useEffect(() => { if (client) void client.auth.getUser().then(({ data }) => setUserId(data.user?.id ?? null)); }, [client]);
-  useEffect(() => { void load(); }, [load, revision]);
+  useEffect(() => {
+    void load();
+    return () => { loadGeneration.current += 1; };
+  }, [load]);
+  useEffect(() => {
+    const refreshOnFocus = () => { void load(); };
+    const refreshWhenVisible = () => { if (document.visibilityState === "visible") void load(); };
+    window.addEventListener("focus", refreshOnFocus);
+    document.addEventListener("visibilitychange", refreshWhenVisible);
+    return () => {
+      window.removeEventListener("focus", refreshOnFocus);
+      document.removeEventListener("visibilitychange", refreshWhenVisible);
+    };
+  }, [load]);
+  useEffect(() => {
+    if (!client) return;
+    const channel = client
+      .channel("standard-product-workspace-mappings")
+      .on("postgres_changes", { event: "*", schema: "public", table: "source_product_mappings" }, () => { void load(); })
+      .subscribe();
+    return () => { void client.removeChannel(channel); };
+  }, [client, load]);
 
   const standardById = useMemo(() => new Map(standards.map((standard) => [standard.id, standard])), [standards]);
-  const identityAwareMappings = useMemo(() => variantMappings.map((mapping) => {
-    const peer = candidates.find((candidate) => (
-      candidate.sourceProductCode.trim() === mapping.sourceProductCode.trim()
-      && sellers(candidate).some((seller) => seller.trim().toLocaleLowerCase("ko-KR") === mapping.sourceLabel.trim().toLocaleLowerCase("ko-KR"))
-    ));
-    return peer
-      ? { ...mapping, martTag: peer.martTag, productName: peer.productName }
-      : mapping;
-  }), [candidates, variantMappings]);
-  const states = useMemo(() => candidates.map((candidate) => {
-    const variant = resolveMartTaggedStandardProductMapping(candidate, identityAwareMappings);
+  const resolvedCandidates = useMemo(() => resolveOfficialProductCandidates(candidates, variantMappings), [candidates, variantMappings]);
+  const states = useMemo(() => resolvedCandidates.map(({ candidate, product: variant }) => {
     const browserRecord = legacy[officialProductCandidateKey(candidate)];
     const discovered = discoverOfficialProduct(candidate);
     return { candidate, variant, standard: variant ? standardById.get(variant.standard_product_id) : undefined, legacy: browserRecord ?? (discovered.status === "matched" ? discovered.record : undefined), fromBrowserStorage: Boolean(browserRecord) };
-  }), [candidates, identityAwareMappings, standardById, legacy]);
+  }), [resolvedCandidates, standardById, legacy]);
   const linked = states.filter((state) => state.variant && state.standard);
   const unlinked = states.filter((state) => !state.variant);
   const matchesSearch = useCallback((state: (typeof states)[number]) => {
@@ -147,7 +175,7 @@ export function StandardProductWorkspace({ candidates, revision }: { candidates:
   return <section className={styles.browser}>
     <div className={styles.browserHead}><div><p className={styles.kicker}>STANDARD PRODUCT MAPPING</p><h1>표준 상품 연결</h1><p>표준 상품은 햇반 같은 상품군입니다. 영수증 품목은 실제 판매 규격(예: 210g × 3)으로 등록해 표준 상품 아래에 보관합니다.</p></div></div>
     {message && <p className={styles.error} role="alert">{message}</p>}
-    <label className={styles.mappingSearch}><span className={styles.srOnly}>표준 상품 연결 검색</span><input type="search" value={searchQuery} onChange={(event) => setSearchQuery(event.target.value)} placeholder="상품명, 브랜드, 판매처, 상품 코드로 검색" /></label>
+    <div className={styles.mappingToolbar}><label className={styles.mappingSearch}><span className={styles.srOnly}>표준 상품 연결 검색</span><input type="search" value={searchQuery} onChange={(event) => setSearchQuery(event.target.value)} placeholder="상품명, 브랜드, 판매처, 상품 코드로 검색" /></label><button type="button" className={styles.secondaryButton} disabled={refreshing} onClick={() => void load()}>{refreshing ? "새로고침 중" : "새로고침"}</button></div>
     <div className={styles.officialSummary}><span><b>{variants.length}</b>개 판매 규격 등록</span><span><b>{variants.filter((variant) => variant.specification_status === "placeholder").length}</b>개 규격 확인 필요</span><span><b>{linked.length}</b>개 영수증 판매 기록 매핑</span><span><b>{unlinked.length}</b>개 연결 필요</span></div>
     <section className={styles.officialSection}><h2>등록된 표준 상품</h2><p className={styles.manualHint}>대표 이미지는 파일 업로드 또는 HTTPS 이미지 링크로 등록할 수 있습니다. 파일은 최적화 후 Supabase Storage에 저장됩니다.</p>{visibleStandards.length ? <><div className={styles.standardCategoryButtons} aria-label="표준 상품 카테고리"><button type="button" aria-pressed={selectedStandardCategory === "전체"} className={selectedStandardCategory === "전체" ? styles.selectedCatalogProduct : ""} onClick={() => setSelectedStandardCategory("전체")}>전체</button>{standardCategories.map((category) => <button type="button" key={category} aria-pressed={selectedStandardCategory === category} className={selectedStandardCategory === category ? styles.selectedCatalogProduct : ""} onClick={() => setSelectedStandardCategory(category)}>{category}</button>)}<button type="button" onClick={() => setSelectedStandardCategory(null)}>선택 해제</button></div>{selectedStandardCategory ? <div className={styles.officialGrid}>{standardsForSelectedCategory.map((standard) => {
       const image = standardImages.get(standard.id);
@@ -155,7 +183,7 @@ export function StandardProductWorkspace({ candidates, revision }: { candidates:
       const pendingCount = registeredVariants.filter((variant) => variant.specification_status === "placeholder").length;
       return <article className={styles.registeredStandardCard} key={standard.id}><button type="button" className={styles.registeredStandardProduct} aria-label={`${standard.canonical_name} 규격·판매처 코드 관리`} onClick={() => openStandardInCatalog(standard)}><span className={styles.officialThumb}><ProductImagePreview imageUrl={image?.image_url} productName={standard.canonical_name} /></span><span className={styles.registeredStandardInfo}><span>표준 상품</span><strong>{standard.canonical_name}</strong><small>브랜드 {standard.brand ?? "미지정"}</small><small>판매 규격 {registeredVariants.length}개 · {image ? image.source_type === "upload" ? "Supabase 저장 이미지" : "외부 이미지 링크" : "대표 이미지 없음"}</small>{pendingCount > 0 && <span className={styles.specificationBadge}>규격 확인 필요 {pendingCount}개</span>}<span className={styles.registeredStandardHint}>규격·판매처 코드 관리 →</span></span></button><button type="button" className={styles.registeredStandardImageButton} onClick={() => setImageTarget(standard)}>{image ? "대표 이미지 변경" : "대표 이미지 추가"}</button></article>;
     })}</div> : <p className={styles.muted}>카테고리를 선택하면 해당 표준 상품만 표시됩니다.</p>}</> : <p>검색 조건에 맞는 표준 상품이 없습니다.</p>}</section>
-    <div className={styles.standardWorkspaceTabs} role="tablist" aria-label="표준 상품 관리 영역"><button type="button" role="tab" aria-selected={lowerTab === "connection"} className={lowerTab === "connection" ? styles.standardWorkspaceTabActive : ""} onClick={() => setLowerTab("connection")}>연결 대기 상품</button><button type="button" role="tab" aria-selected={lowerTab === "specification"} className={lowerTab === "specification" ? styles.standardWorkspaceTabActive : ""} onClick={() => setLowerTab("specification")}>규격·판매처 코드 관리</button></div>
+    <div className={styles.standardWorkspaceTabs} role="tablist" aria-label="표준 상품 관리 영역"><button type="button" role="tab" aria-selected={lowerTab === "connection"} className={lowerTab === "connection" ? styles.standardWorkspaceTabActive : ""} onClick={() => { setLowerTab("connection"); void load(); }}>연결 대기 상품</button><button type="button" role="tab" aria-selected={lowerTab === "specification"} className={lowerTab === "specification" ? styles.standardWorkspaceTabActive : ""} onClick={() => setLowerTab("specification")}>규격·판매처 코드 관리</button></div>
     {lowerTab === "connection" ? <section className={styles.officialSection}><h2>표준 상품 연결 대기열</h2><p className={styles.manualHint}>규격을 확인할 수 없으면 임시값으로 연결할 수 있습니다. 임시값은 관리자 검토 전까지 공개 단위가격 계산에서 제외됩니다.</p><div className={styles.manualQueue}>{visibleUnlinked.map(({ candidate, legacy: legacyRecord, fromBrowserStorage }) => <article key={officialProductCandidateKey(candidate)}><div><strong>{legacyRecord?.officialName ?? candidate.productName}</strong><small>판매처 {sellers(candidate).join(", ")} · 코드 {candidate.sourceProductCode}</small>{legacyRecord && <small>{fromBrowserStorage ? "기존 브라우저 저장 연결" : "기존 시드 연결"}을 가져올 수 있습니다.</small>}</div><div className={styles.queueActions}><a href={legacyRecord?.officialUrl ?? officialSearchUrl(candidate)} target="_blank" rel="noreferrer">상품 정보 찾기</a><button onClick={() => setSelected(candidate)}>{legacyRecord ? "표준 상품으로 가져오기" : "표준 상품 연결"}</button></div></article>)}</div></section> : <CatalogExplorerPanel selectionRequest={catalogSelection} />}
     {selected && <StandardProductConnectionModal candidate={selected} legacy={selectedState?.legacy} brands={brands} standards={standards} variants={variants} standardImages={standardImages} onClose={() => setSelected(null)} onSaved={(notice) => { void load().then(() => notice && setMessage(notice)); }} />}
     {imageTarget && <StandardProductImageModal standard={imageTarget} existing={standardImages.get(imageTarget.id)} userId={userId} onClose={() => setImageTarget(null)} onSaved={() => { setImageTarget(null); void load(); }} />}

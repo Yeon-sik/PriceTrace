@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { discoverOfficialProduct, mergeOfficialProductCandidates, resolveExactStandardProductMapping, resolveMartTaggedStandardProductMapping, resolveStandardProductMapping } from "./official-product";
+import { discoverOfficialProduct, mergeOfficialProductCandidates, officialProductCandidateKey, resolveExactStandardProductMapping, resolveMartTaggedStandardProductMapping, resolveOfficialProductCandidates, resolveStandardProductMapping } from "./official-product";
 
 describe("official product discovery", () => {
   it("matches a verified PX catalog product code", () => {
@@ -33,6 +33,22 @@ describe("official product candidates", () => {
       { sourceProductCode: "P-1", productName: "상품 500ml", storeLabel: "PX A", catalogNamespace: "korean-military-px" },
       { sourceProductCode: "P-1", productName: "상품 1L", storeLabel: "PX B", catalogNamespace: "korean-military-px" },
     ])).toHaveLength(2);
+  });
+
+  it("resolves one stable UI identity for the same PX item observed at two sellers", () => {
+    const resolved = resolveOfficialProductCandidates([
+      { sourceProductCode: "240312", productName: "닥터지 로얄 블랙스네일 크림 기획", storeLabel: "국군복지단 바다마을마트", martTag: "PX", catalogNamespace: "korean-military-px" },
+      { sourceProductCode: "240312", productName: "닥터지 로얄 블랙스네일 크림 기획", storeLabel: "와마트 일산점", martTag: "PX", catalogNamespace: "korean-military-px" },
+    ], [{
+      sourceLabel: "국군복지단 바다마을마트",
+      sourceProductCode: "240312",
+      product: "drg-50ml",
+    }]);
+
+    expect(resolved).toHaveLength(1);
+    expect(resolved[0].product).toBe("drg-50ml");
+    expect(resolved[0].candidate.storeLabels).toEqual(["국군복지단 바다마을마트", "와마트 일산점"]);
+    expect(new Set(resolved.map(({ candidate }) => officialProductCandidateKey(candidate))).size).toBe(resolved.length);
   });
 });
 

@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "privacyPolicyVersion": 2,
-  "revision": "63f582ce1c886cb4",
+  "revision": "88e3c9feb7f52518",
   "id": "2026-05-08_001",
   "fileName": "2026-05-08_001.json",
   "merchant": {
@@ -989,7 +989,7 @@
       "identifiers": [
         {
           "scheme": "merchant_sku",
-          "value": "120367"
+          "value": "120987"
         }
       ],
       "quantity": {
