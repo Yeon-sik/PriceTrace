@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "privacyPolicyVersion": 2,
-  "revision": "89c3a3b216d05e82",
+  "revision": "ce8c7a5da6309b7b",
   "id": "2026-07-14_001",
   "fileName": "2026-07-14_001.json",
   "merchant": {
@@ -1388,7 +1388,7 @@
     {
       "id": "line_691d00e0940cfea4",
       "type": "product",
-      "description": "그릭콤포트 블루베리",
+      "description": "그릭콩포트 블루베리",
       "sourceLineReferences": [
         "77",
         "97"

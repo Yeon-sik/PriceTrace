@@ -20,13 +20,13 @@ export function AdminPage({ candidates, receipts }: { candidates: OfficialProduc
     <div className={styles.adminTabs} role="tablist" aria-label="관리자 기능">
       <button role="tab" aria-selected={tab === "receipts"} onClick={() => setTab("receipts")}>영수증 기록</button>
       <button role="tab" aria-selected={tab === "official"} onClick={() => setTab("official")}>표준 상품 관리</button>
-      <button role="tab" aria-selected={tab === "approvals"} onClick={() => setTab("approvals")}>승인 실행</button>
+      <button role="tab" aria-selected={tab === "approvals"} onClick={() => setTab("approvals")}>연결 승인</button>
       <button role="tab" aria-selected={tab === "market"} onClick={() => setTab("market")}>시장가</button>
       <button role="tab" aria-selected={tab === "quality"} onClick={() => setTab("quality")}>품질 검토</button>
     </div>
     {tab === "receipts" && <AdminReceiptHistory receipts={receipts} />}
     {tab === "official" && <StandardProductWorkspace candidates={candidates} />}
-    {tab === "approvals" && <AdminApprovalExecutionPanel />}
+    {tab === "approvals" && <AdminApprovalExecutionPanel candidates={candidates} />}
     {tab === "market" && <MarketPricePanel />}
     {tab === "quality" && <AdminQualityPanel />}
   </section>;

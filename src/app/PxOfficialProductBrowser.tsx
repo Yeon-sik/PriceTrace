@@ -42,11 +42,13 @@ export function PxOfficialProductBrowser({
   listings: sourceListings,
   query,
   category,
+  onAdd,
 }: {
   catalog: PublicOfficialChannelCatalog;
   listings: PublicOfficialChannelListing[];
   query: string;
   category: ProductCategory;
+  onAdd: (listing: PublicOfficialChannelListing) => void;
 }) {
   const [sort, setSort] = useState<OfficialChannelListingSort>("price-asc");
   const [page, setPage] = useState(1);
@@ -109,6 +111,7 @@ export function PxOfficialProductBrowser({
             <span>{formatObservedAt(listing.officialPrice.observedAt)} 관측</span>
           </div>
           <span className={styles.standardLinkStatus}>표준 상품 연결 전</span>
+          <div className={styles.productActions}><button type="button" aria-label={`${listing.sourceNameRaw} 장바구니에 담기`} onClick={() => onAdd(listing)}>+ 담기</button></div>
         </div>
       </article>)}
     </div>

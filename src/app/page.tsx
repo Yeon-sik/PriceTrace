@@ -1,9 +1,14 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { cartProductFromGroup, cartProductFromOfficialListing, type CartProduct } from "@/domain/cart";
 import { groupProductObservations, martTagFor, PRODUCT_CATEGORIES, type MartType, type ProductCategory, type ProductGroup, type ProductSort } from "@/domain/product-browser";
 import { formatKrw } from "@/domain/settlement";
-import { findUniqueOfficialExactNameMatch } from "@/domain/standard-product-registration";
+import {
+  findUniqueOfficialContainedNameMatch,
+  findUniqueOfficialExactNameMatch,
+  findUniqueOfficialRelaxedNameMatch,
+} from "@/domain/standard-product-registration";
 import { useAdminAccess } from "@/hooks/use-admin-access";
 import { PublicReceiptRepository } from "@/repositories/public-receipt.repository";
 import { PublicOfficialChannelCatalogRepository } from "@/repositories/public-official-channel-catalog.repository";
@@ -33,7 +38,7 @@ export default function Home() {
   const [authOpen, setAuthOpen] = useState(false);
   const [authRevision, setAuthRevision] = useState(0);
   const [trendGroup, setTrendGroup] = useState<ProductGroup | null>(null);
-  const [cartGroupToAdd, setCartGroupToAdd] = useState<ProductGroup | null>(null);
+  const [cartProductToAdd, setCartProductToAdd] = useState<CartProduct | null>(null);
   const [cartQuantity, setCartQuantity] = useState("1");
   const [cartQuantityError, setCartQuantityError] = useState("");
   const [cartNotice, setCartNotice] = useState<{ productName: string; quantity: number } | null>(null);
@@ -50,16 +55,27 @@ export default function Home() {
   const receipts = publicReceiptData.receipts;
   const observationListings = publicReceiptData.observations;
   const productGroups = useMemo(() => groupProductObservations(observationListings), [observationListings]);
+  const cartProducts = useMemo(() => [
+    ...productGroups.map(cartProductFromGroup),
+    ...publicOfficialCatalog.listings.map(cartProductFromOfficialListing),
+  ], [productGroups]);
 
   useEffect(() => { if (!hydrated) hydrateCart(); }, [hydrateCart, hydrated]);
   useEffect(() => { if (page === "admin" && !adminLoading && !isAdmin) setPage("home"); }, [adminLoading, isAdmin, page]);
-  const cartGroups = useMemo(() => productGroups.filter((group) => lines[group.id] > 0), [lines, productGroups]);
-  const cartTotal = cartGroups.reduce((sum, group) => sum + group.latestPriceKrw * lines[group.id], 0);
-  const cartQuantityTotal = cartGroups.reduce((sum, group) => sum + lines[group.id], 0);
+  const cartGroups = useMemo(() => cartProducts.filter((product) => lines[product.id] > 0), [cartProducts, lines]);
+  const cartTotal = cartGroups.reduce((sum, product) => sum + product.priceKrw * lines[product.id], 0);
+  const cartQuantityTotal = cartGroups.reduce((sum, product) => sum + lines[product.id], 0);
   const officialCandidates = useMemo(() => productGroups.map((group) => {
     const receipt = publicReceiptById.get(group.latest.item.receiptId);
     const officialListing = group.catalogNamespace === publicOfficialCatalog.channel.id
-      ? findUniqueOfficialExactNameMatch(publicOfficialCatalog.listings, group.productName) ?? undefined
+      ? findUniqueOfficialExactNameMatch(publicOfficialCatalog.listings, group.productName)
+        ?? findUniqueOfficialRelaxedNameMatch(publicOfficialCatalog.listings, group.productName)
+        ?? findUniqueOfficialContainedNameMatch(
+          publicOfficialCatalog.listings,
+          group.productName,
+          group.latest.item.unitPriceKrw,
+        )
+        ?? undefined
       : undefined;
     const receiptRevision = [
       "receipt-v1",
@@ -93,6 +109,9 @@ export default function Home() {
       officialSourceNameRaw: officialListing?.sourceNameRaw,
       officialVendorNameRaw: officialListing?.vendorNameRaw ?? undefined,
       officialSpecificationTextRaw: officialListing?.specificationTextRaw ?? undefined,
+      officialPriceAmountKrw: officialListing?.officialPrice.amountKrw,
+      officialPriceSourceText: officialListing?.officialPrice.sourceText,
+      officialPriceObservedAt: officialListing?.officialPrice.observedAt,
       officialSourceRefs: officialListing?.sourceRefs,
       officialImageUrl: officialListing?.image?.url,
       officialImageContentHash: officialListing?.image?.contentHash,
@@ -101,22 +120,22 @@ export default function Home() {
     };
   }), [productGroups]);
 
-  function openCartModal(group: ProductGroup) {
-    setCartGroupToAdd(group);
+  function openCartModal(product: CartProduct) {
+    setCartProductToAdd(product);
     setCartQuantity("1");
     setCartQuantityError("");
   }
 
   function confirmAddToCart() {
-    if (!cartGroupToAdd) return;
+    if (!cartProductToAdd) return;
     const quantity = Number(cartQuantity);
     if (!Number.isInteger(quantity) || quantity < 1) {
       setCartQuantityError("1개 이상의 정수를 입력하세요.");
       return;
     }
-    addCart(cartGroupToAdd.id, quantity);
-    setCartNotice({ productName: cartGroupToAdd.productName, quantity });
-    setCartGroupToAdd(null);
+    addCart(cartProductToAdd.id, quantity);
+    setCartNotice({ productName: cartProductToAdd.productName, quantity });
+    setCartProductToAdd(null);
   }
 
   function openProducts(nextCategory: ProductCategory = "전체") {
@@ -143,7 +162,7 @@ export default function Home() {
       {page === "home" && <><section className={styles.hero}><p className={styles.kicker}>PRICE OBSERVATION PLATFORM</p><h1>상품 가격을<br /><span>관측 기록으로 비교하세요.</span></h1><p>판매처와 시점이 명확한 영수증 관측가를 비교하고<br />필요한 상품을 장바구니에 모을 수 있습니다.</p><button onClick={() => openProducts()}>상품 둘러보기 <span>→</span></button></section><section className={styles.homeGrid}><CategoryBox category={category} onSelect={openProducts} /><CartBox count={cartGroups.length} quantity={cartQuantityTotal} total={cartTotal} onOpen={() => setPage("cart")} /></section></>}
       {page === "products" && <ProductBrowser groups={productGroups} query={query} setQuery={setQuery} category={category} setCategory={setCategory} martType={martType} setMartType={setMartType} selectedStore={selectedStore} setSelectedStore={setSelectedStore} sort={sort} setSort={setSort} authRevision={authRevision} onAdd={openCartModal} onTrend={setTrendGroup} onOpenStore={(store) => { setSelectedMarket(store); setPage("markets"); }} />}
       {page === "markets" && <MarketBrowser receipts={receipts} observations={observationListings} selectedStore={selectedMarket} onSelectStore={setSelectedMarket} onOpenTrend={setTrendGroup} />}
-      {page === "cart" && <CartPage groups={productGroups} lines={lines} onQuantityChange={updateCartQuantity} onRemove={removeCart} onClear={clearCart} onBrowse={() => setPage("products")} />}
+      {page === "cart" && <CartPage products={cartProducts} lines={lines} onQuantityChange={updateCartQuantity} onRemove={removeCart} onClear={clearCart} onBrowse={() => setPage("products")} />}
       {page === "admin" && isAdmin && <AdminPage candidates={officialCandidates} receipts={receipts} />}
     </main>
 
@@ -158,7 +177,7 @@ export default function Home() {
 
     {authOpen && <AuthPanel onChange={handleAuthChange} modal onClose={() => setAuthOpen(false)} />}
     {trendGroup && <PriceTrendModal group={trendGroup} onClose={() => setTrendGroup(null)} onOpenStore={(store) => { setTrendGroup(null); setSelectedMarket(store); setPage("markets"); }} />}
-    {cartGroupToAdd && <CartQuantityModal group={cartGroupToAdd} value={cartQuantity} error={cartQuantityError} onChange={(value) => { setCartQuantity(value); setCartQuantityError(""); }} onClose={() => setCartGroupToAdd(null)} onConfirm={confirmAddToCart} />}
+    {cartProductToAdd && <CartQuantityModal product={cartProductToAdd} value={cartQuantity} error={cartQuantityError} onChange={(value) => { setCartQuantity(value); setCartQuantityError(""); }} onClose={() => setCartProductToAdd(null)} onConfirm={confirmAddToCart} />}
     {cartNotice && <CartNoticeModal productName={cartNotice.productName} quantity={cartNotice.quantity} onClose={() => setCartNotice(null)} onGoCart={() => { setCartNotice(null); setPage("cart"); }} />}
   </div>;
 }

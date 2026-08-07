@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { cartProductFromGroup, cartProductFromOfficialListing, type CartProduct } from "@/domain/cart";
 import { distinctSellerCount, latestSellerRows, PRODUCT_CATEGORIES, type MartType, type ProductCategory, type ProductGroup, type ProductSort } from "@/domain/product-browser";
 import { formatKrw } from "@/domain/settlement";
 import {
@@ -43,14 +44,19 @@ function RecordedPriceBlock({ group }: { group: ProductGroup }) {
 function OfficialLinkedStandardCard({
   standard,
   onOpen,
+  onAdd,
 }: {
   standard: OfficialLinkedStandardSummary;
   onOpen?: () => void;
+  onAdd?: (listing: OfficialLinkedStandardSummary["listings"][number]) => void;
 }) {
   const prices = standard.listings.map((listing) => listing.officialPrice.amountKrw);
   const lowestPrice = Math.min(...prices);
   const highestPrice = Math.max(...prices);
   const firstListing = standard.listings[0];
+  const lowestListing = standard.listings.reduce((lowest, listing) => (
+    listing.officialPrice.amountKrw < lowest.officialPrice.amountKrw ? listing : lowest
+  ), firstListing);
 
   return <article className={`${styles.productCard} ${styles.officialLinkedStandardCard}`}>
     <div className={styles.productVisual} data-testid="product-image-slot">
@@ -75,12 +81,13 @@ function OfficialLinkedStandardCard({
         <span>특정 지점 판매·재고 확인 아님</span>
       </div>
       {onOpen && <button type="button" onClick={onOpen}>출처·가격 상세 보기 ›</button>}
-    </div>
-  </article>;
+       {onAdd && <div className={styles.productActions}><button type="button" aria-label={`${standard.name} 장바구니에 담기`} onClick={() => onAdd(lowestListing)}>최저 공식가 담기</button></div>}
+     </div>
+   </article>;
 }
 
 export function ProductBrowser({ groups, query, setQuery, category, setCategory, martType, setMartType, selectedStore, setSelectedStore, sort, setSort, authRevision, onAdd, onTrend, onOpenStore }: {
-  groups: ProductGroup[]; query: string; setQuery: (value: string) => void; category: ProductCategory; setCategory: (value: ProductCategory) => void; martType: MartType; setMartType: (value: MartType) => void; selectedStore: string; setSelectedStore: (value: string) => void; sort: ProductSort; setSort: (value: ProductSort) => void; authRevision: number; onAdd: (group: ProductGroup) => void; onTrend: (group: ProductGroup) => void; onOpenStore: (store: string) => void;
+  groups: ProductGroup[]; query: string; setQuery: (value: string) => void; category: ProductCategory; setCategory: (value: ProductCategory) => void; martType: MartType; setMartType: (value: MartType) => void; selectedStore: string; setSelectedStore: (value: string) => void; sort: ProductSort; setSort: (value: ProductSort) => void; authRevision: number; onAdd: (product: CartProduct) => void; onTrend: (group: ProductGroup) => void; onOpenStore: (store: string) => void;
 }) {
   const { linkedByStandardProduct, standaloneListings } = useMemo(
     () => partitionOfficialChannelListingsByStandardProduct(publicPxCatalog.listings),
@@ -218,6 +225,7 @@ export function ProductBrowser({ groups, query, setQuery, category, setCategory,
           onOpen={standardGroups.some((standard) => standard.id === `standard:${entry.standard.standardProductId}`)
             ? () => setOpenStandardId(`standard:${entry.standard.standardProductId}`)
             : undefined}
+          onAdd={(listing) => onAdd(cartProductFromOfficialListing(listing))}
         />
       : entry.kind === "standard"
         ? <article className={styles.productCard} key={entry.standard.id}>
@@ -233,13 +241,16 @@ export function ProductBrowser({ groups, query, setQuery, category, setCategory,
                 <small>PX 공식 판매상품 {entry.standard.officialListings.length.toLocaleString("ko-KR")}개 연결</small>
                 <strong>공식 표시가 {formatKrw(Math.min(...entry.standard.officialListings.map((listing) => listing.officialPrice.amountKrw)))} ~</strong>
               </div>}
-              <button aria-label={`${entry.standard.name} 하위 상품 보기`} onClick={() => setOpenStandardId(entry.standard.id)}>판매처 가격 기준 비교 보기 ›</button>
+              <div className={styles.productActions}>
+                <button aria-label={`${entry.standard.name} 하위 상품 보기`} onClick={() => setOpenStandardId(entry.standard.id)}>판매처 가격 기준 비교 보기 ›</button>
+                <button type="button" aria-label={`${entry.standard.name} 장바구니에 담기`} onClick={() => onAdd(cartProductFromGroup(entry.standard.items[0]))}>최저 관측가 담기</button>
+              </div>
             </div>
           </article>
-        : <article className={styles.productCard} key={entry.group.id}><div className={styles.productVisual} data-testid="product-image-slot"><ProductImage item={entry.group.latest.item} category={entry.group.category} imageUrl={entry.group.officialProduct?.imageUrl} /></div><div className={styles.productInfo}><h2>{entry.group.officialProduct?.officialName ?? entry.group.productName}</h2><StoreInfo sellerCount={distinctSellerCount(entry.group.observations)} onOpen={() => setStoreListTarget({ title: `${entry.group.productName} 판매처`, rows: latestSellerRows(entry.group.observations) })} /><RecordedPriceBlock group={entry.group} /><div className={styles.productActions}><button className={styles.trendButton} aria-label={`${entry.group.productName} 가격 이력 보기`} onClick={() => onTrend(entry.group)}>가격 이력</button><button aria-label={`${entry.group.productName} 장바구니에 담기`} onClick={() => onAdd(entry.group)}>+ 담기</button></div></div></article>)}</div>
+        : <article className={styles.productCard} key={entry.group.id}><div className={styles.productVisual} data-testid="product-image-slot"><ProductImage item={entry.group.latest.item} category={entry.group.category} imageUrl={entry.group.officialProduct?.imageUrl} /></div><div className={styles.productInfo}><h2>{entry.group.officialProduct?.officialName ?? entry.group.productName}</h2><StoreInfo sellerCount={distinctSellerCount(entry.group.observations)} onOpen={() => setStoreListTarget({ title: `${entry.group.productName} 판매처`, rows: latestSellerRows(entry.group.observations) })} /><RecordedPriceBlock group={entry.group} /><div className={styles.productActions}><button className={styles.trendButton} aria-label={`${entry.group.productName} 가격 이력 보기`} onClick={() => onTrend(entry.group)}>가격 이력</button><button aria-label={`${entry.group.productName} 장바구니에 담기`} onClick={() => onAdd(cartProductFromGroup(entry.group))}>+ 담기</button></div></div></article>)}</div>
     {gridEntries.length === 0 && !showStandaloneOfficialListings && !(showOfficialOnly && !officialListingsEligible) && <div className={styles.noResult}><strong>조건에 맞는 상품이 없습니다.</strong></div>}
 
-    {showStandaloneOfficialListings && <PxOfficialProductBrowser catalog={publicPxCatalog} listings={standaloneListings} query={query} category={category} />}
+    {showStandaloneOfficialListings && <PxOfficialProductBrowser catalog={publicPxCatalog} listings={standaloneListings} query={query} category={category} onAdd={(listing) => onAdd(cartProductFromOfficialListing(listing))} />}
     {showOfficialOnly && !officialListingsEligible && <div className={styles.noResult}><strong>{selectedStore !== "all" ? "공식 상품은 특정 지점의 판매·재고로 확인할 수 없습니다." : "일반 마트 조건에 해당하는 공식 상품 컬렉션이 없습니다."}</strong><p>판매처 유형을 전체 또는 PX로 선택하고, 판매 마트는 전체 마트로 두세요.</p></div>}
 
     {openStandard && !showOfficialOnly && <StandardProductDetailModal standard={openStandard} onClose={() => setOpenStandardId(null)} onOpenStore={onOpenStore} />}

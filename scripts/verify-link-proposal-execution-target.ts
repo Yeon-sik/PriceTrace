@@ -2,6 +2,7 @@ import { readFile } from "node:fs/promises";
 import process from "node:process";
 import {
   assertReviewedProposalMatchesExecutionTarget,
+  buildLinkOnlyRegistrationIdentity,
   buildStrictRegistrationIdentity,
   parseReviewedLinkProposalEnvelope,
 } from "../src/domain/standard-product-registration";
@@ -20,7 +21,7 @@ if (!sourceCatalogNamespace) {
   throw new Error("승인 가능한 영수증 카탈로그 채널이 없습니다.");
 }
 
-const identity = await buildStrictRegistrationIdentity({
+const commonInput = {
   caseId: proposal.caseId,
   receipt: { ...proposal.receipt, sourceCatalogNamespace },
   officialListing: proposal.officialListing,
@@ -34,7 +35,9 @@ const identity = await buildStrictRegistrationIdentity({
     evidence: proposal.evidence,
     review: proposal.review,
   },
-  target: {
+  verifiedNameEquivalence: proposal.sameChannelNameRule.verifiedEquivalence ?? null,
+};
+const commonTarget = {
     standardProductId: proposal.decision.standardProductId,
     catalogProductId: proposal.decision.catalogProductId,
     standardName: target.normalizedIdentity.productFamilyName,
@@ -49,17 +52,34 @@ const identity = await buildStrictRegistrationIdentity({
     contentUnit: target.normalizedIdentity.contentUnit,
     packageCount: target.normalizedIdentity.packageCount,
     referenceUnit: target.normalizedIdentity.referenceUnit,
-    coupangProductUrl: target.coupangOffer.productUrl,
-    coupangListedPriceKrw: target.coupangOffer.listedPriceKrw,
-    coupangQuantity: target.coupangOffer.quantity,
-    coupangContentAmount: target.coupangOffer.contentAmount,
-    coupangContentUnit: target.coupangOffer.contentUnit,
-    coupangMaxBundleQuantity: target.coupangOffer.maxBundleQuantity,
-    coupangMaxBundleListedPriceKrw: target.coupangOffer.maxBundleListedPriceKrw,
     representativeImageAction: target.representativeImage.action,
     representativeImageExpectedCurrent: target.representativeImage.expectedCurrent,
-  },
-});
+};
+const identity = target.executionMode === "link_only_v1"
+  ? await buildLinkOnlyRegistrationIdentity({
+      ...commonInput,
+      userSelectedOfficialVariant: target.userSelectedOfficialVariant ?? null,
+      target: {
+        ...commonTarget,
+        apparelSize: target.normalizedIdentity.apparelSize ?? null,
+        kitComponents: target.normalizedIdentity.kitComponents ?? null,
+        wiperBladeFitment: target.normalizedIdentity.wiperBladeFitment ?? null,
+      },
+    })
+  : await buildStrictRegistrationIdentity({
+      ...commonInput,
+      target: {
+        ...commonTarget,
+        coupangProductUrl: target.coupangOffer!.productUrl,
+        coupangListedPriceKrw: target.coupangOffer!.listedPriceKrw,
+        coupangQuantity: target.coupangOffer!.quantity,
+        coupangContentAmount: target.coupangOffer!.contentAmount,
+        coupangContentUnit: target.coupangOffer!.contentUnit,
+        coupangMaxBundleQuantity: target.coupangOffer!.maxBundleQuantity,
+        coupangMaxBundleListedPriceKrw:
+          target.coupangOffer!.maxBundleListedPriceKrw,
+      },
+    });
 
 assertReviewedProposalMatchesExecutionTarget(proposal, identity.targetCanonicalJson);
 if (
