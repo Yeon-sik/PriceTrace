@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
 import { discoverOfficialProduct, mergeOfficialProductCandidates, officialProductCandidateKey, resolveExactStandardProductMapping, resolveMartTaggedStandardProductMapping, resolveOfficialProductCandidates, resolveStandardProductMapping } from "./official-product";
+import {
+  isExcludedFromStandardProductConnectionQueue,
+  standardProductConnectionQueueExclusions,
+} from "./standard-product-connection-queue-exclusions";
 
 describe("official product discovery", () => {
   it("matches a verified PX catalog product code", () => {
@@ -49,6 +53,44 @@ describe("official product candidates", () => {
     expect(resolved[0].product).toBe("drg-50ml");
     expect(resolved[0].candidate.storeLabels).toEqual(["국군복지단 바다마을마트", "와마트 일산점"]);
     expect(new Set(resolved.map(({ candidate }) => officialProductCandidateKey(candidate))).size).toBe(resolved.length);
+  });
+});
+
+describe("standard product connection queue exclusions", () => {
+  it("excludes every explicitly recorded duplicate source identity", () => {
+    for (const exclusion of standardProductConnectionQueueExclusions) {
+      expect(isExcludedFromStandardProductConnectionQueue({
+        sourceProductCode: exclusion.sourceProductCode,
+        productName: exclusion.sourceNameRaw,
+        storeLabel: exclusion.sourceLabel,
+        catalogNamespace: "korean-military-px",
+      })).toBe(true);
+    }
+  });
+
+  it("matches an exact excluded seller inside a merged candidate", () => {
+    expect(isExcludedFromStandardProductConnectionQueue({
+      sourceProductCode: "260207",
+      productName: "쉬림프 스파이시 투움바 파스타",
+      storeLabel: "다른 PX 판매처",
+      storeLabels: ["다른 PX 판매처", "와마트 일산점"],
+      catalogNamespace: "korean-military-px",
+    })).toBe(true);
+  });
+
+  it("does not generalize an exclusion by product name or code alone", () => {
+    expect(isExcludedFromStandardProductConnectionQueue({
+      sourceProductCode: "260150",
+      productName: "더단백 크런치바 초코",
+      storeLabel: "다른 판매처",
+      catalogNamespace: null,
+    })).toBe(false);
+    expect(isExcludedFromStandardProductConnectionQueue({
+      sourceProductCode: "다른 코드",
+      productName: "더단백 크런치바 초코",
+      storeLabel: "와마트 일산점",
+      catalogNamespace: null,
+    })).toBe(false);
   });
 });
 

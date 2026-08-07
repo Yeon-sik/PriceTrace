@@ -39,6 +39,7 @@ docs/*
 !docs/Project_Intro.md
 !docs/Project_Detail.md
 !docs/PROJECT_DOCS_OPERATIONS.md
+!docs/예외처리_*.md
 !docs/templates/
 !docs/templates/PROJECT_INTRO_TEMPLATE.md
 !docs/templates/PROJECT_DETAIL_TEMPLATE.md
@@ -59,6 +60,7 @@ src/**/*.test.ts
 !src/domain/public-official-channel-catalog.test.ts
 !src/domain/standard-product-image.test.ts
 !src/repositories/public-official-channel-catalog.repository.test.ts
+!src/repositories/standard-product-link-proposal-queue.repository.test.ts
 tsconfig.tsbuildinfo
 .env.example
 
@@ -66,8 +68,10 @@ tsconfig.tsbuildinfo
 !e2e/
 e2e/*
 !e2e/shopping.spec.ts
+!e2e/official-cart.spec.ts
 !playwright.config.ts
 !src/domain/product-browser.test.ts
+!src/domain/cart.test.ts
 !src/features/product-browser/product-browser.selectors.test.ts
 !src/domain/coupang-price.test.ts
 !src/domain/public-observation.test.ts

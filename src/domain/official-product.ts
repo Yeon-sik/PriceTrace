@@ -22,6 +22,9 @@ export type OfficialProductCandidate = {
   officialSourceNameRaw?: string;
   officialVendorNameRaw?: string;
   officialSpecificationTextRaw?: string;
+  officialPriceAmountKrw?: number;
+  officialPriceSourceText?: string;
+  officialPriceObservedAt?: string;
   officialSourceRefs?: string[];
   officialImageUrl?: string;
   officialImageContentHash?: string;

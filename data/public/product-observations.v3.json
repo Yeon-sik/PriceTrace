@@ -1,8 +1,8 @@
 {
   "schemaVersion": 3,
   "privacyPolicyVersion": 2,
-  "receiptIndexRevision": "21ec4de82bda3546",
-  "revision": "f2320f9f813a0e25",
+  "receiptIndexRevision": "03a217dc099f6448",
+  "revision": "641bd2fa3c9f2060",
   "observations": [
     {
       "id": "9f3022229e6111ae",
@@ -2269,7 +2269,7 @@
       "retailChannel": "px",
       "catalogNamespace": "korean-military-px",
       "observedAt": "2026-07-14",
-      "productName": "그릭콤포트 블루베리",
+      "productName": "그릭콩포트 블루베리",
       "sourceProductCode": "260483",
       "quantity": 2,
       "unitPriceKrw": 2020,
