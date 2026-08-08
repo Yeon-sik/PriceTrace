@@ -2,7 +2,8 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { cartProductFromGroup, cartProductFromOfficialListing, type CartProduct } from "@/domain/cart";
-import { groupProductObservations, martTagFor, PRODUCT_CATEGORIES, type MartType, type ProductCategory, type ProductGroup, type ProductSort } from "@/domain/product-browser";
+import { groupProductObservations, martTagFor, PRODUCT_CATEGORIES, type MartType, type ProductCategory, type ProductGroup, type ProductObservationListing, type ProductSort } from "@/domain/product-browser";
+import type { OfficialProductCandidate } from "@/domain/official-product";
 import { formatKrw } from "@/domain/settlement";
 import {
   findUniqueOfficialContainedNameMatch,
@@ -26,6 +27,40 @@ const publicReceiptData = new PublicReceiptRepository().loadAll();
 const publicOfficialCatalog = new PublicOfficialChannelCatalogRepository().loadPxCatalog();
 const publicReceiptById = new Map(publicReceiptData.receipts.map((receipt) => [receipt.id, receipt]));
 type Page = "home" | "products" | "markets" | "cart" | "admin";
+
+function receiptRevisionFor(observation: ProductObservationListing) {
+  const receipt = publicReceiptById.get(observation.item.receiptId);
+  return [
+    "receipt-v1",
+    receipt?.publicReceiptFileName ?? observation.item.receiptId,
+    observation.item.id,
+    observation.observedAt,
+    observation.item.productName,
+    observation.item.sourceProductCode,
+    observation.item.unitPriceKrw,
+    observation.item.quantityValue,
+    observation.item.totalPriceKrw,
+  ].join(":");
+}
+
+function receiptObservationCandidate(
+  observation: ProductObservationListing,
+): OfficialProductCandidate {
+  return {
+    sourceProductCode: observation.item.sourceProductCode,
+    productName: observation.item.productName,
+    storeLabel: observation.storeLabel,
+    martTag: martTagFor(observation),
+    catalogNamespace: observation.catalogNamespace,
+    receiptId: observation.item.receiptId,
+    receiptItemId: observation.item.id,
+    receiptRevision: receiptRevisionFor(observation),
+    receiptObservedAt: observation.observedAt,
+    receiptUnitPriceKrw: observation.item.unitPriceKrw,
+    receiptQuantity: observation.item.quantityValue,
+    receiptTotalPriceKrw: observation.item.totalPriceKrw,
+  };
+}
 
 export default function Home() {
   const [page, setPage] = useState<Page>("home");
@@ -55,6 +90,10 @@ export default function Home() {
   const receipts = publicReceiptData.receipts;
   const observationListings = publicReceiptData.observations;
   const productGroups = useMemo(() => groupProductObservations(observationListings), [observationListings]);
+  const approvalCandidates = useMemo(
+    () => observationListings.map(receiptObservationCandidate),
+    [observationListings],
+  );
   const cartProducts = useMemo(() => [
     ...productGroups.map(cartProductFromGroup),
     ...publicOfficialCatalog.listings.map(cartProductFromOfficialListing),
@@ -66,7 +105,7 @@ export default function Home() {
   const cartTotal = cartGroups.reduce((sum, product) => sum + product.priceKrw * lines[product.id], 0);
   const cartQuantityTotal = cartGroups.reduce((sum, product) => sum + lines[product.id], 0);
   const officialCandidates = useMemo(() => productGroups.map((group) => {
-    const receipt = publicReceiptById.get(group.latest.item.receiptId);
+    const receiptCandidate = receiptObservationCandidate(group.latest);
     const officialListing = group.catalogNamespace === publicOfficialCatalog.channel.id
       ? findUniqueOfficialExactNameMatch(publicOfficialCatalog.listings, group.productName)
         ?? findUniqueOfficialRelaxedNameMatch(publicOfficialCatalog.listings, group.productName)
@@ -77,30 +116,8 @@ export default function Home() {
         )
         ?? undefined
       : undefined;
-    const receiptRevision = [
-      "receipt-v1",
-      receipt?.publicReceiptFileName ?? group.latest.item.receiptId,
-      group.latest.item.id,
-      group.latest.observedAt,
-      group.latest.item.productName,
-      group.latest.item.sourceProductCode,
-      group.latest.item.unitPriceKrw,
-      group.latest.item.quantityValue,
-      group.latest.item.totalPriceKrw,
-    ].join(":");
     return {
-      sourceProductCode: group.sourceProductCode,
-      productName: group.productName,
-      storeLabel: group.storeLabel,
-      martTag: martTagFor(group),
-      catalogNamespace: group.catalogNamespace,
-      receiptId: group.latest.item.receiptId,
-      receiptItemId: group.latest.item.id,
-      receiptRevision,
-      receiptObservedAt: group.latest.observedAt,
-      receiptUnitPriceKrw: group.latest.item.unitPriceKrw,
-      receiptQuantity: group.latest.item.quantityValue,
-      receiptTotalPriceKrw: group.latest.item.totalPriceKrw,
+      ...receiptCandidate,
       officialChannelId: officialListing ? publicOfficialCatalog.channel.id : undefined,
       officialSourceProductCodeNamespace: officialListing?.sourceProductCodeNamespace,
       officialSourceProductCode: officialListing?.sourceProductCode,
@@ -163,7 +180,7 @@ export default function Home() {
       {page === "products" && <ProductBrowser groups={productGroups} query={query} setQuery={setQuery} category={category} setCategory={setCategory} martType={martType} setMartType={setMartType} selectedStore={selectedStore} setSelectedStore={setSelectedStore} sort={sort} setSort={setSort} authRevision={authRevision} onAdd={openCartModal} onTrend={setTrendGroup} onOpenStore={(store) => { setSelectedMarket(store); setPage("markets"); }} />}
       {page === "markets" && <MarketBrowser receipts={receipts} observations={observationListings} selectedStore={selectedMarket} onSelectStore={setSelectedMarket} onOpenTrend={setTrendGroup} />}
       {page === "cart" && <CartPage products={cartProducts} lines={lines} onQuantityChange={updateCartQuantity} onRemove={removeCart} onClear={clearCart} onBrowse={() => setPage("products")} />}
-      {page === "admin" && isAdmin && <AdminPage candidates={officialCandidates} receipts={receipts} />}
+      {page === "admin" && isAdmin && <AdminPage candidates={officialCandidates} approvalCandidates={approvalCandidates} receipts={receipts} />}
     </main>
 
     <footer className={styles.footer}>가격 추적기 <span>영수증 관측가로 투명하게 비교하세요.</span></footer>

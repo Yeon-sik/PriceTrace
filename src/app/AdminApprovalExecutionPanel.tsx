@@ -2,7 +2,10 @@
 /* eslint-disable @next/next/no-img-element */
 
 import { useCallback, useEffect, useState } from "react";
-import type { OfficialProductCandidate } from "@/domain/official-product";
+import {
+  findFrozenReceiptCandidate,
+  type OfficialProductCandidate,
+} from "@/domain/official-product";
 import { buildOfficialImageApprovalExecution } from "@/domain/official-image-approval";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import {
@@ -35,45 +38,70 @@ function messageFor(reason: unknown) {
 function findCurrentCandidate(
   item: StandardProductLinkProposalQueueItem,
   candidates: OfficialProductCandidate[],
-) {
+): { candidate: OfficialProductCandidate | null; error: string | null } {
   const { receipt, officialListing } = item.proposal;
-  const receiptCandidate = candidates.find((candidate) => (
-    candidate.receiptId === receipt.receiptId
-    && candidate.receiptItemId === receipt.receiptItemId
-    && candidate.catalogNamespace === receipt.sourceCatalogNamespace
-    && candidate.storeLabel === receipt.sourceLabel
-    && candidate.sourceProductCode === receipt.sourceProductCode
-    && candidate.productName === receipt.sourceNameRaw
-  ));
-  if (
-    !receiptCandidate
-    || publicOfficialCatalog.channel.id !== officialListing.channelId
-  ) return undefined;
+  const receiptCandidate = findFrozenReceiptCandidate(candidates, receipt);
+  if (!receiptCandidate) {
+    const currentReceiptRow = candidates.find((candidate) => (
+      candidate.receiptId === receipt.receiptId
+      && candidate.receiptItemId === receipt.receiptItemId
+    ));
+    if (currentReceiptRow) {
+      const changedFields = [
+        currentReceiptRow.catalogNamespace !== receipt.sourceCatalogNamespace ? "카탈로그 채널" : null,
+        currentReceiptRow.storeLabel !== receipt.sourceLabel ? "판매처" : null,
+        currentReceiptRow.sourceProductCode !== receipt.sourceProductCode ? "상품 코드" : null,
+        currentReceiptRow.productName !== receipt.sourceNameRaw ? "상품명" : null,
+      ].filter((field): field is string => Boolean(field));
+      return {
+        candidate: null,
+        error: `제안 이후 영수증 ${changedFields.join("·")}이 변경됐습니다. 변경된 원본으로 새 제안이 필요합니다.`,
+      };
+    }
+    return {
+      candidate: null,
+      error: "제안서의 영수증 행이 현재 공개 영수증에 없습니다. 원본 행을 확인한 뒤 새 제안이 필요합니다.",
+    };
+  }
+  if (publicOfficialCatalog.channel.id !== officialListing.channelId) {
+    return {
+      candidate: null,
+      error: "제안서의 공식 판매채널이 현재 카탈로그 채널과 다릅니다. 새 제안이 필요합니다.",
+    };
+  }
   const currentOfficialListing = publicOfficialCatalog.listings.find((listing) => (
     listing.sourceProductCodeNamespace === officialListing.sourceProductCodeNamespace
     && listing.sourceProductCode === officialListing.sourceProductCode
   ));
-  if (!currentOfficialListing) return undefined;
+  if (!currentOfficialListing) {
+    return {
+      candidate: null,
+      error: "제안서의 공식 상품 코드가 현재 공식 카탈로그에 없습니다. 공식 상품을 다시 확인해야 합니다.",
+    };
+  }
   // Opening is a review-only action. The save path performs the exact frozen-input check.
   return {
-    ...receiptCandidate,
-    catalogNamespace: receipt.sourceCatalogNamespace,
-    officialChannelId: publicOfficialCatalog.channel.id,
-    officialSourceProductCodeNamespace: currentOfficialListing.sourceProductCodeNamespace,
-    officialSourceProductCode: currentOfficialListing.sourceProductCode,
-    officialSnapshotId: publicOfficialCatalog.sourceSnapshot.id,
-    officialSnapshotHash: publicOfficialCatalog.sourceSnapshot.contentHash,
-    officialSourceNameRaw: currentOfficialListing.sourceNameRaw,
-    officialVendorNameRaw: currentOfficialListing.vendorNameRaw ?? undefined,
-    officialSpecificationTextRaw: currentOfficialListing.specificationTextRaw ?? undefined,
-    officialPriceAmountKrw: currentOfficialListing.officialPrice.amountKrw,
-    officialPriceSourceText: currentOfficialListing.officialPrice.sourceText,
-    officialPriceObservedAt: currentOfficialListing.officialPrice.observedAt,
-    officialSourceRefs: currentOfficialListing.sourceRefs,
-    officialImageUrl: currentOfficialListing.image?.url,
-    officialImageContentHash: currentOfficialListing.image?.contentHash,
-    officialImageMediaType: currentOfficialListing.image?.mediaType,
-    officialImageByteLength: currentOfficialListing.image?.byteLength,
+    error: null,
+    candidate: {
+      ...receiptCandidate,
+      catalogNamespace: receipt.sourceCatalogNamespace,
+      officialChannelId: publicOfficialCatalog.channel.id,
+      officialSourceProductCodeNamespace: currentOfficialListing.sourceProductCodeNamespace,
+      officialSourceProductCode: currentOfficialListing.sourceProductCode,
+      officialSnapshotId: publicOfficialCatalog.sourceSnapshot.id,
+      officialSnapshotHash: publicOfficialCatalog.sourceSnapshot.contentHash,
+      officialSourceNameRaw: currentOfficialListing.sourceNameRaw,
+      officialVendorNameRaw: currentOfficialListing.vendorNameRaw ?? undefined,
+      officialSpecificationTextRaw: currentOfficialListing.specificationTextRaw ?? undefined,
+      officialPriceAmountKrw: currentOfficialListing.officialPrice.amountKrw,
+      officialPriceSourceText: currentOfficialListing.officialPrice.sourceText,
+      officialPriceObservedAt: currentOfficialListing.officialPrice.observedAt,
+      officialSourceRefs: currentOfficialListing.sourceRefs,
+      officialImageUrl: currentOfficialListing.image?.url,
+      officialImageContentHash: currentOfficialListing.image?.contentHash,
+      officialImageMediaType: currentOfficialListing.image?.mediaType,
+      officialImageByteLength: currentOfficialListing.image?.byteLength,
+    },
   };
 }
 
@@ -113,13 +141,13 @@ export function AdminApprovalExecutionPanel({ candidates }: { candidates: Offici
   }
 
   function openProposal(item: StandardProductLinkProposalQueueItem) {
-    const candidate = findCurrentCandidate(item, candidates);
-    if (!candidate) {
-      setMessage("현재 영수증 행 또는 공식 카탈로그 상품을 찾을 수 없습니다. 최신 제안서를 다시 요청하세요.");
+    const resolved = findCurrentCandidate(item, candidates);
+    if (!resolved.candidate) {
+      setMessage(resolved.error ?? "현재 영수증 행 또는 공식 카탈로그 상품을 찾을 수 없습니다.");
       return;
     }
     setMessage("");
-    setSelected({ item, candidate });
+    setSelected({ item, candidate: resolved.candidate });
   }
 
   function discardProposal(item: StandardProductLinkProposalQueueItem) {

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { discoverOfficialProduct, mergeOfficialProductCandidates, officialProductCandidateKey, resolveExactStandardProductMapping, resolveMartTaggedStandardProductMapping, resolveOfficialProductCandidates, resolveStandardProductMapping } from "./official-product";
+import { discoverOfficialProduct, findFrozenReceiptCandidate, mergeOfficialProductCandidates, officialProductCandidateKey, resolveExactStandardProductMapping, resolveMartTaggedStandardProductMapping, resolveOfficialProductCandidates, resolveStandardProductMapping } from "./official-product";
 import {
   isExcludedFromStandardProductConnectionQueue,
   standardProductConnectionQueueExclusions,
@@ -18,6 +18,60 @@ describe("official product discovery", () => {
 });
 
 describe("official product candidates", () => {
+  it("keeps an older frozen receipt row addressable for approval", () => {
+    const candidates = [
+      {
+        sourceProductCode: "P-1",
+        productName: "상품",
+        storeLabel: "매장 A",
+        catalogNamespace: "shared-catalog",
+        receiptId: "receipt-new",
+        receiptItemId: "item-new",
+      },
+      {
+        sourceProductCode: "P-1",
+        productName: "상품",
+        storeLabel: "매장 A",
+        catalogNamespace: "shared-catalog",
+        receiptId: "receipt-old",
+        receiptItemId: "item-old",
+      },
+    ];
+
+    expect(findFrozenReceiptCandidate(candidates, {
+      receiptId: "receipt-old",
+      receiptItemId: "item-old",
+      sourceCatalogNamespace: "shared-catalog",
+      sourceLabel: "매장 A",
+      sourceProductCode: "P-1",
+      sourceNameRaw: "상품",
+    })?.receiptItemId).toBe("item-old");
+  });
+
+  it("uses a reviewed catalog namespace only while the public receipt channel remains unknown", () => {
+    const candidate = {
+      sourceProductCode: "P-1",
+      productName: "상품",
+      storeLabel: "매장 A",
+      catalogNamespace: null,
+      receiptId: "receipt-1",
+      receiptItemId: "item-1",
+    };
+    const frozenReceipt = {
+      receiptId: "receipt-1",
+      receiptItemId: "item-1",
+      sourceCatalogNamespace: "shared-catalog",
+      sourceLabel: "매장 A",
+      sourceProductCode: "P-1",
+      sourceNameRaw: "상품",
+    };
+
+    expect(findFrozenReceiptCandidate([candidate], frozenReceipt)).toBe(candidate);
+    expect(findFrozenReceiptCandidate([
+      { ...candidate, catalogNamespace: "different-catalog" },
+    ], frozenReceipt)).toBeUndefined();
+  });
+
   it("merges same catalog, code, and name while preserving sellers", () => {
     expect(mergeOfficialProductCandidates([
       { sourceProductCode: "P-1", productName: "상품", storeLabel: "매장 A", catalogNamespace: "shared-catalog" },
