@@ -25,7 +25,7 @@ export function AdminPage({ candidates, approvalCandidates, receipts }: { candid
       <button role="tab" aria-selected={tab === "quality"} onClick={() => setTab("quality")}>품질 검토</button>
     </div>
     {tab === "receipts" && <AdminReceiptHistory receipts={receipts} />}
-    {tab === "official" && <StandardProductWorkspace candidates={candidates} />}
+    {tab === "official" && <StandardProductWorkspace candidates={candidates} onOpenApprovalQueue={() => setTab("approvals")} />}
     {tab === "approvals" && <AdminApprovalExecutionPanel candidates={approvalCandidates} />}
     {tab === "market" && <MarketPricePanel />}
     {tab === "quality" && <AdminQualityPanel />}

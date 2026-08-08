@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "privacyPolicyVersion": 2,
-  "revision": "04be5cec43325ec6",
+  "revision": "eeb0f5a2b47947b2",
   "id": "2026-06-12_001",
   "fileName": "2026-06-12_001.json",
   "merchant": {
@@ -9,8 +9,8 @@
     "name": "국군복지단",
     "branchName": "바다마을마트",
     "businessKind": "unknown",
-    "retailChannel": "unknown",
-    "catalogNamespace": null,
+    "retailChannel": "px",
+    "catalogNamespace": "korean-military-px",
     "merchantId": "3490700",
     "businessRegistrationNumber": "106-83-07115",
     "address": "서울 영등포 가마산로540",

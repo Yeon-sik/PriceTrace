@@ -1,0 +1,195 @@
+{
+  "schemaVersion": "pricetrace-px-receipt-product-name-reviews.v1",
+  "reviews": [
+    {
+      "receiptId": "2026-06-12_001",
+      "receiptItemId": "line_3bac64b8d5c8796a",
+      "sourceLabel": "국군복지단 바다마을마트",
+      "sourceProductCode": "160121",
+      "sourceNameRaw": "한입지식찐고구마",
+      "reviewedDisplayName": "한입자색찐고구마",
+      "officialListing": {
+        "channelId": "korean-military-px",
+        "sourceProductCodeNamespace": "welfare.mil.kr:shop:p_code",
+        "sourceProductCode": "27884"
+      },
+      "reviewStatus": "display_alias_only",
+      "reviewedAt": "2026-08-09T00:00:00+09:00",
+      "sourceRefs": [
+        "data/public/receipts/2026-06-12_001.json#line_3bac64b8d5c8796a",
+        "data/public/official-channel-catalog/px.v1.json#p_code=27884"
+      ]
+    },
+    {
+      "receiptId": "2026-06-12_001",
+      "receiptItemId": "line_ce3137976fe14e47",
+      "sourceLabel": "국군복지단 바다마을마트",
+      "sourceProductCode": "250277",
+      "sourceNameRaw": "녹차초코맛바",
+      "reviewedDisplayName": "녹차초콜릿바",
+      "officialListing": {
+        "channelId": "korean-military-px",
+        "sourceProductCodeNamespace": "welfare.mil.kr:shop:p_code",
+        "sourceProductCode": "35734"
+      },
+      "reviewStatus": "display_alias_only",
+      "reviewedAt": "2026-08-09T00:00:00+09:00",
+      "sourceRefs": [
+        "data/public/receipts/2026-06-12_001.json#line_ce3137976fe14e47",
+        "data/public/official-channel-catalog/px.v1.json#p_code=35734"
+      ]
+    },
+    {
+      "receiptId": "2026-06-12_001",
+      "receiptItemId": "line_ce705e4507498197",
+      "sourceLabel": "국군복지단 바다마을마트",
+      "sourceProductCode": "260207",
+      "sourceNameRaw": "쉬림프 스파이시 부옴바 미스터",
+      "reviewedDisplayName": "쉬림프 스파이시 투움바 파스타",
+      "officialListing": {
+        "channelId": "korean-military-px",
+        "sourceProductCodeNamespace": "welfare.mil.kr:shop:p_code",
+        "sourceProductCode": "36790"
+      },
+      "reviewStatus": "display_alias_only",
+      "reviewedAt": "2026-08-09T00:00:00+09:00",
+      "sourceRefs": [
+        "data/public/receipts/2026-06-12_001.json#line_ce705e4507498197",
+        "data/public/official-channel-catalog/px.v1.json#p_code=36790"
+      ]
+    },
+    {
+      "receiptId": "2026-06-12_001",
+      "receiptItemId": "line_e374295d19ff972f",
+      "sourceLabel": "국군복지단 바다마을마트",
+      "sourceProductCode": "260399",
+      "sourceNameRaw": "슈링스타 프리팩",
+      "reviewedDisplayName": "슈팅스타 프리팩",
+      "officialListing": {
+        "channelId": "korean-military-px",
+        "sourceProductCodeNamespace": "welfare.mil.kr:shop:p_code",
+        "sourceProductCode": "37174"
+      },
+      "reviewStatus": "display_alias_only",
+      "reviewedAt": "2026-08-09T00:00:00+09:00",
+      "sourceRefs": [
+        "data/public/receipts/2026-06-12_001.json#line_e374295d19ff972f",
+        "data/public/official-channel-catalog/px.v1.json#p_code=37174"
+      ]
+    },
+    {
+      "receiptId": "2026-06-12_001",
+      "receiptItemId": "line_26c6e6f0bba155b8",
+      "sourceLabel": "국군복지단 바다마을마트",
+      "sourceProductCode": "260401",
+      "sourceNameRaw": "엄마는외계인 모리팩",
+      "reviewedDisplayName": "엄마는외계인 프리팩",
+      "officialListing": {
+        "channelId": "korean-military-px",
+        "sourceProductCodeNamespace": "welfare.mil.kr:shop:p_code",
+        "sourceProductCode": "37168"
+      },
+      "reviewStatus": "display_alias_only",
+      "reviewedAt": "2026-08-09T00:00:00+09:00",
+      "sourceRefs": [
+        "data/public/receipts/2026-06-12_001.json#line_26c6e6f0bba155b8",
+        "data/public/official-channel-catalog/px.v1.json#p_code=37168"
+      ]
+    },
+    {
+      "receiptId": "2026-07-14_001",
+      "receiptItemId": "line_b2cf47df2ba590d7",
+      "sourceLabel": "와마트 일산점",
+      "sourceProductCode": "200054",
+      "sourceNameRaw": "하림 닭가슴살림닭가슴살",
+      "reviewedDisplayName": "하얀속살슬림닭가슴살",
+      "officialListing": {
+        "channelId": "korean-military-px",
+        "sourceProductCodeNamespace": "welfare.mil.kr:shop:p_code",
+        "sourceProductCode": "26866"
+      },
+      "reviewStatus": "display_alias_only",
+      "reviewedAt": "2026-08-09T00:00:00+09:00",
+      "sourceRefs": [
+        "data/public/receipts/2026-07-14_001.json#line_b2cf47df2ba590d7",
+        "data/public/official-channel-catalog/px.v1.json#p_code=26866"
+      ]
+    },
+    {
+      "receiptId": "2026-07-14_001",
+      "receiptItemId": "line_350b3f1183392251",
+      "sourceLabel": "와마트 일산점",
+      "sourceProductCode": "210157",
+      "sourceNameRaw": "황금발말포크&스크램블 2인",
+      "reviewedDisplayName": "황금밥알포크&스크램블 2인",
+      "officialListing": {
+        "channelId": "korean-military-px",
+        "sourceProductCodeNamespace": "welfare.mil.kr:shop:p_code",
+        "sourceProductCode": "31014"
+      },
+      "reviewStatus": "display_alias_only",
+      "reviewedAt": "2026-08-09T00:00:00+09:00",
+      "sourceRefs": [
+        "data/public/receipts/2026-07-14_001.json#line_350b3f1183392251",
+        "data/public/official-channel-catalog/px.v1.json#p_code=31014"
+      ]
+    },
+    {
+      "receiptId": "2026-07-14_001",
+      "receiptItemId": "line_b6604172dffd64f8",
+      "sourceLabel": "와마트 일산점",
+      "sourceProductCode": "250277",
+      "sourceNameRaw": "녹차초코릿바",
+      "reviewedDisplayName": "녹차초콜릿바",
+      "officialListing": {
+        "channelId": "korean-military-px",
+        "sourceProductCodeNamespace": "welfare.mil.kr:shop:p_code",
+        "sourceProductCode": "35734"
+      },
+      "reviewStatus": "display_alias_only",
+      "reviewedAt": "2026-08-09T00:00:00+09:00",
+      "sourceRefs": [
+        "data/public/receipts/2026-07-14_001.json#line_b6604172dffd64f8",
+        "data/public/official-channel-catalog/px.v1.json#p_code=35734"
+      ]
+    },
+    {
+      "receiptId": "2026-07-14_001",
+      "receiptItemId": "line_2b8626ae1553a0b6",
+      "sourceLabel": "와마트 일산점",
+      "sourceProductCode": "250490",
+      "sourceNameRaw": "오동통 모둠어묵",
+      "reviewedDisplayName": "오동통 모듬어묵",
+      "officialListing": {
+        "channelId": "korean-military-px",
+        "sourceProductCodeNamespace": "welfare.mil.kr:shop:p_code",
+        "sourceProductCode": "35386"
+      },
+      "reviewStatus": "display_alias_only",
+      "reviewedAt": "2026-08-09T00:00:00+09:00",
+      "sourceRefs": [
+        "data/public/receipts/2026-07-14_001.json#line_2b8626ae1553a0b6",
+        "data/public/official-channel-catalog/px.v1.json#p_code=35386"
+      ]
+    },
+    {
+      "receiptId": "2026-07-14_001",
+      "receiptItemId": "line_4f3c81cd84803345",
+      "sourceLabel": "와마트 일산점",
+      "sourceProductCode": "260621",
+      "sourceNameRaw": "(260366)RainOK 메탈",
+      "reviewedDisplayName": "RainOK 메탈 그래핀 하이브리드 와이퍼",
+      "officialListing": {
+        "channelId": "korean-military-px",
+        "sourceProductCodeNamespace": "welfare.mil.kr:shop:p_code",
+        "sourceProductCode": "37602"
+      },
+      "reviewStatus": "display_alias_only",
+      "reviewedAt": "2026-08-09T00:00:00+09:00",
+      "sourceRefs": [
+        "data/public/receipts/2026-07-14_001.json#line_4f3c81cd84803345",
+        "data/public/official-channel-catalog/px.v1.json#p_code=37602"
+      ]
+    }
+  ]
+}

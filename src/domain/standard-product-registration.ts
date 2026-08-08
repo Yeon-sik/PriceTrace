@@ -711,6 +711,21 @@ export function normalizeProductNameForExactMatch(value: string) {
   return value.replace(/\p{White_Space}+/gu, "");
 }
 
+export function normalizeStandardProductNameForUniqueness(value: string) {
+  return normalizeProductNameForExactMatch(value).toLocaleLowerCase("ko-KR");
+}
+
+export function findWhitespaceEquivalentStandardProduct<
+  T extends { canonical_name: string },
+>(standards: T[], proposedName: string) {
+  const normalizedProposedName = normalizeStandardProductNameForUniqueness(proposedName);
+  if (!normalizedProposedName) return undefined;
+  return standards.find(
+    (standard) => normalizeStandardProductNameForUniqueness(standard.canonical_name)
+      === normalizedProposedName,
+  );
+}
+
 export function receiptAndOfficialNamesMatch(receiptName: string, officialName: string) {
   const normalizedReceipt = normalizeProductNameForExactMatch(receiptName);
   return normalizedReceipt.length > 0

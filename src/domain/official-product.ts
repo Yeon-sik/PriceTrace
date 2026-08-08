@@ -1,3 +1,6 @@
+import type { Confidence } from "./types";
+import type { OfficialListingDiscoveryMethod } from "./official-listing-candidate";
+
 export type OfficialProductCandidate = {
   sourceProductCode: string;
   productName: string;
@@ -14,6 +17,11 @@ export type OfficialProductCandidate = {
   receiptUnitPriceKrw?: number;
   receiptQuantity?: number;
   receiptTotalPriceKrw?: number;
+  receiptConfidence?: Confidence;
+  /** Reviewed UI alias only. The immutable receipt source remains productName. */
+  reviewedProductName?: string;
+  reviewedProductNameSourceRefs?: string[];
+  officialDiscoveryMethod?: OfficialListingDiscoveryMethod;
   officialChannelId?: string;
   officialSourceProductCodeNamespace?: string;
   officialSourceProductCode?: string;
