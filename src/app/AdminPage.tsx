@@ -13,7 +13,7 @@ import { MarketPricePanel } from "./MarketPricePanel";
 import styles from "./page.module.css";
 
 type AdminTab = "receipts" | "official" | "approvals" | "market" | "quality";
-export function AdminPage({ candidates, receipts }: { candidates: OfficialProductCandidate[]; receipts: Receipt[] }) {
+export function AdminPage({ candidates, approvalCandidates, receipts }: { candidates: OfficialProductCandidate[]; approvalCandidates: OfficialProductCandidate[]; receipts: Receipt[] }) {
   const [tab, setTab] = useState<AdminTab>("receipts");
   return <section className={styles.browser}>
     <div className={styles.browserHead}><div><p className={styles.kicker}>ADMINISTRATION</p><h1>관리자</h1><p>영수증 기록, 상품 연결, 품질 검토를 분리해 관리합니다.</p></div></div>
@@ -26,7 +26,7 @@ export function AdminPage({ candidates, receipts }: { candidates: OfficialProduc
     </div>
     {tab === "receipts" && <AdminReceiptHistory receipts={receipts} />}
     {tab === "official" && <StandardProductWorkspace candidates={candidates} />}
-    {tab === "approvals" && <AdminApprovalExecutionPanel candidates={candidates} />}
+    {tab === "approvals" && <AdminApprovalExecutionPanel candidates={approvalCandidates} />}
     {tab === "market" && <MarketPricePanel />}
     {tab === "quality" && <AdminQualityPanel />}
   </section>;

@@ -40,6 +40,43 @@ export type StandardProductMapping<T> = {
   product: T;
 };
 
+type FrozenReceiptCandidateIdentity = {
+  receiptId: string;
+  receiptItemId: string;
+  sourceCatalogNamespace: string | null;
+  sourceLabel: string;
+  sourceProductCode: string;
+  sourceNameRaw: string;
+};
+
+/**
+ * Resolves the exact public receipt row frozen into an approval proposal.
+ * Approval candidates intentionally keep every observation instead of only a
+ * grouped product's latest row, so an older reviewed receipt remains openable.
+ */
+export function findFrozenReceiptCandidate<T extends OfficialProductCandidate>(
+  candidates: T[],
+  receipt: FrozenReceiptCandidateIdentity,
+) {
+  return candidates.find((candidate) => (
+    candidate.receiptId === receipt.receiptId
+    && candidate.receiptItemId === receipt.receiptItemId
+    && (
+      candidate.catalogNamespace === receipt.sourceCatalogNamespace
+      || (
+        // A reviewed proposal may carry a catalog namespace that the public
+        // receipt projection still cannot express. A known, different current
+        // namespace remains a hard mismatch.
+        candidate.catalogNamespace === null
+        && receipt.sourceCatalogNamespace !== null
+      )
+    )
+    && candidate.storeLabel === receipt.sourceLabel
+    && candidate.sourceProductCode === receipt.sourceProductCode
+    && candidate.productName === receipt.sourceNameRaw
+  ));
+}
+
 function sourceMappingKey(sourceLabel: string, sourceProductCode: string) {
   return `${sourceLabel.trim().toLocaleLowerCase("ko-KR")}:${sourceProductCode.trim()}`;
 }
