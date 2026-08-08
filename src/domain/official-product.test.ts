@@ -4,6 +4,15 @@ import {
   isExcludedFromStandardProductConnectionQueue,
   standardProductConnectionQueueExclusions,
 } from "./standard-product-connection-queue-exclusions";
+import {
+  buildPxStandardProductQueueEntries,
+  groupPxStandardProductQueueEntries,
+  isPxStandardProductCandidate,
+} from "./standard-product-connection-queue";
+import {
+  findPxProductNameReview,
+  PxProductNameReviewRegistrySchema,
+} from "./px-product-name-review";
 
 describe("official product discovery", () => {
   it("matches a verified PX catalog product code", () => {
@@ -107,6 +116,143 @@ describe("official product candidates", () => {
     expect(resolved[0].product).toBe("drg-50ml");
     expect(resolved[0].candidate.storeLabels).toEqual(["국군복지단 바다마을마트", "와마트 일산점"]);
     expect(new Set(resolved.map(({ candidate }) => officialProductCandidateKey(candidate))).size).toBe(resolved.length);
+  });
+});
+
+describe("PX queue review metadata", () => {
+  it("keeps the receipt raw name immutable while resolving an exact display-only review", () => {
+    const candidate = {
+      sourceProductCode: "260399",
+      productName: "슈링스타 프리팩",
+      storeLabel: "국군복지단 바다마을마트",
+      catalogNamespace: "korean-military-px",
+      receiptId: "2026-06-12_001",
+      receiptItemId: "line-review",
+    };
+    const registry = PxProductNameReviewRegistrySchema.parse({
+      schemaVersion: "pricetrace-px-receipt-product-name-reviews.v1",
+      reviews: [{
+        receiptId: "2026-06-12_001",
+        receiptItemId: "line-review",
+        sourceLabel: "국군복지단 바다마을마트",
+        sourceProductCode: "260399",
+        sourceNameRaw: "슈링스타 프리팩",
+        reviewedDisplayName: "슈팅스타 프리팩",
+        officialListing: {
+          channelId: "korean-military-px",
+          sourceProductCodeNamespace: "official-code",
+          sourceProductCode: "37174",
+        },
+        reviewStatus: "display_alias_only",
+        reviewedAt: "2026-08-09T00:00:00+09:00",
+        sourceRefs: ["receipt:line-review", "official:37174"],
+      }],
+    });
+
+    expect(findPxProductNameReview(candidate, registry.reviews)?.reviewedDisplayName)
+      .toBe("슈팅스타 프리팩");
+    expect(candidate.productName).toBe("슈링스타 프리팩");
+    expect(findPxProductNameReview({ ...candidate, storeLabel: "다른 판매처" }, registry.reviews))
+      .toBeUndefined();
+  });
+
+  it("groups same PX catalog codes for review without merging their raw names", () => {
+    const candidates = [
+      {
+        sourceProductCode: "260399",
+        productName: "슈팅스타 프리팩",
+        storeLabel: "와마트 일산점",
+        martTag: "PX",
+        catalogNamespace: "korean-military-px",
+        receiptConfidence: "high" as const,
+        officialSourceProductCode: "37174",
+        officialDiscoveryMethod: "exact_name" as const,
+      },
+      {
+        sourceProductCode: "260399",
+        productName: "슈링스타 프리팩",
+        reviewedProductName: "슈팅스타 프리팩",
+        storeLabel: "국군복지단 바다마을마트",
+        martTag: "PX",
+        catalogNamespace: "korean-military-px",
+        receiptConfidence: "medium" as const,
+        officialSourceProductCode: "37174",
+        officialDiscoveryMethod: "reviewed_display_name" as const,
+      },
+    ];
+    const entries = buildPxStandardProductQueueEntries(candidates, [], []);
+    const groups = groupPxStandardProductQueueEntries(entries);
+
+    expect(groups).toHaveLength(1);
+    expect(groups[0].entries.map((entry) => entry.candidate.productName))
+      .toEqual(["슈팅스타 프리팩", "슈링스타 프리팩"]);
+    expect(entries[1].reasons).toEqual(expect.arrayContaining([
+      "source_name_conflict",
+      "reviewed_display_name",
+      "low_confidence_source",
+      "official_name_candidate",
+    ]));
+  });
+
+  it("separates approval-pending and same-code mapping review reasons", () => {
+    const candidate = {
+      sourceProductCode: "210157",
+      productName: "황금발말포크&스크램블 2인",
+      storeLabel: "와마트 일산점",
+      martTag: "PX",
+      catalogNamespace: "korean-military-px",
+      receiptId: "receipt-1",
+      receiptItemId: "line-1",
+    };
+    const pxCatalogCandidates = [candidate, {
+      ...candidate,
+      receiptId: "receipt-2",
+      receiptItemId: "line-2",
+      storeLabel: "국군복지단 바다마을마트",
+    }];
+    const entries = buildPxStandardProductQueueEntries([candidate], [{
+      sourceLabel: "국군복지단 바다마을마트",
+      sourceProductCode: "210157",
+      product: "variant-1",
+    }], [{
+      receiptId: "receipt-1",
+      receiptItemId: "line-1",
+      sourceCatalogNamespace: "korean-military-px",
+      sourceLabel: "와마트 일산점",
+      sourceProductCode: "210157",
+      sourceNameRaw: "황금발말포크&스크램블 2인",
+    }], pxCatalogCandidates);
+
+    expect(entries[0].pendingApproval).toBe(true);
+    expect(entries[0].reasons).toEqual(expect.arrayContaining([
+      "approval_pending",
+      "same_code_mapping_available",
+    ]));
+    expect(isPxStandardProductCandidate(candidate)).toBe(true);
+    expect(isPxStandardProductCandidate({
+      ...candidate,
+      martTag: "일반 마트",
+      catalogNamespace: null,
+    })).toBe(false);
+  });
+
+  it("does not reuse an unrelated retailer mapping that happens to share a code", () => {
+    const candidate = {
+      sourceProductCode: "210157",
+      productName: "황금발말포크&스크램블 2인",
+      storeLabel: "와마트 일산점",
+      martTag: "PX",
+      catalogNamespace: "korean-military-px",
+    };
+
+    const entries = buildPxStandardProductQueueEntries([candidate], [{
+      sourceLabel: "일반 온라인몰",
+      sourceProductCode: "210157",
+      product: "unrelated-variant",
+    }], []);
+
+    expect(entries[0].sameCodeMappedProducts).toEqual([]);
+    expect(entries[0].reasons).not.toContain("same_code_mapping_available");
   });
 });
 

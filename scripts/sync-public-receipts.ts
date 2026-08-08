@@ -15,6 +15,8 @@ import {
   publicReceiptFilesToReceipts,
 } from "../src/domain/public-receipt";
 import { loadPrivateReceiptPublicationSources } from "./private-receipt-source";
+import rawMerchantCatalogProfiles from "../data/curation/receipt-merchant-catalog-profiles.v1.json";
+import { applyReceiptMerchantCatalogProfiles } from "../src/domain/receipt-merchant-catalog-profile";
 
 const publicDirectory = path.join(process.cwd(), "data", "public");
 const receiptDirectory = path.join(publicDirectory, "receipts");
@@ -81,7 +83,11 @@ async function syncPublicReceipts() {
   if (source.warnings.length > 0) throw new Error(`private 영수증 경고 ${source.warnings.length}건이 있어 공개 파일 생성을 중단했습니다.`);
   if (source.sources.length === 0) throw new Error("공개 영수증으로 변환할 private 영수증이 없습니다.");
 
-  const receiptFiles = buildPublicReceiptFiles(source.sources);
+  const profiled = applyReceiptMerchantCatalogProfiles(
+    source.sources,
+    rawMerchantCatalogProfiles,
+  );
+  const receiptFiles = buildPublicReceiptFiles(profiled.sources);
   const receiptIndex = buildPublicReceiptIndex(receiptFiles);
   const receipts = publicReceiptFilesToReceipts(receiptFiles);
   const observationBundle = buildPublicObservationBundle(receipts, receiptIndex.revision);
@@ -96,7 +102,7 @@ async function syncPublicReceipts() {
     ...receiptFiles.map((receipt) => writeFile(path.join(receiptDirectory, receipt.fileName), `${JSON.stringify(receipt, null, 2)}\n`, "utf8")),
   ]);
   await removeStaleReceiptFiles(new Set(receiptFiles.map((receipt) => receipt.fileName)));
-  console.log(`공개 영수증 갱신 완료 · 개별 JSON ${receiptFiles.length}건 · 관측 ${observationBundle.observations.length}건 · index revision ${receiptIndex.revision}`);
+  console.log(`공개 영수증 갱신 완료 · 개별 JSON ${receiptFiles.length}건 · 관측 ${observationBundle.observations.length}건 · 판매처 프로필 적용 ${profiled.applied.length}건 · index revision ${receiptIndex.revision}`);
 }
 
 (checkOnly ? checkPublicReceipts() : syncPublicReceipts()).catch((error) => {

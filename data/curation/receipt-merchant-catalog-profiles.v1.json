@@ -1,0 +1,23 @@
+{
+  "schemaVersion": "pricetrace-receipt-merchant-catalog-profiles.v1",
+  "profiles": [
+    {
+      "id": "korean-military-px-bada-mart-3490700",
+      "match": {
+        "merchantId": "3490700",
+        "businessRegistrationNumber": "106-83-07115",
+        "address": "서울 영등포 가마산로540",
+        "phone": "070-4251-0616"
+      },
+      "classification": {
+        "retailChannel": "px",
+        "catalogNamespace": "korean-military-px"
+      },
+      "reviewedAt": "2026-08-09T00:00:00+09:00",
+      "reason": "같은 판매처 식별자 4종이 이미 PX 공용 카탈로그로 검증된 공개 영수증과 정확히 일치합니다.",
+      "sourceRefs": [
+        "data/public/receipts/2026-05-08_001.json"
+      ]
+    }
+  ]
+}

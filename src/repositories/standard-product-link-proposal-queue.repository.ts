@@ -79,6 +79,13 @@ export class StandardProductLinkProposalQueueRepository {
     return next;
   }
 
+  removeMany(ids: Iterable<string>) {
+    const removed = new Set(ids);
+    const next = this.load().filter((item) => !removed.has(item.id));
+    this.save(next);
+    return next;
+  }
+
   private save(proposals: StandardProductLinkProposalQueueItem[]) {
     const storage = this.getStorage();
     if (!storage) return;

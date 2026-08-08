@@ -4,15 +4,13 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { cartProductFromGroup, cartProductFromOfficialListing, type CartProduct } from "@/domain/cart";
 import { groupProductObservations, martTagFor, PRODUCT_CATEGORIES, type MartType, type ProductCategory, type ProductGroup, type ProductObservationListing, type ProductSort } from "@/domain/product-browser";
 import type { OfficialProductCandidate } from "@/domain/official-product";
+import { findOfficialListingCandidate } from "@/domain/official-listing-candidate";
 import { formatKrw } from "@/domain/settlement";
-import {
-  findUniqueOfficialContainedNameMatch,
-  findUniqueOfficialExactNameMatch,
-  findUniqueOfficialRelaxedNameMatch,
-} from "@/domain/standard-product-registration";
+import { findPxProductNameReview } from "@/domain/px-product-name-review";
 import { useAdminAccess } from "@/hooks/use-admin-access";
 import { PublicReceiptRepository } from "@/repositories/public-receipt.repository";
 import { PublicOfficialChannelCatalogRepository } from "@/repositories/public-official-channel-catalog.repository";
+import { PxProductNameReviewRepository } from "@/repositories/px-product-name-review.repository";
 import { useCartStore } from "@/stores/cart.store";
 import { AdminPage } from "./AdminPage";
 import { AuthPanel } from "./AuthPanel";
@@ -25,6 +23,7 @@ import styles from "./page.module.css";
 
 const publicReceiptData = new PublicReceiptRepository().loadAll();
 const publicOfficialCatalog = new PublicOfficialChannelCatalogRepository().loadPxCatalog();
+const pxProductNameReviews = new PxProductNameReviewRepository().load(publicOfficialCatalog);
 const publicReceiptById = new Map(publicReceiptData.receipts.map((receipt) => [receipt.id, receipt]));
 type Page = "home" | "products" | "markets" | "cart" | "admin";
 
@@ -46,7 +45,7 @@ function receiptRevisionFor(observation: ProductObservationListing) {
 function receiptObservationCandidate(
   observation: ProductObservationListing,
 ): OfficialProductCandidate {
-  return {
+  const candidate: OfficialProductCandidate = {
     sourceProductCode: observation.item.sourceProductCode,
     productName: observation.item.productName,
     storeLabel: observation.storeLabel,
@@ -59,7 +58,14 @@ function receiptObservationCandidate(
     receiptUnitPriceKrw: observation.item.unitPriceKrw,
     receiptQuantity: observation.item.quantityValue,
     receiptTotalPriceKrw: observation.item.totalPriceKrw,
+    receiptConfidence: observation.item.confidence,
   };
+  const reviewedName = findPxProductNameReview(candidate, pxProductNameReviews);
+  return reviewedName ? {
+    ...candidate,
+    reviewedProductName: reviewedName.reviewedDisplayName,
+    reviewedProductNameSourceRefs: reviewedName.sourceRefs,
+  } : candidate;
 }
 
 export default function Home() {
@@ -106,18 +112,28 @@ export default function Home() {
   const cartQuantityTotal = cartGroups.reduce((sum, product) => sum + lines[product.id], 0);
   const officialCandidates = useMemo(() => productGroups.map((group) => {
     const receiptCandidate = receiptObservationCandidate(group.latest);
-    const officialListing = group.catalogNamespace === publicOfficialCatalog.channel.id
-      ? findUniqueOfficialExactNameMatch(publicOfficialCatalog.listings, group.productName)
-        ?? findUniqueOfficialRelaxedNameMatch(publicOfficialCatalog.listings, group.productName)
-        ?? findUniqueOfficialContainedNameMatch(
-          publicOfficialCatalog.listings,
-          group.productName,
-          group.latest.item.unitPriceKrw,
-        )
-        ?? undefined
+    const reviewedName = findPxProductNameReview(receiptCandidate, pxProductNameReviews);
+    const reviewedListing = reviewedName
+      ? publicOfficialCatalog.listings.find((listing) => (
+        listing.sourceProductCodeNamespace
+          === reviewedName.officialListing.sourceProductCodeNamespace
+        && listing.sourceProductCode
+          === reviewedName.officialListing.sourceProductCode
+      ))
       : undefined;
+    const discovered = group.catalogNamespace === publicOfficialCatalog.channel.id
+      ? findOfficialListingCandidate(
+        publicOfficialCatalog.listings,
+        group.productName,
+        group.latest.item.unitPriceKrw,
+      )
+      : null;
+    const officialListing = reviewedListing ?? discovered?.listing;
     return {
       ...receiptCandidate,
+      officialDiscoveryMethod: reviewedListing
+        ? "reviewed_display_name" as const
+        : discovered?.method,
       officialChannelId: officialListing ? publicOfficialCatalog.channel.id : undefined,
       officialSourceProductCodeNamespace: officialListing?.sourceProductCodeNamespace,
       officialSourceProductCode: officialListing?.sourceProductCode,

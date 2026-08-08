@@ -2,10 +2,23 @@
 /* eslint-disable @next/next/no-img-element */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { discoverOfficialProduct, officialProductCandidateKey, officialSearchUrl, resolveOfficialProductCandidates, type OfficialProductCandidate, type StandardProductMapping } from "@/domain/official-product";
+import { discoverOfficialProduct, officialProductCandidateKey, officialSearchUrl, resolveExactStandardProductMapping, resolveOfficialProductCandidates, type OfficialProductCandidate, type StandardProductMapping } from "@/domain/official-product";
 import { isExcludedFromStandardProductConnectionQueue } from "@/domain/standard-product-connection-queue-exclusions";
+import {
+  buildPxStandardProductQueueEntries,
+  groupPxStandardProductQueueEntries,
+  isPxStandardProductCandidate,
+  type PxStandardProductQueueEntry,
+  type PxStandardProductQueueGroup,
+  type StandardProductQueueReason,
+} from "@/domain/standard-product-connection-queue";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import { OfficialProductRepository } from "@/repositories/official-product.repository";
+import {
+  STANDARD_PRODUCT_LINK_PROPOSAL_QUEUE_STORAGE_KEY,
+  StandardProductLinkProposalQueueRepository,
+  type StandardProductLinkProposalQueueItem,
+} from "@/repositories/standard-product-link-proposal-queue.repository";
 import {
   normalizeExternalProductImageUrl,
   validateProductImageFile,
@@ -31,6 +44,7 @@ import {
   buildReviewedLinkProposalExecutionIdentity,
   buildStrictRegistrationIdentity,
   findExpectedCatalogProductId,
+  findWhitespaceEquivalentStandardProduct,
   parseReviewedLinkProposalForLiveCandidate,
   parseReviewedLinkProposalEnvelope,
   rebuildReviewedLinkProposalForAdminTarget,
@@ -60,16 +74,30 @@ type PendingLinkProposal = {
   approvalStatement: string;
 };
 const legacyRepository = new OfficialProductRepository();
+const proposalQueueRepository = new StandardProductLinkProposalQueueRepository();
 const sellers = (candidate: OfficialProductCandidate) => candidate.storeLabels?.length ? candidate.storeLabels : [candidate.storeLabel];
+
+const queueReasonLabels: Partial<Record<StandardProductQueueReason, string>> = {
+  approval_pending: "승인 대기 중",
+  same_code_mapping_available: "동일 PX 코드 연결 있음",
+  same_code_mapping_ambiguous: "동일 코드 연결 충돌",
+  source_name_conflict: "같은 코드·다른 원문",
+  reviewed_display_name: "검토 표시명",
+  low_confidence_source: "OCR 재확인",
+  official_exact_candidate: "공식명 정확 일치",
+  official_name_candidate: "공식명 후보",
+  manual_research_required: "추가 조사 필요",
+};
 
 export type StandardProductApprovalRequest = {
   candidate: OfficialProductCandidate;
   proposal: ReviewedLinkProposal;
   onClose: () => void;
   onApproved: () => void;
+  onAlreadyRegistered: () => void;
 };
 
-export function StandardProductWorkspace({ candidates, approvalRequest }: { candidates: OfficialProductCandidate[]; approvalRequest?: StandardProductApprovalRequest }) {
+export function StandardProductWorkspace({ candidates, approvalRequest, onOpenApprovalQueue }: { candidates: OfficialProductCandidate[]; approvalRequest?: StandardProductApprovalRequest; onOpenApprovalQueue?: () => void }) {
   const client = getSupabaseBrowserClient();
   const loadGeneration = useRef(0);
   const [userId, setUserId] = useState<string | null>(null);
@@ -88,6 +116,7 @@ export function StandardProductWorkspace({ candidates, approvalRequest }: { cand
   const [catalogSelection, setCatalogSelection] = useState<CatalogExplorerSelectionRequest>();
   const [refreshing, setRefreshing] = useState(false);
   const [catalogReady, setCatalogReady] = useState(false);
+  const [proposalQueueItems, setProposalQueueItems] = useState<StandardProductLinkProposalQueueItem[]>([]);
 
   const load = useCallback(async () => {
     if (!client) return;
@@ -150,25 +179,81 @@ export function StandardProductWorkspace({ candidates, approvalRequest }: { cand
       .subscribe();
     return () => { void client.removeChannel(channel); };
   }, [client, load]);
+  useEffect(() => {
+    const refreshProposalQueue = () => setProposalQueueItems(proposalQueueRepository.load());
+    const refreshOnStorage = (event: StorageEvent) => {
+      if (event.key === STANDARD_PRODUCT_LINK_PROPOSAL_QUEUE_STORAGE_KEY) {
+        refreshProposalQueue();
+      }
+    };
+    refreshProposalQueue();
+    window.addEventListener("focus", refreshProposalQueue);
+    window.addEventListener("storage", refreshOnStorage);
+    return () => {
+      window.removeEventListener("focus", refreshProposalQueue);
+      window.removeEventListener("storage", refreshOnStorage);
+    };
+  }, []);
 
   const standardById = useMemo(() => new Map(standards.map((standard) => [standard.id, standard])), [standards]);
-  const resolvedCandidates = useMemo(() => resolveOfficialProductCandidates(candidates, variantMappings), [candidates, variantMappings]);
+  const pxCandidates = useMemo(
+    () => candidates.filter(isPxStandardProductCandidate),
+    [candidates],
+  );
+  const resolvedCandidates = useMemo(() => resolveOfficialProductCandidates(pxCandidates, variantMappings), [pxCandidates, variantMappings]);
   const states = useMemo(() => resolvedCandidates.map(({ candidate, product: variant }) => {
     const browserRecord = legacy[officialProductCandidateKey(candidate)];
     const discovered = discoverOfficialProduct(candidate);
     return { candidate, variant, standard: variant ? standardById.get(variant.standard_product_id) : undefined, legacy: browserRecord ?? (discovered.status === "matched" ? discovered.record : undefined), fromBrowserStorage: Boolean(browserRecord) };
   }), [resolvedCandidates, standardById, legacy]);
   const linked = states.filter((state) => state.variant && state.standard);
-  const unlinked = states.filter((state) => (
-    !state.variant
-    && !isExcludedFromStandardProductConnectionQueue(state.candidate)
+  const excluded = states.filter((state) => (
+    !state.variant && isExcludedFromStandardProductConnectionQueue(state.candidate)
   ));
-  const matchesSearch = useCallback((state: (typeof states)[number]) => {
+  const unlinked = states.filter((state) => !state.variant && !isExcludedFromStandardProductConnectionQueue(state.candidate));
+  const pendingReceipts = useMemo(
+    () => proposalQueueItems.map((item) => item.proposal.receipt),
+    [proposalQueueItems],
+  );
+  const queueEntries = useMemo(() => buildPxStandardProductQueueEntries(
+    unlinked.map((state) => state.candidate),
+    variantMappings,
+    pendingReceipts,
+    pxCandidates,
+  ), [pendingReceipts, pxCandidates, unlinked, variantMappings]);
+  const stateByCandidateKey = useMemo(() => new Map(states.map((state) => [
+    officialProductCandidateKey(state.candidate),
+    state,
+  ])), [states]);
+  const matchesSearch = useCallback((entry: PxStandardProductQueueEntry<Variant>) => {
     const query = searchQuery.trim().toLocaleLowerCase("ko-KR");
     if (!query) return true;
-    return `${state.candidate.productName} ${state.candidate.sourceProductCode} ${sellers(state.candidate).join(" ")} ${state.standard?.brand ?? ""} ${state.standard?.canonical_name ?? ""} ${state.variant?.canonical_name ?? ""}`.toLocaleLowerCase("ko-KR").includes(query);
-  }, [searchQuery]);
-  const visibleUnlinked = unlinked.filter(matchesSearch);
+    const candidate = entry.candidate;
+    const mappedTargets = entry.sameCodeMappedProducts.map((variant) => {
+      const standard = standardById.get(variant.standard_product_id);
+      return `${standard?.brand ?? ""} ${standard?.canonical_name ?? ""} ${variant.canonical_name}`;
+    }).join(" ");
+    return `${candidate.reviewedProductName ?? ""} ${candidate.officialSourceNameRaw ?? ""} ${candidate.productName} ${candidate.sourceProductCode} ${sellers(candidate).join(" ")} ${mappedTargets}`.toLocaleLowerCase("ko-KR").includes(query);
+  }, [searchQuery, standardById]);
+  const visibleQueueEntries = queueEntries.filter(matchesSearch);
+  const pendingQueueEntries = visibleQueueEntries.filter((entry) => entry.pendingApproval);
+  const actionableQueueEntries = visibleQueueEntries.filter((entry) => !entry.pendingApproval);
+  const mappingReviewEntries = actionableQueueEntries.filter((entry) => entry.reasons.some((reason) => (
+    reason === "same_code_mapping_available" || reason === "same_code_mapping_ambiguous"
+  )));
+  const officialReviewEntries = actionableQueueEntries.filter((entry) => (
+    !mappingReviewEntries.includes(entry) && Boolean(entry.candidate.officialSourceProductCode)
+  ));
+  const researchEntries = actionableQueueEntries.filter((entry) => (
+    !mappingReviewEntries.includes(entry) && !officialReviewEntries.includes(entry)
+  ));
+  const pendingQueueGroups = groupPxStandardProductQueueEntries(pendingQueueEntries);
+  const mappingReviewGroups = groupPxStandardProductQueueEntries(mappingReviewEntries);
+  const officialReviewGroups = groupPxStandardProductQueueEntries(officialReviewEntries);
+  const researchGroups = groupPxStandardProductQueueEntries(researchEntries);
+  const actionableGroupCount = groupPxStandardProductQueueEntries(
+    queueEntries.filter((entry) => !entry.pendingApproval),
+  ).length;
   const variantsByStandard = useMemo(() => {
     const grouped = new Map<string, Variant[]>();
     for (const variant of variants) grouped.set(variant.standard_product_id, [...(grouped.get(variant.standard_product_id) ?? []), variant]);
@@ -191,6 +276,74 @@ export function StandardProductWorkspace({ candidates, approvalRequest }: { cand
     }));
     setLowerTab("specification");
   };
+  const renderQueueGroups = (
+    title: string,
+    description: string,
+    groups: PxStandardProductQueueGroup<Variant>[],
+  ) => {
+    if (groups.length === 0) return null;
+    return <section className={styles.pxQueueBucket} aria-label={title}>
+      <div className={styles.pxQueueBucketHead}>
+        <h3>{title} <span>{groups.length}건</span></h3>
+        <p>{description}</p>
+      </div>
+      <div className={styles.manualQueue}>{groups.map((group) => {
+        const displayNames = new Set(group.entries.map(({ candidate }) => (
+          candidate.reviewedProductName
+            ?? candidate.officialSourceNameRaw
+            ?? candidate.productName
+        )));
+        const groupName = displayNames.size === 1
+          ? [...displayNames][0]
+          : "같은 PX 코드의 이름 표현 충돌";
+        return <article className={styles.pxQueueGroup} key={group.key}>
+          <header className={styles.pxQueueGroupHead}>
+            <div>
+              <strong>{groupName}</strong>
+              <small>PX 공용 코드 {group.sourceProductCode || "없음"} · 검토할 원본 표현 {group.entries.length}개</small>
+            </div>
+          </header>
+          <div className={styles.pxQueueSourceList}>{group.entries.map((entry) => {
+            const candidate = entry.candidate;
+            const state = stateByCandidateKey.get(officialProductCandidateKey(candidate));
+            const legacyRecord = state?.legacy;
+            const displayName = candidate.reviewedProductName
+              ?? candidate.officialSourceNameRaw
+              ?? legacyRecord?.officialName
+              ?? candidate.productName;
+            const mappedVariant = entry.sameCodeMappedProducts.length === 1
+              ? entry.sameCodeMappedProducts[0]
+              : undefined;
+            const mappedStandard = mappedVariant
+              ? standardById.get(mappedVariant.standard_product_id)
+              : undefined;
+            const actionLabel = entry.pendingApproval
+              ? "승인 대기열 보기"
+              : entry.sameCodeMappedProducts.length > 0
+                ? "기존 연결 검토"
+                : candidate.officialSourceProductCode
+                  ? "공식 후보 검토"
+                  : "상품 조사 시작";
+            return <div className={styles.pxQueueSourceRow} key={officialProductCandidateKey(candidate)}>
+              <div className={styles.pxQueueSourceInfo}>
+                <strong>{displayName}</strong>
+                {displayName !== candidate.productName && <small>영수증 원문: {candidate.productName}</small>}
+                <small>판매처 {sellers(candidate).join(", ")} · 영수증 코드 {candidate.sourceProductCode}</small>
+                {mappedVariant && <small className={styles.pxQueueMappedTarget}>기존 연결 후보: {mappedStandard?.brand ? `${mappedStandard.brand} · ` : ""}{mappedStandard?.canonical_name ?? "표준 상품"} / {mappedVariant.canonical_name}</small>}
+                {entry.sameCodeMappedProducts.length > 1 && <small className={styles.pxQueueWarning}>같은 코드가 여러 판매 규격에 연결되어 자동 재사용할 수 없습니다.</small>}
+                <div className={styles.pxQueueBadges}>{entry.reasons.map((reason) => <span key={reason}>{queueReasonLabels[reason]}</span>)}</div>
+                {candidate.reviewedProductName && <small className={styles.pxQueueProvenance}>검토 표시명은 탐색용이며 영수증 원문이나 상품 연결 근거를 덮어쓰지 않습니다.</small>}
+              </div>
+              <div className={styles.queueActions}>
+                <a href={legacyRecord?.officialUrl ?? officialSearchUrl(candidate)} target="_blank" rel="noreferrer">상품 정보 찾기</a>
+                <button type="button" onClick={() => entry.pendingApproval ? onOpenApprovalQueue?.() : setSelected(candidate)} disabled={entry.pendingApproval && !onOpenApprovalQueue}>{actionLabel}</button>
+              </div>
+            </div>;
+          })}</div>
+        </article>;
+      })}</div>
+    </section>;
+  };
 
   if (!client || !userId) return null;
   if (approvalRequest) {
@@ -199,13 +352,38 @@ export function StandardProductWorkspace({ candidates, approvalRequest }: { cand
         {message || "표준 상품 정보를 불러오는 중입니다."}
       </section>;
     }
-    const approvalState = states.find((state) => (
-      officialProductCandidateKey(state.candidate)
-      === officialProductCandidateKey(approvalRequest.candidate)
-    ));
+    const exactVariant = resolveExactStandardProductMapping(
+      approvalRequest.candidate,
+      variantMappings,
+    );
+    const exactStandard = exactVariant
+      ? standardById.get(exactVariant.standard_product_id)
+      : undefined;
+    if (exactVariant && exactStandard) {
+      return <div className={styles.modalBackdrop} role="presentation">
+        <section className={`${styles.authModal} ${styles.officialModal} ${styles.alreadyRegisteredApproval}`} role="dialog" aria-modal="true" aria-labelledby="already-registered-title">
+          <button className={styles.closeButton} onClick={approvalRequest.onClose} aria-label="이미 등록된 제안 닫기">×</button>
+          <p className={styles.kicker}>STANDARD PRODUCT</p>
+          <h2 id="already-registered-title">이미 등록된 영수증 판매 기록</h2>
+          <p>판매처와 상품 코드가 모두 일치하는 검증된 매핑이 있습니다. 이 제안으로 다시 등록하지 않습니다.</p>
+          <dl>
+            <div><dt>영수증 식별자</dt><dd>{approvalRequest.candidate.storeLabel} · {approvalRequest.candidate.sourceProductCode}</dd></div>
+            <div><dt>표준 상품</dt><dd>{exactStandard.brand ? `${exactStandard.brand} · ` : ""}{exactStandard.canonical_name}</dd></div>
+            <div><dt>판매 규격</dt><dd>{exactVariant.canonical_name}</dd></div>
+          </dl>
+          <div className={styles.alreadyRegisteredActions}>
+            <button type="button" className={styles.secondaryButton} onClick={approvalRequest.onClose}>닫기</button>
+            <button type="button" onClick={approvalRequest.onAlreadyRegistered}>등록 완료 제안 정리</button>
+          </div>
+        </section>
+      </div>;
+    }
     return <StandardProductConnectionModal
       candidate={approvalRequest.candidate}
-      legacy={approvalState?.legacy}
+      legacy={states.find((state) => (
+        officialProductCandidateKey(state.candidate)
+        === officialProductCandidateKey(approvalRequest.candidate)
+      ))?.legacy}
       brands={brands}
       standards={standards}
       variants={variants}
@@ -216,11 +394,19 @@ export function StandardProductWorkspace({ candidates, approvalRequest }: { cand
       onSaved={() => {}}
     />;
   }
+  if (!catalogReady) {
+    return <section className={styles.browser} aria-busy={refreshing}>
+      <div className={styles.browserHead}><div><p className={styles.kicker}>STANDARD PRODUCT MAPPING</p><h1>표준 상품 연결</h1><p>표준 상품은 햇반 같은 상품군입니다. 영수증 품목은 실제 판매 규격(예: 210g × 3)으로 등록해 표준 상품 아래에 보관합니다.</p></div></div>
+      {message && <p className={styles.error} role="alert">{message}</p>}
+      <div className={styles.mappingToolbar}><button type="button" className={styles.secondaryButton} disabled={refreshing} onClick={() => void load()}>{refreshing ? "표준 상품 정보 불러오는 중" : "다시 불러오기"}</button></div>
+      <p className={styles.emptyState} role="status">{refreshing ? "등록된 규격과 PX 판매처 연결을 확인하고 있습니다." : "표준 상품 정보를 불러오지 못했습니다. 다시 불러오기를 눌러 주세요."}</p>
+    </section>;
+  }
   return <section className={styles.browser}>
     <div className={styles.browserHead}><div><p className={styles.kicker}>STANDARD PRODUCT MAPPING</p><h1>표준 상품 연결</h1><p>표준 상품은 햇반 같은 상품군입니다. 영수증 품목은 실제 판매 규격(예: 210g × 3)으로 등록해 표준 상품 아래에 보관합니다.</p></div></div>
     {message && <p className={styles.error} role="alert">{message}</p>}
     <div className={styles.mappingToolbar}><label className={styles.mappingSearch}><span className={styles.srOnly}>표준 상품 연결 검색</span><input type="search" value={searchQuery} onChange={(event) => setSearchQuery(event.target.value)} placeholder="상품명, 브랜드, 판매처, 상품 코드로 검색" /></label><button type="button" className={styles.secondaryButton} disabled={refreshing} onClick={() => void load()}>{refreshing ? "새로고침 중" : "새로고침"}</button></div>
-    <div className={styles.officialSummary}><span><b>{variants.length}</b>개 판매 규격 등록</span><span><b>{variants.filter((variant) => variant.specification_status === "placeholder").length}</b>개 규격 확인 필요</span><span><b>{linked.length}</b>개 영수증 판매 기록 매핑</span><span><b>{unlinked.length}</b>개 연결 필요</span></div>
+    <div className={styles.officialSummary}><span><b>{variants.length}</b>개 판매 규격 등록</span><span><b>{variants.filter((variant) => variant.specification_status === "placeholder").length}</b>개 규격 확인 필요</span><span><b>{linked.length}</b>개 PX 기록 연결됨</span><span><b>{excluded.length}</b>개 검증 중복 제외</span><span><b>{queueEntries.filter((entry) => entry.pendingApproval).length}</b>개 승인 대기</span><span><b>{actionableGroupCount}</b>개 PX 연결 작업</span></div>
     <section className={styles.officialSection}><h2>등록된 표준 상품</h2><p className={styles.manualHint}>대표 이미지는 파일 업로드 또는 HTTPS 이미지 링크로 등록할 수 있습니다. 파일은 최적화 후 Supabase Storage에 저장됩니다.</p>{visibleStandards.length ? <><div className={styles.standardCategoryButtons} aria-label="표준 상품 카테고리"><button type="button" aria-pressed={selectedStandardCategory === "전체"} className={selectedStandardCategory === "전체" ? styles.selectedCatalogProduct : ""} onClick={() => setSelectedStandardCategory("전체")}>전체</button>{standardCategories.map((category) => <button type="button" key={category} aria-pressed={selectedStandardCategory === category} className={selectedStandardCategory === category ? styles.selectedCatalogProduct : ""} onClick={() => setSelectedStandardCategory(category)}>{category}</button>)}<button type="button" onClick={() => setSelectedStandardCategory(null)}>선택 해제</button></div>{selectedStandardCategory ? <div className={styles.officialGrid}>{standardsForSelectedCategory.map((standard) => {
       const image = standardImages.get(standard.id);
       const registeredVariants = variantsByStandard.get(standard.id) ?? [];
@@ -228,7 +414,7 @@ export function StandardProductWorkspace({ candidates, approvalRequest }: { cand
       return <article className={styles.registeredStandardCard} key={standard.id}><button type="button" className={styles.registeredStandardProduct} aria-label={`${standard.canonical_name} 규격·판매처 코드 관리`} onClick={() => openStandardInCatalog(standard)}><span className={styles.officialThumb}><ProductImagePreview imageUrl={image?.image_url} productName={standard.canonical_name} /></span><span className={styles.registeredStandardInfo}><span>표준 상품</span><strong>{standard.canonical_name}</strong><small>브랜드 {standard.brand ?? "미지정"}</small><small>판매 규격 {registeredVariants.length}개 · {image ? image.source_type === "upload" ? "Supabase 저장 이미지" : "외부 이미지 링크" : "대표 이미지 없음"}</small>{pendingCount > 0 && <span className={styles.specificationBadge}>규격 확인 필요 {pendingCount}개</span>}<span className={styles.registeredStandardHint}>규격·판매처 코드 관리 →</span></span></button><button type="button" className={styles.registeredStandardImageButton} onClick={() => setImageTarget(standard)}>{image ? "대표 이미지 변경" : "대표 이미지 추가"}</button></article>;
     })}</div> : <p className={styles.muted}>카테고리를 선택하면 해당 표준 상품만 표시됩니다.</p>}</> : <p>검색 조건에 맞는 표준 상품이 없습니다.</p>}</section>
     <div className={styles.standardWorkspaceTabs} role="tablist" aria-label="표준 상품 관리 영역"><button type="button" role="tab" aria-selected={lowerTab === "connection"} className={lowerTab === "connection" ? styles.standardWorkspaceTabActive : ""} onClick={() => { setLowerTab("connection"); void load(); }}>연결 대기 상품</button><button type="button" role="tab" aria-selected={lowerTab === "specification"} className={lowerTab === "specification" ? styles.standardWorkspaceTabActive : ""} onClick={() => setLowerTab("specification")}>규격·판매처 코드 관리</button></div>
-    {lowerTab === "connection" ? <section className={styles.officialSection}><h2>표준 상품 연결 대기열</h2><p className={styles.manualHint}>규격을 확인할 수 없으면 임시값으로 연결할 수 있습니다. 임시값은 관리자 검토 전까지 공개 단위가격 계산에서 제외됩니다.</p><div className={styles.manualQueue}>{visibleUnlinked.map(({ candidate, legacy: legacyRecord, fromBrowserStorage }) => <article key={officialProductCandidateKey(candidate)}><div><strong>{legacyRecord?.officialName ?? candidate.productName}</strong><small>판매처 {sellers(candidate).join(", ")} · 코드 {candidate.sourceProductCode}</small>{legacyRecord && <small>{fromBrowserStorage ? "기존 브라우저 저장 연결" : "기존 시드 연결"}을 가져올 수 있습니다.</small>}</div><div className={styles.queueActions}><a href={legacyRecord?.officialUrl ?? officialSearchUrl(candidate)} target="_blank" rel="noreferrer">상품 정보 찾기</a><button onClick={() => setSelected(candidate)}>{legacyRecord ? "표준 상품으로 가져오기" : "표준 상품 연결"}</button></div></article>)}</div></section> : <CatalogExplorerPanel selectionRequest={catalogSelection} />}
+    {lowerTab === "connection" ? <section className={styles.officialSection}><h2>PX 표준 상품 연결 대기열</h2><p className={styles.manualHint}>PX 공용 코드별로 묶되 영수증 원문은 각각 보존합니다. 공식명 후보와 검토 표시명은 조사 우선순위일 뿐 자동 연결 근거가 아니며, 승인 대기 항목은 이 탭의 연결 작업 수에서 제외됩니다.</p>{visibleQueueEntries.length === 0 ? <p className={styles.emptyState}>검색 조건에 맞는 PX 연결 작업이 없습니다.</p> : <div className={styles.pxQueueBuckets}>{renderQueueGroups("승인 대기", "검증된 제안서가 현재 브라우저의 연결 승인 탭에 있어 중복 조사하지 않습니다.", pendingQueueGroups)}{renderQueueGroups("기존 연결 재사용 검토", "같은 PX 영수증 코드에 검증된 판매 규격 연결이 있습니다. 이름·규격 충돌을 확인한 뒤 해당 판매처 연결만 별도로 승인합니다.", mappingReviewGroups)}{renderQueueGroups("공식 PX 후보 확인", "공식 카탈로그에서 정확 일치 또는 오타·축약 후보를 찾았습니다. 공식 규격과 브랜드 근거를 확인해야 합니다.", officialReviewGroups)}{renderQueueGroups("추가 조사 필요", "공식 후보가 아직 하나로 좁혀지지 않아 상품별 증거 조사가 필요합니다.", researchGroups)}</div>}</section> : <CatalogExplorerPanel selectionRequest={catalogSelection} />}
     {selected && <StandardProductConnectionModal candidate={selected} legacy={selectedState?.legacy} brands={brands} standards={standards} variants={variants} standardImages={standardImages} onClose={() => setSelected(null)} onSaved={(notice) => { void load().then(() => notice && setMessage(notice)); }} />}
     {imageTarget && <StandardProductImageModal standard={imageTarget} existing={standardImages.get(imageTarget.id)} userId={userId} onClose={() => setImageTarget(null)} onSaved={() => { setImageTarget(null); void load(); }} />}
   </section>;
@@ -267,6 +453,9 @@ function StandardProductConnectionModal({ candidate, legacy, brands, standards, 
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState("");
   const selectedStandard = standards.find((standard) => standard.id === standardProductId);
+  const whitespaceEquivalentStandard = standardProductId
+    ? undefined
+    : findWhitespaceEquivalentStandardProduct(standards, standardName);
   const reusedListingName = candidate.officialSourceNameRaw ?? legacy?.officialName ?? candidate.productName;
   const reusedProductUrl = legacy?.officialUrl ?? selectedStandard?.product_reference_url ?? approvalTarget?.brandEvidence.productReferenceUrl ?? "";
   const approvalFormEdited = Boolean(approvalTarget && (
@@ -668,6 +857,7 @@ function StandardProductConnectionModal({ candidate, legacy, brands, standards, 
           <h3>표준 상품·판매 규격 연결</h3>
           <form className={styles.manualForm} onSubmit={saveMapping}>
             <label>기존 표준 상품<select value={standardProductId} onChange={(event) => { const nextStandard = standards.find((standard) => standard.id === event.target.value); setStandardProductId(event.target.value); setBrandName(nextStandard?.brand ?? ""); setMappingSaved(false); setMessage(""); }}><option value="">새 표준 상품 만들기</option>{standards.map((standard) => <option key={standard.id} value={standard.id}>{standard.brand ? `${standard.brand} · ` : ""}{standard.canonical_name}</option>)}</select></label>
+            {whitespaceEquivalentStandard && <p className={styles.standardNameCollision} role="alert">같은 이름의 표준 상품 <b>{whitespaceEquivalentStandard.canonical_name}</b>이 이미 있습니다. 새로 만들지 말고 위 목록에서 해당 표준 상품을 직접 선택하세요.</p>}
             {selectedStandard ? <><section className={styles.reusedProductInfo} aria-label="사용할 표준 상품 정보"><span>표준 상품 <b>{selectedStandard.canonical_name}</b></span><span>브랜드 <b>{selectedStandard.brand ?? "미지정"}</b></span><span>하위 상품명 <b>{approvalProposal ? listingName : reusedListingName}</b></span>{reusedProductUrl ? <a href={reusedProductUrl} target="_blank" rel="noreferrer">기존 상품 URL 확인</a> : <strong>기존 URL이 없어 연결할 수 없습니다.</strong>}</section>{approvalProposal && <label>적용할 판매 규격명<input required value={listingName} onChange={(event) => setListingName(event.target.value)} /><small>공식 카탈로그 원문: {candidate.officialSourceNameRaw}</small></label>}</> : <><label>새 표준 상품명<input required value={standardName} onChange={(event) => setStandardName(event.target.value)} placeholder="예: 햇반" /></label><label>{approvalProposal ? "적용할 판매 규격명" : "공식 판매 규격명"}<input required value={approvalProposal ? listingName : candidate.officialSourceNameRaw ?? listingName} onChange={(event) => setListingName(event.target.value)} readOnly={!approvalProposal && Boolean(candidate.officialSourceNameRaw)} placeholder="공식 카탈로그 원문" /><small>{approvalProposal ? `공식 카탈로그 원문: ${candidate.officialSourceNameRaw}` : "공식 스냅샷 원문은 수정하지 않습니다."}</small></label><label>상품 확인 URL<input required type="url" placeholder="https://" value={productUrl} onChange={(event) => setProductUrl(event.target.value)} /></label></>}
             <section className={styles.reusedProductInfo} aria-label="공식 대표 이미지"><span>공식 대표 이미지 <b>표준 상품군에 적용</b></span>{candidate.officialImageUrl ? <a href={candidate.officialImageUrl} target="_blank" rel="noreferrer">공식 이미지 링크 확인</a> : <strong>공식 이미지 근거가 없어 연결할 수 없습니다.</strong>}</section>
             <label>표준 브랜드<input list="standard-brand-options" value={brandName} onChange={(event) => setBrandName(event.target.value)} placeholder="예: Baskin Robbins" /><small>상품명과 분리해 표준 상품군에 지정하며, 하위 판매 규격이 이 값을 상속합니다.</small></label>
@@ -689,7 +879,7 @@ function StandardProductConnectionModal({ candidate, legacy, brands, standards, 
               <small>승인 문구 : {pendingProposal.approvalStatement}</small>
               <small>입력값을 바꾸면 이 승인은 자동 무효화됩니다.</small>
             </section>}
-            <button type="submit" disabled={saving || mappingSaved || Boolean(selectedStandard && !reusedProductUrl)}>{mappingSaved ? "등록 완료" : saving ? (approvalProposal ? "승인 및 등록 중..." : "검증 중...") : approvalProposal ? (approvalFormEdited ? "수정 후 승인" : "연결 승인") : pendingProposal ? "이 제안 승인하고 등록" : "연결 제안서 만들기"}</button>
+            <button type="submit" disabled={saving || mappingSaved || Boolean(whitespaceEquivalentStandard) || Boolean(selectedStandard && !reusedProductUrl)}>{mappingSaved ? "등록 완료" : saving ? (approvalProposal ? "승인 및 등록 중..." : "검증 중...") : approvalProposal ? (approvalFormEdited ? "수정 후 승인" : "연결 승인") : pendingProposal ? "이 제안 승인하고 등록" : "연결 제안서 만들기"}</button>
           </form>
         </div>
         {isLinkOnlyApproval ? <aside className={styles.coupangModalPane} aria-label="쿠팡 가격 없음"><h3>쿠팡 가격</h3><p className={styles.muted}>이 제안은 공식 채널과 영수증 상품만 연결합니다.</p><strong>쿠팡가 없음</strong></aside> : <CoupangPriceFields productUrl={coupangProductUrl} onProductUrlChange={setCoupangProductUrl} listedPriceKrw={coupangListedPriceKrw} onListedPriceKrwChange={setCoupangListedPriceKrw} quantity={coupangQuantity} onQuantityChange={setCoupangQuantity} contentAmount={coupangContentAmount} onContentAmountChange={setCoupangContentAmount} contentUnit={usesPlaceholderSpecification ? "each" : contentUnit} maxBundleQuantity={coupangMaxBundleQuantity} onMaxBundleQuantityChange={setCoupangMaxBundleQuantity} maxBundleListedPriceKrw={coupangMaxBundleListedPriceKrw} onMaxBundleListedPriceKrwChange={setCoupangMaxBundleListedPriceKrw} />}

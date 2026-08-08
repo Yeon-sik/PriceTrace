@@ -796,6 +796,7 @@ declare
   v_first record;
   v_count_entry record;
   v_count_entry_replay record;
+  v_kilogram record;
   v_replay record;
   v_image_reuse record;
   v_verified_equivalence record;
@@ -947,7 +948,7 @@ begin
     or position(
       'is_verified_official_name_containment'
       in pg_get_functiondef(
-        'public.approve_and_register_standard_product_link_strict_v5(text,text,text,text,text,text,text,text,timestamptz,uuid,uuid,text,text,text,text,text,text,text,text,text,numeric,text,integer,integer,text,text[],text,integer,integer,numeric,text,integer,integer)'::regprocedure
+        'public.approve_and_register_standard_product_link_strict_v5(text,text,text,text,text,text,text,text,text,timestamptz,uuid,uuid,text,text,text,text,text,text,text,text,text,numeric,text,integer,integer,text,text[],text,integer,integer,numeric,text,integer,integer)'::regprocedure
       )
     ) = 0
   then
@@ -1146,6 +1147,71 @@ begin
   then
     raise exception 'The strict V6 count-entry replay was not idempotent.';
   end if;
+
+  select *
+  into v_kilogram
+  from pg_temp.run_strict_link_probe(
+    p_case_id => 'strict-probe-kilogram:' || v_suffix,
+    p_receipt_name => v_name || ' 부침가루',
+    p_official_name => v_name || ' 부침가루',
+    p_receipt_source_code => v_receipt_source_code || '_kilogram',
+    p_official_source_code => v_official_source_code || '_kilogram',
+    p_observed_at => v_observed_at,
+    p_official_specification_text => '1kg',
+    p_content_amount_override => 1000,
+    p_content_unit_override => 'g',
+    p_package_count_override => 1,
+    p_official_specification_check_override => jsonb_build_object(
+      'specificationTextRaw', '1kg',
+      'parsedContentAmount', 1000,
+      'parsedContentUnit', 'g',
+      'parsedPackageCount', 1,
+      'packageCountBasis', 'default_one_absent_count',
+      'matchesTarget', true
+    )
+  );
+
+  if v_kilogram.replayed
+    or v_kilogram.standard_product_id is null
+    or v_kilogram.catalog_product_id is null
+    or not exists (
+      select 1
+      from public.catalog_products as catalog
+      where catalog.id = v_kilogram.catalog_product_id
+        and catalog.standard_product_id = v_kilogram.standard_product_id
+        and catalog.content_amount = 1000
+        and catalog.content_unit = 'g'
+        and catalog.package_count = 1
+    )
+  then
+    raise exception 'The strict V6 kilogram specification was not normalized to grams.';
+  end if;
+
+  begin
+    perform * from pg_temp.run_strict_link_probe(
+      p_case_id => 'strict-probe-kilogram-mismatch:' || v_suffix,
+      p_receipt_name => v_name || ' mismatch 부침가루',
+      p_official_name => v_name || ' mismatch 부침가루',
+      p_receipt_source_code => v_receipt_source_code || '_kilogram_mismatch',
+      p_official_source_code => v_official_source_code || '_kilogram_mismatch',
+      p_observed_at => v_observed_at,
+      p_official_specification_text => '1kg',
+      p_content_amount_override => 1,
+      p_content_unit_override => 'g',
+      p_package_count_override => 1,
+      p_official_specification_check_override => jsonb_build_object(
+        'specificationTextRaw', '1kg',
+        'parsedContentAmount', 1,
+        'parsedContentUnit', 'g',
+        'parsedPackageCount', 1,
+        'packageCountBasis', 'default_one_absent_count',
+        'matchesTarget', true
+      )
+    );
+    raise exception 'A mismatched strict V6 kilogram target was accepted.';
+  exception
+    when check_violation then null;
+  end;
 
   begin
     perform * from pg_temp.run_strict_link_probe(

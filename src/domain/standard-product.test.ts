@@ -12,6 +12,7 @@ import {
   buildStrictRegistrationIdentity,
   canonicalJson,
   findExpectedCatalogProductId,
+  findWhitespaceEquivalentStandardProduct,
   findUniqueOfficialContainedNameMatch,
   findUniqueOfficialExactNameMatch,
   findUniqueOfficialRelaxedNameMatch,
@@ -73,6 +74,22 @@ describe("standard product brand registration", () => {
   it("returns a stable official source label", () => {
     expect(officialBrandSourceLabel("https://shop.example.com/products/1")).toBe("shop.example.com");
     expect(officialBrandSourceLabel("not-a-url")).toBeNull();
+  });
+});
+
+describe("standard product family uniqueness", () => {
+  const standards = [
+    { id: "shrimp-cracker", canonical_name: "농심 새우깡" },
+  ];
+
+  it("finds the existing family with the same case-insensitive whitespace key", () => {
+    expect(findWhitespaceEquivalentStandardProduct(standards, "  농심새우깡  "))
+      .toEqual(standards[0]);
+  });
+
+  it("does not treat a different product name as the same family", () => {
+    expect(findWhitespaceEquivalentStandardProduct(standards, "농심 새우깡 매운맛"))
+      .toBeUndefined();
   });
 });
 

@@ -1,6 +1,6 @@
 {
   "schemaVersion": "pricetrace-registered-receipt-product-names.v1",
-  "refreshedAt": "2026-08-03T03:32:13.3487136+09:00",
+  "refreshedAt": "2026-08-09T00:17:40.0649261+09:00",
   "source": "get_public_exact_standard_product_catalog_v2 joined with data/public/product-observations.v3.json",
   "matchRule": "exact_source_name_raw",
   "names": [
@@ -36,10 +36,14 @@
     "베리베리스트로베리큐브",
     "비트 트리플액션 2.8L(드럼)",
     "빕스 미트 라자냐",
+    "빕스 오리지널 바비큐폭립",
     "상쾌한아침우유식빵",
+    "새우깡",
     "생생우동면",
     "셀퓨젼씨 포스트 알파 센테카솔연고",
     "쉬림프 스파이시 투움바 파스타",
+    "신라면큰사발",
+    "아몬드초코볼 (대)",
     "오뚜기 순후추 팝콘",
     "오리지널 글레이즈드 3개입",
     "우삼겹김치볶음밥",

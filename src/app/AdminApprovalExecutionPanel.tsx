@@ -7,6 +7,7 @@ import {
   type OfficialProductCandidate,
 } from "@/domain/official-product";
 import { buildOfficialImageApprovalExecution } from "@/domain/official-image-approval";
+import { reconcilePxProposalRegistration } from "@/domain/standard-product-link-proposal-reconciliation";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import {
   applyApprovedOfficialImage,
@@ -106,20 +107,89 @@ function findCurrentCandidate(
 }
 
 export function AdminApprovalExecutionPanel({ candidates }: { candidates: OfficialProductCandidate[] }) {
+  const client = getSupabaseBrowserClient();
   const [items, setItems] = useState<StandardProductLinkProposalQueueItem[]>([]);
   const [selected, setSelected] = useState<SelectedProposal | null>(null);
   const [proposalText, setProposalText] = useState("");
   const [message, setMessage] = useState("");
 
-  const refreshQueue = useCallback(() => {
-    setItems(queueRepository.load());
-  }, []);
+  const refreshQueue = useCallback(async () => {
+    const loaded = queueRepository.load();
+    setItems(loaded);
+    if (!client || loaded.length === 0) return;
+
+    try {
+      const [mappingResult, variantResult, standardResult] = await Promise.all([
+        client
+          .from("source_product_mappings")
+          .select("source_label,source_product_code,catalog_product_id")
+          .eq("review_status", "verified"),
+        client
+          .from("catalog_products")
+          .select("id,standard_product_id,canonical_name,specification_status,content_amount,content_unit,package_count,reference_unit")
+          .eq("status", "active"),
+        client
+          .from("standard_products")
+          .select("id,canonical_name")
+          .eq("status", "active"),
+      ]);
+      if (mappingResult.error || variantResult.error || standardResult.error) return;
+
+      const mappings = (mappingResult.data ?? []).map((mapping) => ({
+        sourceLabel: mapping.source_label,
+        sourceProductCode: mapping.source_product_code,
+        catalogProductId: mapping.catalog_product_id,
+      }));
+      const variants = (variantResult.data ?? []).map((variant) => ({
+        id: variant.id,
+        standardProductId: variant.standard_product_id,
+        canonicalName: variant.canonical_name,
+        specificationStatus: variant.specification_status,
+        contentAmount: variant.content_amount,
+        contentUnit: variant.content_unit,
+        packageCount: variant.package_count,
+        referenceUnit: variant.reference_unit,
+      }));
+      const standards = (standardResult.data ?? []).map((standard) => ({
+        id: standard.id,
+        canonicalName: standard.canonical_name,
+      }));
+      const reconciled = loaded.map((item) => ({
+        item,
+        result: reconcilePxProposalRegistration(item.proposal, mappings, variants, standards),
+      }));
+      const alreadyRegistered = reconciled.filter(({ result }) => (
+        result.status === "already_registered"
+      ));
+      const collisions = reconciled.filter(({ result }) => (
+        result.status === "mapping_collision"
+      ));
+      if (alreadyRegistered.length > 0) {
+        setItems(queueRepository.removeMany(alreadyRegistered.map(({ item }) => item.id)));
+      }
+      if (alreadyRegistered.length > 0 || collisions.length > 0) {
+        const notices = [];
+        if (alreadyRegistered.length > 0) {
+          const names = alreadyRegistered.map(({ item }) => (
+            item.proposal.executionTarget.normalizedIdentity.productFamilyName
+          ));
+          notices.push(`이미 같은 PX 판매처·코드와 동일 판매 규격으로 등록된 제안 ${alreadyRegistered.length}건을 자동 정리했습니다: ${names.join(", ")}`);
+        }
+        if (collisions.length > 0) {
+          notices.push(`현재 매핑과 제안 대상이 다른 PX 제안 ${collisions.length}건은 삭제하지 않았습니다.`);
+        }
+        setMessage(notices.join(" "));
+      }
+    } catch {
+      // 브라우저가 오프라인이어도 로컬 대기열 자체는 그대로 보여 준다.
+    }
+  }, [client]);
 
   useEffect(() => {
-    refreshQueue();
-    const refreshOnFocus = () => refreshQueue();
+    void refreshQueue();
+    const refreshOnFocus = () => { void refreshQueue(); };
     const refreshOnStorage = (event: StorageEvent) => {
-      if (event.key === STANDARD_PRODUCT_LINK_PROPOSAL_QUEUE_STORAGE_KEY) refreshQueue();
+      if (event.key === STANDARD_PRODUCT_LINK_PROPOSAL_QUEUE_STORAGE_KEY) void refreshQueue();
     };
     window.addEventListener("focus", refreshOnFocus);
     window.addEventListener("storage", refreshOnStorage);
@@ -133,7 +203,7 @@ export function AdminApprovalExecutionPanel({ candidates }: { candidates: Offici
     try {
       const saved = queueRepository.enqueue(proposalText);
       setProposalText("");
-      refreshQueue();
+      void refreshQueue();
       setMessage(`${saved.proposal.executionTarget.normalizedIdentity.productFamilyName} 제안서를 로컬 승인 대기열에 저장했습니다.`);
     } catch (reason) {
       setMessage(messageFor(reason));
@@ -164,6 +234,14 @@ export function AdminApprovalExecutionPanel({ candidates }: { candidates: Offici
     setItems(queueRepository.remove(selected.item.id));
     setSelected(null);
     setMessage(`${productName} 연결을 승인하고 등록했습니다. 완료된 안건은 로컬 대기열에서 삭제했습니다.`);
+  }
+
+  function removeAlreadyRegisteredProposal() {
+    if (!selected) return;
+    const productName = selected.item.proposal.executionTarget.normalizedIdentity.productFamilyName;
+    setItems(queueRepository.remove(selected.item.id));
+    setSelected(null);
+    setMessage(`${productName}은(는) 판매처와 상품 코드가 일치하는 기존 매핑을 확인해 로컬 대기열에서 정리했습니다.`);
   }
 
   return <section className={styles.approvalExecutor} aria-labelledby="approval-executor-title">
@@ -216,6 +294,7 @@ export function AdminApprovalExecutionPanel({ candidates }: { candidates: Offici
         proposal: selected.item.proposal,
         onClose: () => setSelected(null),
         onApproved: completeApproval,
+        onAlreadyRegistered: removeAlreadyRegisteredProposal,
       }}
     />}
   </section>;
