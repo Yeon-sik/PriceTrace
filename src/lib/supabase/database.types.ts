@@ -431,6 +431,14 @@ export interface Database {
           replayed:boolean;
         }[];
       };
+      get_product_read_v1: {
+        Args: {
+          p_catalog_product_id?:string|null;
+          p_query?:string|null;
+          p_limit?:number;
+        };
+        Returns: Json;
+      };
       get_public_exact_standard_product_catalog_v2: {
         Args: Record<string, never>;
         Returns: {

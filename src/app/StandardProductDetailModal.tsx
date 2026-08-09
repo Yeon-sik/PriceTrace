@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { summarizeSellerPrices } from "@/domain/seller-price-insights";
 import { formatKrw } from "@/domain/settlement";
+import { ProductNutritionPanel } from "@/features/product-nutrition/ProductNutritionPanel";
 import { PriceTrendModal } from "./PriceTrendModal";
 import { CoupangComparisonMessage } from "./CoupangComparisonMessage";
 import type { StandardProductGroup, StandardProductItem } from "./ProductBrowser";
@@ -10,6 +11,9 @@ import styles from "./page.module.css";
 
 export function StandardProductDetailModal({ standard, onClose, onOpenStore }: { standard: StandardProductGroup; onClose: () => void; onOpenStore: (store: string) => void }) {
   const [trendItem, setTrendItem] = useState<StandardProductItem | null>(null);
+  const [nutritionCatalogProductId, setNutritionCatalogProductId] = useState(
+    standard.items[0]?.catalogProductId ?? "",
+  );
   const sellerOffers = useMemo(() => summarizeSellerPrices(standard.items.map((item) => ({
     sellerKey: item.sellerKey,
     sellerLabel: item.storeLabel,
@@ -18,7 +22,14 @@ export function StandardProductDetailModal({ standard, onClose, onOpenStore }: {
     confidence: item.latest.item.confidence,
     source: item.latest.source ?? "receipt",
   }))), [standard.items]);
+  const nutritionVariants = useMemo(
+    () => [...new Map(standard.items.map((item) => [item.catalogProductId, item])).values()],
+    [standard.items],
+  );
   const lowestItem = useMemo(() => [...standard.items].sort((left, right) => left.unitPriceKrw - right.unitPriceKrw || right.latest.observedAt.localeCompare(left.latest.observedAt))[0] ?? null, [standard.items]);
+  const nutritionItem = nutritionVariants.find(
+    (item) => item.catalogProductId === nutritionCatalogProductId,
+  ) ?? lowestItem;
 
   useEffect(() => {
     if (trendItem) return;
@@ -68,6 +79,20 @@ export function StandardProductDetailModal({ standard, onClose, onOpenStore }: {
           </article>)}
         </div>
       </section>}
+      {nutritionItem && <>
+        <label className={styles.nutritionVariantSelect}>
+          <span>영양 연결을 확인할 정확한 판매 규격</span>
+          <select
+            value={nutritionItem.catalogProductId}
+            onChange={(event) => setNutritionCatalogProductId(event.target.value)}
+          >
+            {nutritionVariants.map((item) => <option key={item.catalogProductId} value={item.catalogProductId}>
+              {item.officialProduct?.officialName ?? item.productName} · {item.packageLabel} · {item.storeLabel}
+            </option>)}
+          </select>
+        </label>
+        <ProductNutritionPanel standardName={standard.name} item={nutritionItem} />
+      </>}
       {sellerOffers.length > 0 && <section className={styles.standardSellerComparison} aria-labelledby="standard-seller-comparison-title">
         <div className={styles.sectionHeading}>
           <div><h3 id="standard-seller-comparison-title">판매처별 최근 단위가격</h3></div>

@@ -9,6 +9,7 @@ private-data/
 # Next.js / Node
 node_modules/
 .next/
+.next-e2e/
 out/
 coverage/
 playwright-report/
@@ -40,6 +41,9 @@ docs/*
 !docs/Project_Detail.md
 !docs/PROJECT_DOCS_OPERATIONS.md
 !docs/예외처리_*.md
+!docs/integrations/
+docs/integrations/*
+!docs/integrations/product-nutrition-link.md
 !docs/templates/
 !docs/templates/PROJECT_INTRO_TEMPLATE.md
 !docs/templates/PROJECT_DETAIL_TEMPLATE.md
@@ -78,7 +82,12 @@ e2e/*
 !src/domain/public-receipt.test.ts
 !src/domain/public-standard-catalog.test.ts
 !src/domain/seller-price-insights.test.ts
+!src/domain/product-read.test.ts
+!src/domain/product-read-migration.test.ts
+!src/domain/product-nutrition-link.test.ts
 !src/repositories/cart.repository.test.ts
 !src/repositories/admin-receipt.repository.test.ts
 !src/repositories/official-product.repository.test.ts
 !src/repositories/public-receipt.repository.test.ts
+!src/repositories/product-read.repository.test.ts
+!src/repositories/nutrition-catalog.repository.test.ts
