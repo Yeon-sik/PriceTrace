@@ -1,14 +1,18 @@
 import { expect, test, type Page } from "@playwright/test";
 
 const nutritionCatalogProductId = "22222222-2222-4222-8222-222222222222";
+const secondNutritionCatalogProductId = "33333333-3333-4333-8333-333333333333";
 const nutritionStandardProductId = "11111111-1111-4111-8111-111111111111";
 const nutritionFoodId = "fitness-haagendazs-strawberry";
 
 async function mockProductNutritionContracts(page: Page, {
   nutritionOffline = false,
   approvedNutrition = true,
+  includeSecondVariant = false,
+  failedNutritionCatalogProductId = null as string | null,
 } = {}) {
   let currentNutritionOffline = nutritionOffline;
+  const requestedNutritionCatalogIds: string[] = [];
   const nutritionRow = {
     contract_version: "nutrition-read.v1",
     nutrition_food_id: nutritionFoodId,
@@ -39,27 +43,35 @@ async function mockProductNutritionContracts(page: Page, {
   };
 
   await page.route("**/rest/v1/rpc/get_public_exact_standard_product_catalog_v2", async (route) => {
+    const catalogRows = [{
+      source_label: "와마트 일산점",
+      source_product_code: "210059",
+      catalog_product_id: nutritionCatalogProductId,
+      standard_product_id: nutritionStandardProductId,
+      standard_name: "하겐다즈 미니컵 스트로베리",
+      content_amount: 100,
+      content_unit: "ml",
+      package_count: 1,
+      reference_unit: 100,
+      coupang_listed_price_krw: null,
+      coupang_quantity: null,
+      coupang_content_amount: null,
+      coupang_content_unit: null,
+      coupang_max_bundle_quantity: null,
+      coupang_max_bundle_listed_price_krw: null,
+      coupang_product_url: null,
+      coupang_observed_at: null,
+    }];
+    if (includeSecondVariant) {
+      catalogRows.push({
+        ...catalogRows[0],
+        source_product_code: "200183",
+        catalog_product_id: secondNutritionCatalogProductId,
+      });
+    }
     await route.fulfill({
       contentType: "application/json",
-      body: JSON.stringify([{
-        source_label: "와마트 일산점",
-        source_product_code: "210059",
-        catalog_product_id: nutritionCatalogProductId,
-        standard_product_id: nutritionStandardProductId,
-        standard_name: "하겐다즈 미니컵 스트로베리",
-        content_amount: 100,
-        content_unit: "ml",
-        package_count: 1,
-        reference_unit: 100,
-        coupang_listed_price_krw: null,
-        coupang_quantity: null,
-        coupang_content_amount: null,
-        coupang_content_unit: null,
-        coupang_max_bundle_quantity: null,
-        coupang_max_bundle_listed_price_krw: null,
-        coupang_product_url: null,
-        coupang_observed_at: null,
-      }]),
+      body: JSON.stringify(catalogRows),
     });
   });
   await page.route("**/rest/v1/standard_product_images*", async (route) => {
@@ -73,13 +85,19 @@ async function mockProductNutritionContracts(page: Page, {
     });
   });
   await page.route("**/rest/v1/rpc/get_public_product_nutrition_v1", async (route) => {
-    if (currentNutritionOffline) {
+    const requestBody = route.request().postDataJSON() as { p_catalog_product_id?: string };
+    const requestedCatalogProductId = requestBody.p_catalog_product_id ?? "";
+    requestedNutritionCatalogIds.push(requestedCatalogProductId);
+    if (currentNutritionOffline || requestedCatalogProductId === failedNutritionCatalogProductId) {
       await route.fulfill({ status: 503, contentType: "application/json", body: JSON.stringify({ message: "nutrition offline" }) });
       return;
     }
     await route.fulfill({
       contentType: "application/json",
-      body: JSON.stringify(approvedNutrition ? [nutritionRow] : []),
+      body: JSON.stringify(approvedNutrition ? [{
+        ...nutritionRow,
+        catalog_product_id: requestedCatalogProductId,
+      }] : []),
     });
   });
 
@@ -87,6 +105,7 @@ async function mockProductNutritionContracts(page: Page, {
     setNutritionOffline(value: boolean) {
       currentNutritionOffline = value;
     },
+    requestedNutritionCatalogIds,
   };
 }
 
@@ -116,6 +135,41 @@ test("전체 상품에서 공식 상품을 함께 보여 주고 상품 계층과
   await expect(page.getByRole("region", { name: "PX 공식 판매상품" })).toHaveCount(0);
   await expect(page.getByRole("group", { name: "판매처 유형" }).getByRole("button", { name: "전체", exact: true })).toHaveAttribute("aria-pressed", "true");
   await expect(page.getByRole("combobox", { name: "정렬" })).toHaveValue("cheap");
+});
+
+test("공유 URL과 브라우저 뒤로가기로 주요 화면 상태를 복원한다", async ({ page }) => {
+  await page.goto("/PriceTrace?view=products");
+  await expect(page.getByRole("heading", { name: "상품 목록", exact: true })).toBeVisible();
+  await expect(page).toHaveURL(/\?view=products$/);
+
+  const mainNavigation = page.getByRole("navigation", { name: "주요 메뉴" });
+  await mainNavigation.getByRole("button", { name: /^장바구니/ }).click();
+  await expect(page.getByRole("heading", { name: "장바구니", exact: true })).toBeVisible();
+  await expect(page).toHaveURL(/\?view=cart$/);
+
+  await page.goBack();
+  await expect(page.getByRole("heading", { name: "상품 목록", exact: true })).toBeVisible();
+  await expect(mainNavigation.getByRole("button", { name: "상품 목록", exact: true })).toHaveAttribute("aria-current", "page");
+
+  await mainNavigation.getByRole("button", { name: "판매처 기록", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "판매처 기록", exact: true })).toBeVisible();
+  await expect(page).toHaveURL(/\?view=markets$/);
+
+  await page.goBack();
+  await expect(page.getByRole("heading", { name: "상품 목록", exact: true })).toBeVisible();
+});
+
+test("로그인 dialog를 Esc로 닫으면 실행 버튼으로 포커스를 복원한다", async ({ page }) => {
+  await page.goto("/PriceTrace");
+  const loginButton = page.getByRole("button", { name: "로그인", exact: true });
+  await loginButton.click();
+
+  const loginDialog = page.getByRole("dialog", { name: "로그인", exact: true });
+  await expect(loginDialog.getByRole("textbox", { name: "이메일" })).toBeFocused();
+  await page.keyboard.press("Escape");
+
+  await expect(loginDialog).toHaveCount(0);
+  await expect(loginButton).toBeFocused();
 });
 
 test("공개 관측 상품을 보여 주고 새로고침 뒤에도 장바구니를 유지한다", async ({ page }) => {
@@ -164,13 +218,18 @@ test("공개 관측 상품을 보여 주고 새로고침 뒤에도 장바구니�
   await expect(cartSummary).toContainText("총 3개");
   await expect(cartSummary).toContainText("6,090원");
   await expect(page.getByRole("article").filter({ hasText: "최근 관측가 (2026-07-14)" })).toBeVisible();
+  const cartQuantityInput = page.getByRole("spinbutton", { name: `${productName} 수량` });
+  await cartQuantityInput.fill("1.5");
+  await expect(cartQuantityInput).toHaveValue("1");
+  await expect(cartSummary).toContainText("총 1개");
+  await expect(cartSummary).toContainText("2,030원");
 
   await page.reload();
   await page
     .getByRole("navigation", { name: "주요 메뉴" })
-    .getByRole("button", { name: "장바구니 3" })
+    .getByRole("button", { name: "장바구니 1" })
     .click();
-  await expect(page.getByRole("complementary", { name: "장바구니 합계" })).toContainText("총 3개");
+  await expect(page.getByRole("complementary", { name: "장바구니 합계" })).toContainText("총 1개");
 });
 
 test("큰 대표 이미지도 상품 이름 위의 이미지 영역을 벗어나지 않는다", async ({ page }) => {
@@ -364,8 +423,37 @@ test("표준 상품 정보에서 승인된 영양을 별도 영양성분표로 �
   await expect(nutritionFacts).toContainText("콜레스테롤");
   await expect(nutritionFacts).toContainText("45mg");
 
-  await nutritionCloseButton.click();
+  await page.keyboard.press("Escape");
+  await expect(nutritionDialog).toHaveCount(0);
+  await expect(dialog).toBeVisible();
   await expect(nutritionButton).toBeFocused();
+  await page.keyboard.press("Escape");
+  await expect(dialog).toHaveCount(0);
+  await expect(informationButton).toBeFocused();
+});
+
+test("여러 정확 규격 중 일부 영양 조회가 실패해도 확인된 영양은 유지한다", async ({ page }) => {
+  const nutritionMock = await mockProductNutritionContracts(page, {
+    includeSecondVariant: true,
+    failedNutritionCatalogProductId: secondNutritionCatalogProductId,
+  });
+  await page.goto("/PriceTrace?view=products");
+
+  await page.getByRole("button", {
+    name: "하겐다즈 미니컵 스트로베리 정보 보기",
+    exact: true,
+  }).click();
+  const productDialog = page.getByRole("dialog", { name: "하겐다즈 미니컵 스트로베리" });
+  await expect(productDialog).toContainText("하위 상품 2개");
+  await productDialog.getByRole("button", { name: "영양 정보 확인", exact: true }).click();
+
+  const nutritionDialog = page.getByRole("dialog", { name: "단위 무게 당 영양 정보" });
+  await expect(nutritionDialog.getByRole("article", { name: "하겐다즈 스트로베리 영양 영양성분표" })).toBeVisible();
+  await expect(nutritionDialog).toContainText("일부 공개 영양정보를 불러오지 못했습니다.");
+  await expect.poll(() => [...new Set(nutritionMock.requestedNutritionCatalogIds)].sort()).toEqual([
+    nutritionCatalogProductId,
+    secondNutritionCatalogProductId,
+  ]);
 });
 
 test("승인된 영양 내용이 없으면 영양 팝업에 내용없음을 표시한다", async ({ page }) => {

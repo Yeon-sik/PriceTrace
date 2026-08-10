@@ -1,7 +1,8 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { cartProductFromGroup, cartProductFromOfficialListing, type CartProduct } from "@/domain/cart";
+import { buildAppNavigationUrl, readAppNavigationUrl, type AppPage } from "@/domain/app-navigation";
+import { cartProductFromGroup, cartProductFromOfficialListing, summarizeCart, type CartProduct } from "@/domain/cart";
 import { groupProductObservations, martTagFor, PRODUCT_CATEGORIES, type MartType, type ProductCategory, type ProductGroup, type ProductObservationListing, type ProductSort } from "@/domain/product-browser";
 import type { OfficialProductCandidate } from "@/domain/official-product";
 import { findOfficialListingCandidate } from "@/domain/official-listing-candidate";
@@ -25,7 +26,6 @@ const publicReceiptData = new PublicReceiptRepository().loadAll();
 const publicOfficialCatalog = new PublicOfficialChannelCatalogRepository().loadPxCatalog();
 const pxProductNameReviews = new PxProductNameReviewRepository().load(publicOfficialCatalog);
 const publicReceiptById = new Map(publicReceiptData.receipts.map((receipt) => [receipt.id, receipt]));
-type Page = "home" | "products" | "markets" | "cart" | "admin";
 
 function receiptRevisionFor(observation: ProductObservationListing) {
   const receipt = publicReceiptById.get(observation.item.receiptId);
@@ -69,7 +69,7 @@ function receiptObservationCandidate(
 }
 
 export default function Home() {
-  const [page, setPage] = useState<Page>("home");
+  const [page, setPage] = useState<AppPage>("home");
   const [selectedMarket, setSelectedMarket] = useState<string | null>(null);
   const [category, setCategory] = useState<ProductCategory>("전체");
   const [query, setQuery] = useState("");
@@ -92,6 +92,29 @@ export default function Home() {
   const clearCart = useCartStore((state) => state.clear);
   const { isAdmin, loading: adminLoading } = useAdminAccess(authRevision);
   const handleAuthChange = useCallback(() => setAuthRevision((revision) => revision + 1), []);
+  const navigate = useCallback((
+    nextPage: AppPage,
+    options: { selectedMarket?: string | null; replace?: boolean } = {},
+  ) => {
+    const nextMarket = nextPage === "markets" ? options.selectedMarket ?? null : null;
+    setPage(nextPage);
+    setSelectedMarket(nextMarket);
+    if (typeof window === "undefined") return;
+
+    const nextUrl = buildAppNavigationUrl(window.location.href, {
+      page: nextPage,
+      selectedMarket: nextMarket,
+    });
+    const currentUrl = `${window.location.pathname}${window.location.search}${window.location.hash}`;
+    if (nextUrl === currentUrl) return;
+
+    window.history[options.replace ? "replaceState" : "pushState"](
+      { priceTracePage: nextPage },
+      "",
+      nextUrl,
+    );
+    window.scrollTo({ top: 0, behavior: "auto" });
+  }, []);
 
   const receipts = publicReceiptData.receipts;
   const observationListings = publicReceiptData.observations;
@@ -106,10 +129,38 @@ export default function Home() {
   ], [productGroups]);
 
   useEffect(() => { if (!hydrated) hydrateCart(); }, [hydrateCart, hydrated]);
-  useEffect(() => { if (page === "admin" && !adminLoading && !isAdmin) setPage("home"); }, [adminLoading, isAdmin, page]);
-  const cartGroups = useMemo(() => cartProducts.filter((product) => lines[product.id] > 0), [cartProducts, lines]);
-  const cartTotal = cartGroups.reduce((sum, product) => sum + product.priceKrw * lines[product.id], 0);
-  const cartQuantityTotal = cartGroups.reduce((sum, product) => sum + lines[product.id], 0);
+  useEffect(() => {
+    const syncFromUrl = (closeTransientUi: boolean) => {
+      const navigation = readAppNavigationUrl(window.location.href);
+      setPage(navigation.page);
+      setSelectedMarket(navigation.selectedMarket);
+      if (closeTransientUi) {
+        setAuthOpen(false);
+        setTrendGroup(null);
+        setCartProductToAdd(null);
+        setCartNotice(null);
+      }
+
+      const canonicalUrl = buildAppNavigationUrl(window.location.href, navigation);
+      const currentUrl = `${window.location.pathname}${window.location.search}${window.location.hash}`;
+      if (canonicalUrl !== currentUrl) {
+        window.history.replaceState({ priceTracePage: navigation.page }, "", canonicalUrl);
+      }
+    };
+    const handlePopState = () => syncFromUrl(true);
+    syncFromUrl(false);
+    window.addEventListener("popstate", handlePopState);
+    return () => window.removeEventListener("popstate", handlePopState);
+  }, []);
+  useEffect(() => {
+    if (page === "admin" && !adminLoading && !isAdmin) {
+      navigate("home", { replace: true });
+    }
+  }, [adminLoading, isAdmin, navigate, page]);
+  const cartSummary = useMemo(() => summarizeCart(cartProducts, lines), [cartProducts, lines]);
+  const cartGroups = cartSummary.items;
+  const cartTotal = cartSummary.totalKrw;
+  const cartQuantityTotal = cartSummary.totalQuantity;
   const officialCandidates = useMemo(() => productGroups.map((group) => {
     const receiptCandidate = receiptObservationCandidate(group.latest);
     const reviewedName = findPxProductNameReview(receiptCandidate, pxProductNameReviews);
@@ -173,45 +224,45 @@ export default function Home() {
 
   function openProducts(nextCategory: ProductCategory = "전체") {
     setCategory(nextCategory);
-    setPage("products");
+    navigate("products");
   }
 
   return <div className={styles.shell}>
     <header className={styles.header}>
       <div className={styles.headerInner}>
-        <button className={styles.logo} onClick={() => setPage("home")} aria-label="가격 추적기 홈">가격 추적기</button>
-        <div className={styles.account}>{isAdmin && <button className={styles.adminShortcut} onClick={() => setPage("admin")}>관리자</button>}<AuthPanel onChange={handleAuthChange} onOpen={() => setAuthOpen(true)} /></div>
+        <button className={styles.logo} onClick={() => navigate("home")} aria-label="가격 추적기 홈">가격 추적기</button>
+        <div className={styles.account}>{isAdmin && <button className={styles.adminShortcut} onClick={() => navigate("admin")}>관리자</button>}<AuthPanel onChange={handleAuthChange} onOpen={() => setAuthOpen(true)} /></div>
       </div>
       <nav className={styles.nav} aria-label="주요 메뉴"><div className={styles.navInner}>
-        <button className={page === "home" ? styles.navActive : ""} aria-current={page === "home" ? "page" : undefined} onClick={() => setPage("home")}>홈</button>
-        <button className={page === "products" ? styles.navActive : ""} aria-current={page === "products" ? "page" : undefined} onClick={() => setPage("products")}>상품 목록</button>
-        <button className={page === "cart" ? styles.navActive : ""} aria-current={page === "cart" ? "page" : undefined} onClick={() => setPage("cart")}>장바구니 <span className={styles.navBadge}>{cartQuantityTotal}</span></button>
-        <button className={page === "markets" ? styles.navActive : ""} aria-current={page === "markets" ? "page" : undefined} onClick={() => { setSelectedMarket(null); setPage("markets"); }}>판매처 기록</button>
-        {isAdmin && <button className={page === "admin" ? styles.navActive : ""} aria-current={page === "admin" ? "page" : undefined} onClick={() => setPage("admin")}>관리자</button>}
+        <button className={page === "home" ? styles.navActive : ""} aria-current={page === "home" ? "page" : undefined} onClick={() => navigate("home")}>홈</button>
+        <button className={page === "products" ? styles.navActive : ""} aria-current={page === "products" ? "page" : undefined} onClick={() => navigate("products")}>상품 목록</button>
+        <button className={page === "cart" ? styles.navActive : ""} aria-current={page === "cart" ? "page" : undefined} onClick={() => navigate("cart")}>장바구니 <span className={styles.navBadge}>{cartQuantityTotal}</span></button>
+        <button className={page === "markets" ? styles.navActive : ""} aria-current={page === "markets" ? "page" : undefined} onClick={() => navigate("markets")}>판매처 기록</button>
+        {isAdmin && <button className={page === "admin" ? styles.navActive : ""} aria-current={page === "admin" ? "page" : undefined} onClick={() => navigate("admin")}>관리자</button>}
       </div></nav>
     </header>
 
     <main className={styles.main}>
-      {page === "home" && <><section className={styles.hero}><p className={styles.kicker}>PRICE OBSERVATION PLATFORM</p><h1>상품 가격을<br /><span>관측 기록으로 비교하세요.</span></h1><p>판매처와 시점이 명확한 영수증 관측가를 비교하고<br />필요한 상품을 장바구니에 모을 수 있습니다.</p><button onClick={() => openProducts()}>상품 둘러보기 <span>→</span></button></section><section className={styles.homeGrid}><CategoryBox category={category} onSelect={openProducts} /><CartBox count={cartGroups.length} quantity={cartQuantityTotal} total={cartTotal} onOpen={() => setPage("cart")} /></section></>}
-      {page === "products" && <ProductBrowser groups={productGroups} query={query} setQuery={setQuery} category={category} setCategory={setCategory} martType={martType} setMartType={setMartType} selectedStore={selectedStore} setSelectedStore={setSelectedStore} sort={sort} setSort={setSort} authRevision={authRevision} onAdd={openCartModal} onTrend={setTrendGroup} onOpenStore={(store) => { setSelectedMarket(store); setPage("markets"); }} />}
-      {page === "markets" && <MarketBrowser receipts={receipts} observations={observationListings} selectedStore={selectedMarket} onSelectStore={setSelectedMarket} onOpenTrend={setTrendGroup} />}
-      {page === "cart" && <CartPage products={cartProducts} lines={lines} onQuantityChange={updateCartQuantity} onRemove={removeCart} onClear={clearCart} onBrowse={() => setPage("products")} />}
+      {page === "home" && <><section className={styles.hero}><p className={styles.kicker}>PRICE OBSERVATION PLATFORM</p><h1>상품 가격을<br /><span>관측 기록으로 비교하세요.</span></h1><p>판매처와 시점이 명확한 영수증 관측가를 비교하고<br />필요한 상품을 장바구니에 모을 수 있습니다.</p><button onClick={() => openProducts()}>상품 둘러보기 <span>→</span></button></section><section className={styles.homeGrid}><CategoryBox category={category} onSelect={openProducts} /><CartBox count={cartGroups.length} quantity={cartQuantityTotal} total={cartTotal} onOpen={() => navigate("cart")} /></section></>}
+      {page === "products" && <ProductBrowser groups={productGroups} query={query} setQuery={setQuery} category={category} setCategory={setCategory} martType={martType} setMartType={setMartType} selectedStore={selectedStore} setSelectedStore={setSelectedStore} sort={sort} setSort={setSort} authRevision={authRevision} onAdd={openCartModal} onTrend={setTrendGroup} onOpenStore={(store) => navigate("markets", { selectedMarket: store })} />}
+      {page === "markets" && <MarketBrowser receipts={receipts} observations={observationListings} selectedStore={selectedMarket} onSelectStore={(store) => navigate("markets", { selectedMarket: store, replace: true })} onOpenTrend={setTrendGroup} />}
+      {page === "cart" && <CartPage products={cartProducts} lines={lines} onQuantityChange={updateCartQuantity} onRemove={removeCart} onClear={clearCart} onBrowse={() => navigate("products")} />}
       {page === "admin" && isAdmin && <AdminPage candidates={officialCandidates} approvalCandidates={approvalCandidates} receipts={receipts} />}
     </main>
 
     <footer className={styles.footer}>가격 추적기 <span>영수증 관측가로 투명하게 비교하세요.</span></footer>
-    {page !== "cart" && <FloatingCartButton quantity={cartQuantityTotal} total={cartTotal} onOpen={() => setPage("cart")} />}
+    {page !== "cart" && <FloatingCartButton quantity={cartQuantityTotal} total={cartTotal} onOpen={() => navigate("cart")} />}
     <nav className={styles.mobileNav} aria-label="모바일 주요 메뉴">
-      <button className={page === "home" ? styles.mobileNavActive : ""} aria-current={page === "home" ? "page" : undefined} onClick={() => setPage("home")}><span aria-hidden="true">⌂</span>홈</button>
-      <button className={page === "products" ? styles.mobileNavActive : ""} aria-current={page === "products" ? "page" : undefined} onClick={() => setPage("products")}><span aria-hidden="true">⌕</span>상품 목록</button>
-      <button className={page === "cart" ? styles.mobileNavActive : ""} aria-current={page === "cart" ? "page" : undefined} onClick={() => setPage("cart")}><span aria-hidden="true">🛒</span>장바구니<b>{cartQuantityTotal || ""}</b></button>
-      <button className={page === "markets" ? styles.mobileNavActive : ""} aria-current={page === "markets" ? "page" : undefined} onClick={() => { setSelectedMarket(null); setPage("markets"); }}><span aria-hidden="true">⌖</span>판매처 기록</button>
+      <button className={page === "home" ? styles.mobileNavActive : ""} aria-current={page === "home" ? "page" : undefined} onClick={() => navigate("home")}><span aria-hidden="true">⌂</span>홈</button>
+      <button className={page === "products" ? styles.mobileNavActive : ""} aria-current={page === "products" ? "page" : undefined} onClick={() => navigate("products")}><span aria-hidden="true">⌕</span>상품 목록</button>
+      <button className={page === "cart" ? styles.mobileNavActive : ""} aria-current={page === "cart" ? "page" : undefined} onClick={() => navigate("cart")}><span aria-hidden="true">🛒</span>장바구니<b>{cartQuantityTotal || ""}</b></button>
+      <button className={page === "markets" ? styles.mobileNavActive : ""} aria-current={page === "markets" ? "page" : undefined} onClick={() => navigate("markets")}><span aria-hidden="true">⌖</span>판매처 기록</button>
     </nav>
 
     {authOpen && <AuthPanel onChange={handleAuthChange} modal onClose={() => setAuthOpen(false)} />}
-    {trendGroup && <PriceTrendModal group={trendGroup} onClose={() => setTrendGroup(null)} onOpenStore={(store) => { setTrendGroup(null); setSelectedMarket(store); setPage("markets"); }} />}
+    {trendGroup && <PriceTrendModal group={trendGroup} onClose={() => setTrendGroup(null)} onOpenStore={(store) => { setTrendGroup(null); navigate("markets", { selectedMarket: store }); }} />}
     {cartProductToAdd && <CartQuantityModal product={cartProductToAdd} value={cartQuantity} error={cartQuantityError} onChange={(value) => { setCartQuantity(value); setCartQuantityError(""); }} onClose={() => setCartProductToAdd(null)} onConfirm={confirmAddToCart} />}
-    {cartNotice && <CartNoticeModal productName={cartNotice.productName} quantity={cartNotice.quantity} onClose={() => setCartNotice(null)} onGoCart={() => { setCartNotice(null); setPage("cart"); }} />}
+    {cartNotice && <CartNoticeModal productName={cartNotice.productName} quantity={cartNotice.quantity} onClose={() => setCartNotice(null)} onGoCart={() => { setCartNotice(null); navigate("cart"); }} />}
   </div>;
 }
 

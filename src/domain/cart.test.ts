@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { cartProductFromGroup, cartProductFromOfficialListing } from "./cart";
+import { cartProductFromGroup, cartProductFromOfficialListing, normalizeCartQuantity, summarizeCart } from "./cart";
 import type { PublicOfficialChannelListing } from "./public-official-channel-catalog";
 import { groupProductObservations, type ProductObservationListing } from "./product-browser";
 import type { ReceiptItem } from "./types";
@@ -77,5 +77,37 @@ describe("cart products", () => {
       priceObservedAt: "2026-08-05T00:00:00.000Z",
       priceSource: "official-channel",
     });
+  });
+
+  it("summarizes only positive integer cart lines from one shared selector", () => {
+    const receiptProduct = cartProductFromGroup(standardProductGroup());
+    const officialProduct = cartProductFromOfficialListing(officialListing());
+
+    expect(summarizeCart([receiptProduct, officialProduct], {
+      [receiptProduct.id]: 2,
+      [officialProduct.id]: 3,
+      ignored: -1,
+    })).toEqual({
+      items: [receiptProduct, officialProduct],
+      quantities: {
+        [receiptProduct.id]: 2,
+        [officialProduct.id]: 3,
+      },
+      totalKrw: 6_600,
+      totalQuantity: 5,
+    });
+
+    expect(summarizeCart([receiptProduct], { [receiptProduct.id]: 1.5 })).toEqual({
+      items: [receiptProduct],
+      quantities: { [receiptProduct.id]: 1 },
+      totalKrw: 1_500,
+      totalQuantity: 1,
+    });
+  });
+
+  it("normalizes positive fractional input without persisting invalid cart quantities", () => {
+    expect(normalizeCartQuantity(1.5)).toBe(1);
+    expect(normalizeCartQuantity(0)).toBeNull();
+    expect(normalizeCartQuantity(Number.NaN)).toBeNull();
   });
 });

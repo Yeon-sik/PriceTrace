@@ -13,6 +13,38 @@ export type CartProduct = {
   imageUrl?: string;
 };
 
+export type CartSummary = {
+  items: CartProduct[];
+  quantities: Record<string, number>;
+  totalKrw: number;
+  totalQuantity: number;
+};
+
+export function normalizeCartQuantity(quantity: number): number | null {
+  if (!Number.isFinite(quantity)) return null;
+  const normalized = Math.trunc(quantity);
+  return normalized > 0 ? normalized : null;
+}
+
+export function summarizeCart(
+  products: readonly CartProduct[],
+  lines: Readonly<Record<string, number>>,
+): CartSummary {
+  const quantities: Record<string, number> = {};
+  const items = products.filter((product) => {
+    const quantity = normalizeCartQuantity(lines[product.id]);
+    if (quantity === null) return false;
+    quantities[product.id] = quantity;
+    return true;
+  });
+  return {
+    items,
+    quantities,
+    totalKrw: items.reduce((sum, product) => sum + product.priceKrw * quantities[product.id], 0),
+    totalQuantity: items.reduce((sum, product) => sum + quantities[product.id], 0),
+  };
+}
+
 export function cartProductFromGroup(group: ProductGroup): CartProduct {
   return {
     id: group.id,

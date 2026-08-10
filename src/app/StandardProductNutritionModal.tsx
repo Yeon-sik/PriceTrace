@@ -1,8 +1,9 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useRef, type RefObject } from "react";
 import type { NutritionFood } from "@/domain/product-nutrition-link";
 import { useStandardProductNutrition } from "@/features/product-nutrition/use-standard-product-nutrition";
+import { trapDialogFocus, useDialogLifecycle } from "@/hooks/use-dialog-lifecycle";
 import styles from "./page.module.css";
 
 function formatAmount(value: number | null, unit: string) {
@@ -62,28 +63,16 @@ export function StandardProductNutritionModal({
   standardName,
   catalogProductIds,
   onClose,
+  restoreFocusRef,
 }: {
   standardName: string;
   catalogProductIds: readonly string[];
   onClose: () => void;
+  restoreFocusRef?: RefObject<HTMLElement | null>;
 }) {
   const closeButtonRef = useRef<HTMLButtonElement>(null);
   const { foods, loading, error, warning, retry } = useStandardProductNutrition(catalogProductIds);
-
-  useEffect(() => {
-    const previousFocus = document.activeElement instanceof HTMLElement
-      ? document.activeElement
-      : null;
-    closeButtonRef.current?.focus();
-    const closeOnEscape = (event: KeyboardEvent) => {
-      if (event.key === "Escape") onClose();
-    };
-    window.addEventListener("keydown", closeOnEscape);
-    return () => {
-      window.removeEventListener("keydown", closeOnEscape);
-      previousFocus?.focus();
-    };
-  }, [onClose]);
+  useDialogLifecycle({ onClose, initialFocusRef: closeButtonRef, restoreFocusRef });
 
   return <div
     className={`${styles.modalBackdrop} ${styles.nutritionModalBackdrop}`}
@@ -95,22 +84,7 @@ export function StandardProductNutritionModal({
       role="dialog"
       aria-modal="true"
       aria-labelledby="standard-nutrition-title"
-      onKeyDown={(event) => {
-        if (event.key !== "Tab") return;
-        const focusable = [...event.currentTarget.querySelectorAll<HTMLElement>(
-          "button:not([disabled]), a[href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex='-1'])",
-        )];
-        const first = focusable[0];
-        const last = focusable.at(-1);
-        if (!first || !last) return;
-        if (event.shiftKey && document.activeElement === first) {
-          event.preventDefault();
-          last.focus();
-        } else if (!event.shiftKey && document.activeElement === last) {
-          event.preventDefault();
-          first.focus();
-        }
-      }}
+      onKeyDown={trapDialogFocus}
     >
       <button
         ref={closeButtonRef}

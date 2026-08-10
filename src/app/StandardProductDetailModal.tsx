@@ -1,50 +1,33 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
 import { summarizeSellerPrices } from "@/domain/seller-price-insights";
 import { formatKrw } from "@/domain/settlement";
+import { trapDialogFocus, useDialogLifecycle } from "@/hooks/use-dialog-lifecycle";
 import { PriceTrendModal } from "./PriceTrendModal";
 import { CoupangComparisonMessage } from "./CoupangComparisonMessage";
 import { StandardProductNutritionModal } from "./StandardProductNutritionModal";
 import type { StandardProductGroup, StandardProductItem } from "./ProductBrowser";
 import styles from "./page.module.css";
 
-function trapDialogFocus(event: React.KeyboardEvent<HTMLElement>) {
-  if (event.key !== "Tab") return;
-  const focusable = [...event.currentTarget.querySelectorAll<HTMLElement>(
-    "button:not([disabled]), a[href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), summary, [tabindex]:not([tabindex='-1'])",
-  )].filter((element) => (
-    !element.closest("[hidden]")
-    && (!element.closest("details:not([open])") || element.tagName === "SUMMARY")
-  ));
-  const first = focusable[0];
-  const last = focusable.at(-1);
-  if (!first || !last) return;
-  if (event.shiftKey && document.activeElement === first) {
-    event.preventDefault();
-    last.focus();
-  } else if (!event.shiftKey && document.activeElement === last) {
-    event.preventDefault();
-    first.focus();
-  }
-}
-
 export function StandardProductDetailModal({ standard, onClose, onOpenStore }: { standard: StandardProductGroup; onClose: () => void; onOpenStore: (store: string) => void }) {
   const [trendItem, setTrendItem] = useState<StandardProductItem | null>(null);
   const [nutritionOpen, setNutritionOpen] = useState(false);
   const closeButtonRef = useRef<HTMLButtonElement>(null);
   const nutritionButtonRef = useRef<HTMLButtonElement>(null);
-  const onCloseRef = useRef(onClose);
   const nutritionOpenRef = useRef(nutritionOpen);
   const trendItemRef = useRef(trendItem);
-  onCloseRef.current = onClose;
   nutritionOpenRef.current = nutritionOpen;
   trendItemRef.current = trendItem;
 
   const closeNutrition = useCallback(() => {
     setNutritionOpen(false);
-    window.requestAnimationFrame(() => nutritionButtonRef.current?.focus());
   }, []);
+  useDialogLifecycle({
+    onClose,
+    initialFocusRef: closeButtonRef,
+    canCloseOnEscape: () => !nutritionOpenRef.current && !trendItemRef.current,
+  });
   const sellerOffers = useMemo(() => summarizeSellerPrices(standard.items.map((item) => ({
     sellerKey: item.sellerKey,
     sellerLabel: item.storeLabel,
@@ -58,26 +41,6 @@ export function StandardProductDetailModal({ standard, onClose, onOpenStore }: {
     [standard.items],
   );
   const lowestItem = useMemo(() => [...standard.items].sort((left, right) => left.unitPriceKrw - right.unitPriceKrw || right.latest.observedAt.localeCompare(left.latest.observedAt))[0] ?? null, [standard.items]);
-
-  useEffect(() => {
-    const previousFocus = document.activeElement instanceof HTMLElement
-      ? document.activeElement
-      : null;
-    const previousOverflow = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
-    closeButtonRef.current?.focus();
-    const closeOnEscape = (event: KeyboardEvent) => {
-      if (event.key === "Escape" && !nutritionOpenRef.current && !trendItemRef.current) {
-        onCloseRef.current();
-      }
-    };
-    window.addEventListener("keydown", closeOnEscape);
-    return () => {
-      document.body.style.overflow = previousOverflow;
-      window.removeEventListener("keydown", closeOnEscape);
-      previousFocus?.focus();
-    };
-  }, []);
 
   if (trendItem) return <PriceTrendModal group={trendItem} onClose={onClose} onBack={() => setTrendItem(null)} onOpenStore={onOpenStore} />;
 
@@ -178,6 +141,7 @@ export function StandardProductDetailModal({ standard, onClose, onOpenStore }: {
       standardName={standard.name}
       catalogProductIds={nutritionCatalogProductIds}
       onClose={closeNutrition}
+      restoreFocusRef={nutritionButtonRef}
     />}
   </>;
 }

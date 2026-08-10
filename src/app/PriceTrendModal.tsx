@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { ProductGroup } from "@/domain/product-browser";
 import {
   sellerPricePointsFromGroup,
@@ -9,12 +9,14 @@ import {
   type SellerPricePoint,
 } from "@/domain/seller-price-insights";
 import { formatKrw } from "@/domain/settlement";
+import { trapDialogFocus, useDialogLifecycle } from "@/hooks/use-dialog-lifecycle";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import styles from "./page.module.css";
 
 type TrendPoint = SellerPricePoint;
 
 export function PriceTrendModal({ group, onClose, onOpenStore, onBack }: { group: ProductGroup; onClose: () => void; onOpenStore: (store: string) => void; onBack?: () => void }) {
+  const closeButtonRef = useRef<HTMLButtonElement>(null);
   const client = getSupabaseBrowserClient();
   const initialPoints = useMemo(() => sellerPricePointsFromGroup(group), [group]);
   const [points, setPoints] = useState<TrendPoint[]>(initialPoints);
@@ -22,16 +24,7 @@ export function PriceTrendModal({ group, onClose, onOpenStore, onBack }: { group
   const [loading, setLoading] = useState(Boolean(client && group.officialProduct));
   const [message, setMessage] = useState(group.officialProduct ? "" : `${group.latest.storeLabel}의 동일 상품 관측을 표시합니다. 판매처 비교는 검증된 공통 상품 연결이 있을 때 확장됩니다.`);
 
-  useEffect(() => {
-    const previousOverflow = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
-    const escape = (event: KeyboardEvent) => { if (event.key === "Escape") onClose(); };
-    window.addEventListener("keydown", escape);
-    return () => {
-      document.body.style.overflow = previousOverflow;
-      window.removeEventListener("keydown", escape);
-    };
-  }, [onClose]);
+  useDialogLifecycle({ onClose, initialFocusRef: closeButtonRef });
 
   useEffect(() => {
     setPoints(initialPoints);
@@ -107,9 +100,9 @@ export function PriceTrendModal({ group, onClose, onOpenStore, onBack }: { group
   const title = group.officialProduct?.officialName ?? group.productName;
 
   return <div className={styles.modalBackdrop} role="presentation" onMouseDown={(event) => event.target === event.currentTarget && onClose()}>
-    <section className={`${styles.authModal} ${styles.trendModal}`} role="dialog" aria-modal="true" aria-labelledby="trend-title">
+    <section className={`${styles.authModal} ${styles.trendModal}`} role="dialog" aria-modal="true" aria-labelledby="trend-title" onKeyDown={trapDialogFocus}>
       {onBack && <button type="button" className={styles.backButton} onClick={onBack} aria-label="이전 화면으로 돌아가기">‹ 뒤로</button>}
-      <button className={styles.closeButton} onClick={onClose} aria-label="가격 이력 창 닫기">×</button>
+      <button ref={closeButtonRef} className={styles.closeButton} onClick={onClose} aria-label="가격 이력 창 닫기">×</button>
       <h2 id="trend-title">{title}</h2>
       {selectedSummary && <>
         <div className={styles.productDetailMeta}>
