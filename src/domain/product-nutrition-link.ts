@@ -62,6 +62,11 @@ export type NutritionFood = {
   sodiumMg: number | null;
   saturatedFatGrams: number | null;
   sugarsGrams: number | null;
+  fiberGrams: number | null;
+  addedSugarsGrams: number | null;
+  transFatGrams: number | null;
+  cholesterolMg: number | null;
+  micronutrients: Record<string, { amount: number; unit: string }>;
   sourceType: string;
   sourceReference: string | null;
   sourceRevision: string | null;
@@ -85,6 +90,11 @@ export function nutritionFoodFromReadRow(rowInput: unknown): NutritionFood {
     sodiumMg: row.nutrition_values.sodium_mg,
     saturatedFatGrams: row.nutrition_values.saturated_fat_grams,
     sugarsGrams: row.nutrition_values.sugars_grams,
+    fiberGrams: row.nutrition_values.fiber_grams,
+    addedSugarsGrams: row.nutrition_values.added_sugars_grams,
+    transFatGrams: row.nutrition_values.trans_fat_grams,
+    cholesterolMg: row.nutrition_values.cholesterol_mg,
+    micronutrients: row.micronutrients,
     sourceType: row.source_type,
     sourceReference: row.source_reference,
     sourceRevision: row.source_revision,
@@ -220,6 +230,25 @@ export const ProductNutritionLinkStateSchema = z.object({
 export type ProductNutritionLink = z.infer<typeof ProductNutritionLinkSchema>;
 export type ProductNutritionProposal = z.infer<typeof ProductNutritionProposalSchema>;
 export type ProductNutritionLinkState = z.infer<typeof ProductNutritionLinkStateSchema>;
+
+export function approvedNutritionFoodsFromLinkStates(
+  states: readonly ProductNutritionLinkState[],
+) {
+  const foodsById = new Map<string, NutritionFood>();
+
+  for (const state of states) {
+    for (const link of state.approvedLinks) {
+      if (!link.nutritionFood) continue;
+      const food = nutritionFoodFromReadRow(link.nutritionFood);
+      const current = foodsById.get(food.id);
+      if (!current || food.revision > current.revision) foodsById.set(food.id, food);
+    }
+  }
+
+  return [...foodsById.values()].sort((left, right) => (
+    left.name.localeCompare(right.name, "ko-KR") || left.id.localeCompare(right.id)
+  ));
+}
 
 export function buildProductNutritionProposalRequest({
   action,

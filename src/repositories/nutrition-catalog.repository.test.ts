@@ -86,6 +86,41 @@ describe("NutritionCatalogRepository", () => {
     });
   });
 
+  it("reads only the public projection for an exact catalog product", async () => {
+    const rpc = vi.fn().mockResolvedValue({
+      data: [{ ...publicFoodRow(), catalog_product_id: catalogProductId }],
+      error: null,
+    });
+    const repository = new NutritionCatalogRepository({ rpc } as unknown as SupabaseClient);
+
+    const foods = await repository.readPublicFoods(catalogProductId);
+
+    expect(rpc).toHaveBeenCalledWith("get_public_product_nutrition_v1", {
+      p_namespace: "pricetrace",
+      p_catalog_product_id: catalogProductId,
+    });
+    expect(foods).toHaveLength(1);
+    expect(foods[0]).toMatchObject({
+      id: nutritionFoodId,
+      approvedCatalogProductId: catalogProductId,
+    });
+  });
+
+  it("rejects a public projection for a different exact catalog product", async () => {
+    const rpc = vi.fn().mockResolvedValue({
+      data: [{
+        ...publicFoodRow(),
+        catalog_product_id: "55555555-5555-4555-8555-555555555555",
+      }],
+      error: null,
+    });
+    const repository = new NutritionCatalogRepository({ rpc } as unknown as SupabaseClient);
+
+    await expect(repository.readPublicFoods(catalogProductId)).rejects.toThrow(
+      /요청하지 않은 정확 규격/,
+    );
+  });
+
   it("reads authoritative link state from the Nutrition RPC", async () => {
     const rpc = vi.fn().mockResolvedValue({
       data: {

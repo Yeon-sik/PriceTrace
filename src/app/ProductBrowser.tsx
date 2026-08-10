@@ -77,10 +77,13 @@ function OfficialLinkedStandardCard({
         <strong>{formatKrw(lowestPrice)}{highestPrice === lowestPrice ? "" : ` ~ ${formatKrw(highestPrice)}`}</strong>
       </div>
       <div className={styles.officialChannelMeta}>
-        <span>연결된 원문: {standard.listings.map((listing) => listing.sourceNameRaw).join(", ")}</span>
+        <details className={styles.officialSourceDetails}>
+          <summary>연결 원문 {standard.listings.length.toLocaleString("ko-KR")}개</summary>
+          <span>{standard.listings.map((listing) => listing.sourceNameRaw).join(", ")}</span>
+        </details>
         <span>특정 지점 판매·재고 확인 아님</span>
       </div>
-      {onOpen && <button type="button" onClick={onOpen}>출처·가격 상세 보기 ›</button>}
+      {onOpen && <button type="button" aria-label={`${standard.name} 정보 보기`} onClick={onOpen}>정보 보기</button>}
        {onAdd && <div className={styles.productActions}><button type="button" aria-label={`${standard.name} 장바구니에 담기`} onClick={() => onAdd(lowestListing)}>최저 공식가 담기</button></div>}
      </div>
    </article>;
@@ -181,6 +184,14 @@ export function ProductBrowser({ groups, query, setQuery, category, setCategory,
   const officialProductDisplayCount = standaloneListings.length + linkedByStandardProduct.size;
   const resultCount = gridEntries.length
     + (showStandaloneOfficialListings ? standaloneOfficialListingCount : 0);
+  const changeCatalogView = (nextView: CatalogView) => {
+    setCatalogView(nextView);
+    if (nextView === "official") {
+      setMartType("all");
+      setSelectedStore("all");
+      setSort("cheap");
+    }
+  };
 
   return <section className={styles.browser}>
     <div className={styles.browserHead}>
@@ -202,19 +213,19 @@ export function ProductBrowser({ groups, query, setQuery, category, setCategory,
     </div>
 
     <div className={styles.catalogLayerTabs} role="group" aria-label="상품 데이터 계층">
-      <button type="button" aria-pressed={catalogView === "all"} className={catalogView === "all" ? styles.catalogLayerTabActive : ""} onClick={() => setCatalogView("all")}>전체 상품</button>
-      <button type="button" aria-pressed={catalogView === "standard"} className={catalogView === "standard" ? styles.catalogLayerTabActive : ""} onClick={() => setCatalogView("standard")}>표준 상품만</button>
-      <button type="button" aria-pressed={catalogView === "official"} className={catalogView === "official" ? styles.catalogLayerTabActive : ""} onClick={() => setCatalogView("official")}>공식 상품만 <span>{officialProductDisplayCount.toLocaleString("ko-KR")}</span></button>
+      <button type="button" aria-pressed={catalogView === "all"} className={catalogView === "all" ? styles.catalogLayerTabActive : ""} onClick={() => changeCatalogView("all")}>전체 상품</button>
+      <button type="button" aria-pressed={catalogView === "standard"} className={catalogView === "standard" ? styles.catalogLayerTabActive : ""} onClick={() => changeCatalogView("standard")}>표준 상품만</button>
+      <button type="button" aria-pressed={catalogView === "official"} className={catalogView === "official" ? styles.catalogLayerTabActive : ""} onClick={() => changeCatalogView("official")}>공식 상품만 <span>{officialProductDisplayCount.toLocaleString("ko-KR")}</span></button>
     </div>
 
     {catalogNotice && !showOfficialOnly && <p className={styles.dataNotice} role="status">{catalogNotice}</p>}
-    <div className={styles.marketControls}>
-      <div className={styles.segmented} aria-label="판매처 유형">{([ ["all", "전체"], ["regular", "일반 마트"], ["px", "PX (군마트)"] ] as const).map(([value, label]) => <button key={value} aria-pressed={martType === value} className={martType === value ? styles.selectedSegment : ""} onClick={() => { setMartType(value); setSelectedStore("all"); }}>{label}</button>)}</div>
-      <label className={styles.storeSelect}>판매 마트<select value={selectedStore} onChange={(event) => setSelectedStore(event.target.value)}><option value="all">전체 마트</option>{stores.map((store) => <option key={store} value={store}>{store}</option>)}</select></label>
-      {!showOfficialOnly &&
+    {showOfficialOnly
+      ? <p className={styles.officialCatalogScope}>PX 공식 판매상품 전체 · 특정 지점의 판매·재고 정보가 아닙니다.</p>
+      : <div className={styles.marketControls}>
+          <div className={styles.segmented} role="group" aria-label="판매처 유형">{([ ["all", "전체"], ["regular", "일반 마트"], ["px", "PX (군마트)"] ] as const).map(([value, label]) => <button key={value} aria-pressed={martType === value} className={martType === value ? styles.selectedSegment : ""} onClick={() => { setMartType(value); setSelectedStore("all"); }}>{label}</button>)}</div>
+          <label className={styles.storeSelect}>판매 마트<select value={selectedStore} onChange={(event) => setSelectedStore(event.target.value)}><option value="all">전체 마트</option>{stores.map((store) => <option key={store} value={store}>{store}</option>)}</select></label>
           <label className={styles.sortSelect}>정렬<select value={sort} onChange={(event) => setSort(event.target.value as ProductSort)}><option value="expensive">비싼 물품 순</option><option value="cheap">저렴한 물품 순</option><option value="sellers">판매처 많은 물품 순</option></select></label>
-      }
-    </div>
+        </div>}
     <div className={styles.filters} aria-label="상품 카테고리">{PRODUCT_CATEGORIES.map((item) => <button aria-pressed={category === item} className={category === item ? styles.filterActive : ""} key={item} onClick={() => setCategory(item)}>{item}</button>)}</div>
     <div className={styles.resultBar}><p>상품 {resultCount.toLocaleString("ko-KR")}개</p>{(query || category !== "전체" || martType !== "all" || selectedStore !== "all" || showStandardOnly || showOfficialOnly) && <button onClick={() => { setQuery(""); setCategory("전체"); setMartType("all"); setSelectedStore("all"); setCatalogView("all"); }}>필터 초기화</button>}</div>
 
@@ -242,7 +253,7 @@ export function ProductBrowser({ groups, query, setQuery, category, setCategory,
                 <strong>공식 표시가 {formatKrw(Math.min(...entry.standard.officialListings.map((listing) => listing.officialPrice.amountKrw)))} ~</strong>
               </div>}
               <div className={styles.productActions}>
-                <button aria-label={`${entry.standard.name} 하위 상품 보기`} onClick={() => setOpenStandardId(entry.standard.id)}>판매처 가격 기준 비교 보기 ›</button>
+                <button aria-label={`${entry.standard.name} 정보 보기`} onClick={() => setOpenStandardId(entry.standard.id)}>정보 보기</button>
                 <button type="button" aria-label={`${entry.standard.name} 장바구니에 담기`} onClick={() => onAdd(cartProductFromGroup(entry.standard.items[0]))}>최저 관측가 담기</button>
               </div>
             </div>
@@ -253,7 +264,7 @@ export function ProductBrowser({ groups, query, setQuery, category, setCategory,
     {showStandaloneOfficialListings && <PxOfficialProductBrowser catalog={publicPxCatalog} listings={standaloneListings} query={query} category={category} onAdd={(listing) => onAdd(cartProductFromOfficialListing(listing))} />}
     {showOfficialOnly && !officialListingsEligible && <div className={styles.noResult}><strong>{selectedStore !== "all" ? "공식 상품은 특정 지점의 판매·재고로 확인할 수 없습니다." : "일반 마트 조건에 해당하는 공식 상품 컬렉션이 없습니다."}</strong><p>판매처 유형을 전체 또는 PX로 선택하고, 판매 마트는 전체 마트로 두세요.</p></div>}
 
-    {openStandard && !showOfficialOnly && <StandardProductDetailModal standard={openStandard} onClose={() => setOpenStandardId(null)} onOpenStore={onOpenStore} />}
+    {openStandard && <StandardProductDetailModal standard={openStandard} onClose={() => setOpenStandardId(null)} onOpenStore={onOpenStore} />}
     {storeListTarget && !showOfficialOnly && <StoreListModal title={storeListTarget.title} rows={storeListTarget.rows} onClose={() => setStoreListTarget(null)} onOpenStore={onOpenStore} />}
   </section>;
 }

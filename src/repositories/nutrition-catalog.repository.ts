@@ -23,6 +23,26 @@ function unwrapRpcObject(data: unknown) {
 export class NutritionCatalogRepository {
   constructor(private readonly client: SupabaseClient) {}
 
+  async readPublicFoods(catalogProductId: string): Promise<NutritionFood[]> {
+    const { data, error } = await this.client.rpc("get_public_product_nutrition_v1", {
+      p_namespace: PRODUCT_READ_NAMESPACE,
+      p_catalog_product_id: catalogProductId,
+    });
+    if (error) {
+      throw new Error(remoteErrorMessage(error, "공개 영양정보를 불러오지 못했습니다."));
+    }
+    if (!Array.isArray(data)) {
+      throw new Error("공개 영양 RPC가 배열 계약을 반환하지 않았습니다.");
+    }
+    return data.map((row) => {
+      const food = nutritionFoodFromReadRow(row);
+      if (food.approvedCatalogProductId !== catalogProductId) {
+        throw new Error("공개 영양 RPC가 요청하지 않은 정확 규격을 반환했습니다.");
+      }
+      return food;
+    });
+  }
+
   async searchPublicFoods(query: string, limit = 8): Promise<NutritionFood[]> {
     const normalizedQuery = query.trim();
     if (!normalizedQuery) return [];

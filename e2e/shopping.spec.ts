@@ -3,12 +3,40 @@ import { expect, test, type Page } from "@playwright/test";
 const nutritionCatalogProductId = "22222222-2222-4222-8222-222222222222";
 const nutritionStandardProductId = "11111111-1111-4111-8111-111111111111";
 const nutritionFoodId = "fitness-haagendazs-strawberry";
-const productRevision = `sha256:${"a".repeat(64)}`;
-const nutritionRevision = `sha256:${"b".repeat(64)}`;
 
-async function mockProductNutritionContracts(page: Page, { nutritionOffline = false } = {}) {
-  let proposalCreated = false;
-  let proposalBody: Record<string, unknown> | null = null;
+async function mockProductNutritionContracts(page: Page, {
+  nutritionOffline = false,
+  approvedNutrition = true,
+} = {}) {
+  let currentNutritionOffline = nutritionOffline;
+  const nutritionRow = {
+    contract_version: "nutrition-read.v1",
+    nutrition_food_id: nutritionFoodId,
+    name: "하겐다즈 스트로베리 영양",
+    kind: "external_menu",
+    basis_amount: 100,
+    basis_unit: "ml",
+    prep_state: "frozen",
+    nutrition_values: {
+      calories_kcal: 230,
+      protein_grams: 4,
+      carbs_grams: 25,
+      fat_grams: 13,
+      sodium_mg: 60,
+      saturated_fat_grams: 8,
+      sugars_grams: 21,
+      fiber_grams: 1,
+      added_sugars_grams: null,
+      trans_fat_grams: 0,
+      cholesterol_mg: 45,
+    },
+    micronutrients: {},
+    source_type: "manufacturer_label",
+    source_reference: "https://example.com/nutrition",
+    source_revision: "label-v2",
+    revision: 2,
+    catalog_product_id: nutritionCatalogProductId,
+  };
 
   await page.route("**/rest/v1/rpc/get_public_exact_standard_product_catalog_v2", async (route) => {
     await route.fulfill({
@@ -44,127 +72,22 @@ async function mockProductNutritionContracts(page: Page, { nutritionOffline = fa
       body: JSON.stringify({ message: "No test user" }),
     });
   });
-  await page.route("**/rest/v1/rpc/get_product_read_v1", async (route) => {
-    await route.fulfill({
-      contentType: "application/json",
-      body: JSON.stringify({
-        schemaVersion: "product-read.v1",
-        namespace: "pricetrace",
-        revision: productRevision,
-        products: [{
-          revision: productRevision,
-          standardProduct: {
-            id: nutritionStandardProductId,
-            name: "하겐다즈 미니컵 스트로베리",
-            brand: "하겐다즈",
-            updatedAt: "2026-08-09T01:00:00+00:00",
-          },
-          catalogProduct: {
-            id: nutritionCatalogProductId,
-            name: "하겐다즈 미니컵 스트로베리 100ml",
-            specificationText: "100ml",
-            contentAmount: 100,
-            contentUnit: "ml",
-            packageCount: 1,
-            referenceUnit: 100,
-            listingReferenceUrl: "https://example.com/haagendazs",
-            updatedAt: "2026-08-09T01:00:00+00:00",
-          },
-          sellerProducts: [{ sellerLabel: "와마트 일산점", sourceProductCode: "210059" }],
-          observations: [],
-        }],
-      }),
-    });
-  });
-
-  await page.route("**/rest/v1/rpc/get_nutrition_read_v1", async (route) => {
-    if (nutritionOffline) {
+  await page.route("**/rest/v1/rpc/get_public_product_nutrition_v1", async (route) => {
+    if (currentNutritionOffline) {
       await route.fulfill({ status: 503, contentType: "application/json", body: JSON.stringify({ message: "nutrition offline" }) });
       return;
     }
     await route.fulfill({
       contentType: "application/json",
-      body: JSON.stringify([{
-        contract_version: "nutrition-read.v1",
-        nutrition_food_id: nutritionFoodId,
-        name: "하겐다즈 스트로베리 영양",
-        kind: "external_menu",
-        basis_amount: 100,
-        basis_unit: "ml",
-        prep_state: "frozen",
-        nutrition_values: {
-          calories_kcal: 230,
-          protein_grams: 4,
-          carbs_grams: 25,
-          fat_grams: 13,
-          sodium_mg: 60,
-          saturated_fat_grams: 8,
-          sugars_grams: 21,
-          fiber_grams: null,
-          added_sugars_grams: null,
-          trans_fat_grams: null,
-          cholesterol_mg: null,
-        },
-        micronutrients: {},
-        source_type: "manufacturer_label",
-        source_reference: "https://example.com/nutrition",
-        source_revision: "label-v2",
-        revision: 2,
-        catalog_product_id: null,
-      }]),
-    });
-  });
-  await page.route("**/rest/v1/rpc/get_product_nutrition_link_state_v1", async (route) => {
-    if (nutritionOffline) {
-      await route.fulfill({ status: 503, contentType: "application/json", body: JSON.stringify({ message: "nutrition offline" }) });
-      return;
-    }
-    await route.fulfill({
-      contentType: "application/json",
-      body: JSON.stringify({
-        schemaVersion: "product-nutrition-link-state.v1",
-        revision: nutritionRevision,
-        namespace: "pricetrace",
-        catalogProductId: nutritionCatalogProductId,
-        approvedLinks: [],
-        pendingProposals: proposalCreated ? [{
-          schemaVersion: "product-nutrition-link-proposal.v1",
-          id: "33333333-3333-4333-8333-333333333333",
-          action: "link",
-          identity: {
-            namespace: "pricetrace",
-            catalogProductId: nutritionCatalogProductId,
-            nutritionFoodId,
-          },
-          status: "pending",
-          sourceRevision: productRevision,
-          createdAt: "2026-08-09T03:00:00+00:00",
-        }] : [],
-      }),
-    });
-  });
-  await page.route("**/rest/v1/rpc/propose_product_nutrition_link_v1", async (route) => {
-    proposalBody = route.request().postDataJSON() as Record<string, unknown>;
-    proposalCreated = true;
-    await route.fulfill({
-      contentType: "application/json",
-      body: JSON.stringify({
-        schemaVersion: "product-nutrition-link-proposal.v1",
-        id: "33333333-3333-4333-8333-333333333333",
-        action: "link",
-        identity: {
-          namespace: "pricetrace",
-          catalogProductId: nutritionCatalogProductId,
-          nutritionFoodId,
-        },
-        status: "pending",
-        sourceRevision: productRevision,
-        createdAt: "2026-08-09T03:00:00+00:00",
-      }),
+      body: JSON.stringify(approvedNutrition ? [nutritionRow] : []),
     });
   });
 
-  return { getProposalBody: () => proposalBody };
+  return {
+    setNutritionOffline(value: boolean) {
+      currentNutritionOffline = value;
+    },
+  };
 }
 
 test("전체 상품에서 공식 상품을 함께 보여 주고 상품 계층과 마트 범위를 따로 거른다", async ({ page }) => {
@@ -178,19 +101,21 @@ test("전체 상품에서 공식 상품을 함께 보여 주고 상품 계층과
   await expect(page.getByRole("region", { name: "PX 공식 판매상품" })).toBeVisible();
   await expect(page.getByRole("heading", { name: "표준 상품 연결 전 공식 판매상품", exact: true })).toBeVisible();
 
+  await page.getByRole("button", { name: "일반 마트", exact: true }).click();
+  await page.getByRole("combobox", { name: "정렬" }).selectOption("sellers");
+  await expect(page.getByRole("region", { name: "PX 공식 판매상품" })).toHaveCount(0);
+
   await catalogTabs.getByRole("button", { name: /공식 상품만/ }).click();
   await expect(page.getByRole("region", { name: "PX 공식 판매상품" })).toBeVisible();
   await expect(page.getByText("PX 공식 등재", { exact: true }).first()).toBeVisible();
-
-  await page.getByRole("button", { name: "일반 마트", exact: true }).click();
-  await expect(page.getByRole("region", { name: "PX 공식 판매상품" })).toHaveCount(0);
-  await expect(page.getByText("일반 마트 조건에 해당하는 공식 상품 컬렉션이 없습니다.", { exact: true })).toBeVisible();
-
-  await page.getByRole("button", { name: "PX (군마트)", exact: true }).click();
-  await expect(page.getByRole("region", { name: "PX 공식 판매상품" })).toBeVisible();
+  await expect(page.getByText("PX 공식 판매상품 전체 · 특정 지점의 판매·재고 정보가 아닙니다.", { exact: true })).toBeVisible();
+  await expect(page.getByRole("group", { name: "판매처 유형" })).toHaveCount(0);
+  await expect(page.getByRole("combobox", { name: "판매 마트" })).toHaveCount(0);
 
   await catalogTabs.getByRole("button", { name: "표준 상품만", exact: true }).click();
   await expect(page.getByRole("region", { name: "PX 공식 판매상품" })).toHaveCount(0);
+  await expect(page.getByRole("group", { name: "판매처 유형" }).getByRole("button", { name: "전체", exact: true })).toHaveAttribute("aria-pressed", "true");
+  await expect(page.getByRole("combobox", { name: "정렬" })).toHaveValue("cheap");
 });
 
 test("공개 관측 상품을 보여 주고 새로고침 뒤에도 장바구니를 유지한다", async ({ page }) => {
@@ -210,16 +135,20 @@ test("공개 관측 상품을 보여 주고 새로고침 뒤에도 장바구니�
     has: page.getByRole("heading", { name: productName, exact: true }),
   });
   await expect(product).toContainText("2,030원");
-  await product
-    .getByRole("button", { name: `${productName} 장바구니에 담기`, exact: true })
-    .click();
+  const addButton = product.getByRole("button", { name: `${productName} 장바구니에 담기`, exact: true });
+  await addButton.click();
 
   const quantityDialog = page.getByRole("dialog", { name: "몇 개 담을까요?" });
-  await quantityDialog.getByRole("spinbutton", { name: "추가할 수량" }).fill("3");
+  await expect(quantityDialog).toContainText("최근 관측가 2,030원 · 2026-07-14 관측");
+  const quantityInput = quantityDialog.getByRole("spinbutton", { name: "추가할 수량" });
+  await expect(quantityInput).toBeFocused();
+  await quantityInput.fill("3");
   await quantityDialog.getByRole("button", { name: "장바구니에 담기", exact: true }).click();
 
   const successDialog = page.getByRole("dialog", { name: "장바구니에 담겼습니다" });
+  await expect(successDialog.getByRole("button", { name: "장바구니 바로가기", exact: true })).toBeFocused();
   await successDialog.getByRole("button", { name: "계속 둘러보기", exact: true }).click();
+  await expect(addButton).toBeFocused();
 
   const filledFloatingCart = page.getByRole("button", {
     name: "장바구니 열기, 담긴 아이템 3개, 총합 6,090원",
@@ -234,6 +163,7 @@ test("공개 관측 상품을 보여 주고 새로고침 뒤에도 장바구니�
   const cartSummary = page.getByRole("complementary", { name: "장바구니 합계" });
   await expect(cartSummary).toContainText("총 3개");
   await expect(cartSummary).toContainText("6,090원");
+  await expect(page.getByRole("article").filter({ hasText: "최근 관측가 (2026-07-14)" })).toBeVisible();
 
   await page.reload();
   await page
@@ -383,7 +313,8 @@ test("모바일에서도 판매처 기록과 상품 검색에 접근할 수 있�
   await page.goto("/PriceTrace");
 
   const mobileNav = page.getByRole("navigation", { name: "모바일 주요 메뉴" });
-  await expect(page.getByRole("button", { name: "장바구니 열기, 담긴 아이템 0개", exact: true })).toBeVisible();
+  await expect(page.locator('button[aria-label="장바구니 열기, 담긴 아이템 0개"]')).toBeHidden();
+  await expect(mobileNav.getByRole("button", { name: "장바구니", exact: true })).toBeVisible();
   await expect(mobileNav.getByRole("button", { name: "판매처 기록", exact: true })).toBeVisible();
   await mobileNav.getByRole("button", { name: "판매처 기록", exact: true }).click();
 
@@ -398,44 +329,58 @@ test("모바일에서도 판매처 기록과 상품 검색에 접근할 수 있�
   await expect(page.getByRole("searchbox", { name: "판매처 상품 검색" })).toBeVisible();
 });
 
-test("상품 상세에서 정확 ID와 revision으로 Nutrition 연결 제안을 저장한다", async ({ page }) => {
-  const contracts = await mockProductNutritionContracts(page);
+test("표준 상품 정보에서 승인된 영양을 별도 영양성분표로 보여 준다", async ({ page }) => {
+  await mockProductNutritionContracts(page);
   await page.goto("/PriceTrace");
   await page.getByRole("button", { name: "상품 둘러보기 →" }).click();
 
   const standardCard = page.getByRole("article").filter({
-    has: page.getByRole("button", { name: "하겐다즈 미니컵 스트로베리 하위 상품 보기", exact: true }),
+    has: page.getByRole("button", { name: "하겐다즈 미니컵 스트로베리 정보 보기", exact: true }),
   });
-  await standardCard.getByRole("button", { name: "하겐다즈 미니컵 스트로베리 하위 상품 보기", exact: true }).click();
+  const informationButton = standardCard.getByRole("button", { name: "하겐다즈 미니컵 스트로베리 정보 보기", exact: true });
+  await expect(informationButton).toHaveText("정보 보기");
+  await informationButton.click();
 
   const dialog = page.getByRole("dialog", { name: "하겐다즈 미니컵 스트로베리" });
-  await expect(dialog.getByRole("heading", { name: "Fitness 공개 영양" })).toBeVisible();
-  await expect(dialog).toContainText("이름은 후보 탐색에만 사용");
-  await expect(dialog).toContainText(nutritionCatalogProductId);
-  await expect(dialog.getByText("하겐다즈 스트로베리 영양", { exact: true })).toBeVisible();
+  const nutritionButton = dialog.getByRole("button", { name: "영양 정보 확인", exact: true });
+  await expect(nutritionButton).toBeVisible();
+  await expect(dialog).not.toContainText("영양 연결을 확인할 정확한 판매 규격");
+  await expect(dialog).not.toContainText(nutritionCatalogProductId);
 
-  await dialog.getByRole("button", { name: "연결 제안", exact: true }).click();
+  await nutritionButton.click();
 
-  await expect(dialog.getByText("연결 제안을 Nutrition 승인 대기열에 저장했습니다.", { exact: true })).toBeVisible();
-  await expect(dialog.getByRole("button", { name: "연결 승인 대기", exact: true })).toBeDisabled();
-  expect(contracts.getProposalBody()).toMatchObject({
-    p_action: "link",
-    p_namespace: "pricetrace",
-    p_catalog_product_id: nutritionCatalogProductId,
-    p_nutrition_food_id: nutritionFoodId,
-    p_source_revision: productRevision,
-    p_source: {
-      system: "PriceTrace",
-      contract: "product-read.v1",
-      catalogProductId: nutritionCatalogProductId,
-      candidateEvidence: {
-        nutritionFoodName: "하겐다즈 스트로베리 영양",
-        nutritionContract: "nutrition-read.v1",
-        nutritionSourceRevision: "label-v2",
-        nutritionRevision: 2,
-      },
-    },
-  });
+  const nutritionDialog = page.getByRole("dialog", { name: "단위 무게 당 영양 정보" });
+  await expect(nutritionDialog).toBeVisible();
+  const nutritionCloseButton = nutritionDialog.getByRole("button", { name: "영양 정보 닫기" });
+  await expect(nutritionCloseButton).toBeFocused();
+  await nutritionCloseButton.press("Tab");
+  await expect(nutritionCloseButton).toBeFocused();
+  const nutritionFacts = nutritionDialog.getByRole("article", { name: "하겐다즈 스트로베리 영양 영양성분표" });
+  await expect(nutritionFacts).toContainText("100ml 기준");
+  await expect(nutritionFacts).toContainText("열량");
+  await expect(nutritionFacts).toContainText("230kcal");
+  await expect(nutritionFacts).toContainText("트랜스지방");
+  await expect(nutritionFacts).toContainText("0g");
+  await expect(nutritionFacts).toContainText("콜레스테롤");
+  await expect(nutritionFacts).toContainText("45mg");
+
+  await nutritionCloseButton.click();
+  await expect(nutritionButton).toBeFocused();
+});
+
+test("승인된 영양 내용이 없으면 영양 팝업에 내용없음을 표시한다", async ({ page }) => {
+  await mockProductNutritionContracts(page, { approvedNutrition: false });
+  await page.goto("/PriceTrace");
+  await page.getByRole("button", { name: "상품 둘러보기 →" }).click();
+
+  await page.getByRole("button", {
+    name: "하겐다즈 미니컵 스트로베리 정보 보기",
+    exact: true,
+  }).click();
+  await page.getByRole("button", { name: "영양 정보 확인", exact: true }).click();
+
+  const nutritionDialog = page.getByRole("dialog", { name: "단위 무게 당 영양 정보" });
+  await expect(nutritionDialog.getByText("내용없음", { exact: true })).toBeVisible();
 });
 
 test("Nutrition 장애를 상품·가격 상세와 분리한다", async ({ page }) => {
@@ -444,13 +389,35 @@ test("Nutrition 장애를 상품·가격 상세와 분리한다", async ({ page 
   await page.getByRole("button", { name: "상품 둘러보기 →" }).click();
 
   await page.getByRole("button", {
-    name: "하겐다즈 미니컵 스트로베리 하위 상품 보기",
+    name: "하겐다즈 미니컵 스트로베리 정보 보기",
     exact: true,
   }).click();
 
   const dialog = page.getByRole("dialog", { name: "하겐다즈 미니컵 스트로베리" });
   await expect(dialog).toBeVisible();
-  await expect(dialog).toContainText("nutrition offline");
-  await expect(dialog).toContainText("가격·판매처 상세에는 영향이 없습니다.");
   await expect(dialog.getByText("판매처별 최근 단위가격", { exact: true })).toBeVisible();
+  await dialog.getByRole("button", { name: "영양 정보 확인", exact: true }).click();
+
+  const nutritionDialog = page.getByRole("dialog", { name: "단위 무게 당 영양 정보" });
+  await expect(nutritionDialog).toContainText("영양 정보를 불러오지 못했습니다. 잠시 후 다시 시도해 주세요.");
+  await expect(nutritionDialog).not.toContainText("nutrition offline");
+  await expect(nutritionDialog.getByRole("button", { name: "다시 시도", exact: true })).toBeVisible();
+});
+
+test("영양 정보 일시 장애 뒤 팝업에서 다시 시도할 수 있다", async ({ page }) => {
+  const nutritionMock = await mockProductNutritionContracts(page, { nutritionOffline: true });
+  await page.goto("/PriceTrace");
+  await page.getByRole("button", { name: "상품 둘러보기 →" }).click();
+  await page.getByRole("button", {
+    name: "하겐다즈 미니컵 스트로베리 정보 보기",
+    exact: true,
+  }).click();
+  await page.getByRole("button", { name: "영양 정보 확인", exact: true }).click();
+
+  const nutritionDialog = page.getByRole("dialog", { name: "단위 무게 당 영양 정보" });
+  const retryButton = nutritionDialog.getByRole("button", { name: "다시 시도", exact: true });
+  await expect(retryButton).toBeVisible();
+  nutritionMock.setNutritionOffline(false);
+  await retryButton.click();
+  await expect(nutritionDialog.getByRole("article", { name: "하겐다즈 스트로베리 영양 영양성분표" })).toBeVisible();
 });
