@@ -44,6 +44,7 @@ docs/*
 !docs/integrations/
 docs/integrations/*
 !docs/integrations/product-nutrition-link.md
+!docs/integrations/price-observation-submit.md
 !docs/templates/
 !docs/templates/PROJECT_INTRO_TEMPLATE.md
 !docs/templates/PROJECT_DETAIL_TEMPLATE.md
@@ -87,6 +88,8 @@ e2e/*
 !src/domain/product-read.test.ts
 !src/domain/product-read-migration.test.ts
 !src/domain/product-nutrition-link.test.ts
+!src/domain/price-observation-submit.test.ts
+!src/domain/price-observation-submit-migration.test.ts
 !src/repositories/cart.repository.test.ts
 !src/repositories/admin-receipt.repository.test.ts
 !src/repositories/official-product.repository.test.ts

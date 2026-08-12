@@ -20,6 +20,9 @@ export interface Database {
       catalog_products: { Row: { id:string; standard_product_id:string; purchase_type:string; canonical_name:string; brand:string|null; specification:string|null; specification_status:"verified"|"placeholder"; content_amount:number|null; content_unit:string|null; package_count:number; reference_unit:number; listing_reference_url:string|null; category_id:string|null; attributes:Json; status:string; created_by:string|null; created_at:string; updated_at:string }; Insert: { id?:string; standard_product_id:string; purchase_type:string; canonical_name:string; specification?:string|null; specification_status?:"verified"|"placeholder"; content_amount?:number|null; content_unit?:string|null; package_count?:number; reference_unit?:number; listing_reference_url?:string|null; category_id?:string|null; attributes?:Json; status?:string; created_by?:string|null }; Update: { standard_product_id?:string; canonical_name?:string; specification?:string|null; specification_status?:"verified"|"placeholder"; content_amount?:number|null; content_unit?:string|null; package_count?:number; reference_unit?:number; listing_reference_url?:string|null; category_id?:string|null; attributes?:Json; status?:string } };
       standard_product_coupang_prices: { Row: { id:string; standard_product_id:string; catalog_product_id:string|null; link_execution_id:string|null; product_url:string; listed_price_krw:number; quantity:number; content_amount:number|null; content_unit:string|null; max_bundle_quantity:number|null; max_bundle_listed_price_krw:number|null; observed_at:string; created_by:string|null; created_at:string }; Insert: { id?:string; standard_product_id:string; catalog_product_id?:string|null; link_execution_id?:string|null; product_url:string; listed_price_krw:number; quantity?:number; content_amount?:number|null; content_unit?:string|null; max_bundle_quantity?:number|null; max_bundle_listed_price_krw?:number|null; observed_at?:string; created_by?:string|null }; Update: { catalog_product_id?:string|null; link_execution_id?:string|null; product_url?:string; listed_price_krw?:number; quantity?:number; content_amount?:number|null; content_unit?:string|null; max_bundle_quantity?:number|null; max_bundle_listed_price_krw?:number|null; observed_at?:string; created_by?:string|null } };
       market_price_observations: { Row: { id:string; catalog_product_id:string; seller_name:string; product_url:string; listed_price_krw:number; shipping_fee_krw:number; minimum_order_quantity:number; observed_at:string; verification_status:string; verified_by:string|null; verified_at:string|null; created_at:string }; Insert: { id?:string; catalog_product_id:string; seller_name:string; product_url:string; listed_price_krw:number; shipping_fee_krw?:number; minimum_order_quantity?:number; observed_at:string; verification_status?:string; verified_by?:string|null; verified_at?:string|null }; Update: { seller_name?:string; product_url?:string; listed_price_krw?:number; shipping_fee_krw?:number; minimum_order_quantity?:number; observed_at?:string; verification_status?:string; verified_by?:string|null; verified_at?:string|null } };
+      price_observation_sources: { Row: { id:string; source_namespace:string; source_store_code:string; display_name:string; location_label:string|null; status:"active"|"archived"; review_status:"pending"|"verified"|"rejected"; created_by:string|null; reviewed_by:string|null; reviewed_at:string|null; created_at:string; updated_at:string }; Insert: { id?:string; source_namespace:string; source_store_code:string; display_name:string; location_label?:string|null; status?:"active"|"archived"; review_status?:"pending"|"verified"|"rejected"; created_by?:string|null; reviewed_by?:string|null; reviewed_at?:string|null }; Update: { display_name?:string; location_label?:string|null; status?:"active"|"archived"; review_status?:"pending"|"verified"|"rejected"; reviewed_by?:string|null; reviewed_at?:string|null; updated_at?:string } };
+      public_price_observations: { Row: { id:string; store_id:string; observed_on:string; catalog_product_id:string; unit_price_krw:number; verification_status:"user_verified"|"rejected"; created_at:string }; Insert: { id?:string; store_id:string; observed_on:string; catalog_product_id:string; unit_price_krw:number; verification_status?:"user_verified"|"rejected" }; Update: { verification_status?:"user_verified"|"rejected" } };
+      price_observation_submission_requests: { Row: { idempotency_key:string; request_fingerprint:string; public_price_observation_id:string; created_at:string }; Insert: { idempotency_key:string; request_fingerprint:string; public_price_observation_id:string; created_at?:string }; Update: Record<string, never> };
       source_product_mappings: { Row: { id:string; source_label:string; source_product_code:string; catalog_product_id:string; matching_method:string; confidence:number; review_status:string; created_by:string|null; reviewed_by:string|null; reviewed_at:string|null; created_at:string; updated_at:string }; Insert: { id?:string; source_label:string; source_product_code:string; catalog_product_id:string; matching_method?:string; confidence?:number; review_status?:string; created_by?:string|null; reviewed_by?:string|null; reviewed_at?:string|null }; Update: { source_label?:string; source_product_code?:string; catalog_product_id?:string; matching_method?:string; confidence?:number; review_status?:string; reviewed_by?:string|null; reviewed_at?:string|null } };
       products: { Row: { id:string; user_id:string; name:string; purchase_type:string; category_id:string|null; category_tags:string[]; created_at:string }; Insert: { id?:string; user_id:string; name:string; purchase_type?:string; category_id?:string|null; category_tags?:string[] }; Update: { name?:string; purchase_type?:string; category_id?:string|null; category_tags?:string[] } };
       store_products: { Row: { id:string; user_id:string; store_id:string; product_id:string; store_product_code:string }; Insert: { id?:string; user_id:string; store_id:string; product_id:string; store_product_code:string }; Update: { store_product_code?:string } };
@@ -429,6 +432,49 @@ export interface Database {
           standard_product_id:string;
           catalog_product_id:string;
           replayed:boolean;
+        }[];
+      };
+      submit_price_observation_v1: {
+        Args: {
+          p_idempotency_key:string;
+          p_store_id:string;
+          p_observed_on:string;
+          p_catalog_product_id:string;
+          p_unit_price_krw:number;
+        };
+        Returns: {
+          observation_id:string;
+          replayed:boolean;
+          applied_action:"created"|"deduplicated"|"replayed";
+        }[];
+      };
+      get_price_observation_sources_v1: {
+        Args: Record<string, never>;
+        Returns: {
+          store_id:string;
+          source_namespace:string;
+          source_store_code:string;
+          display_name:string;
+          location_label:string|null;
+        }[];
+      };
+      get_price_observations_v1: {
+        Args: {
+          p_catalog_product_id?:string|null;
+          p_store_id?:string|null;
+          p_limit?:number;
+        };
+        Returns: {
+          observation_id:string;
+          store_id:string;
+          source_namespace:string;
+          source_store_code:string;
+          store_name:string;
+          location_label:string|null;
+          observed_on:string;
+          catalog_product_id:string;
+          unit_price_krw:number;
+          verification_status:"user_verified"|"rejected";
         }[];
       };
       get_product_read_v1: {
