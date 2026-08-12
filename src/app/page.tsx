@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { buildAppNavigationUrl, readAppNavigationUrl, type AppPage } from "@/domain/app-navigation";
 import { cartProductFromGroup, cartProductFromOfficialListing, summarizeCart, type CartProduct } from "@/domain/cart";
-import { groupProductObservations, martTagFor, PRODUCT_CATEGORIES, type MartType, type ProductCategory, type ProductGroup, type ProductObservationListing, type ProductSort } from "@/domain/product-browser";
+import { groupProductObservations, martTagFor, type MartType, type ProductCategory, type ProductGroup, type ProductObservationListing, type ProductSort } from "@/domain/product-browser";
 import type { OfficialProductCandidate } from "@/domain/official-product";
 import { findOfficialListingCandidate } from "@/domain/official-listing-candidate";
 import { formatKrw } from "@/domain/settlement";
@@ -20,6 +20,7 @@ import { CartPage } from "./CartPage";
 import { PriceTrendModal } from "./PriceTrendModal";
 import { ProductBrowser } from "./ProductBrowser";
 import { MarketBrowser } from "./MarketBrowser";
+import { RestaurantBrowser } from "./RestaurantBrowser";
 import styles from "./page.module.css";
 
 const publicReceiptData = new PublicReceiptRepository().loadAll();
@@ -71,6 +72,7 @@ function receiptObservationCandidate(
 export default function Home() {
   const [page, setPage] = useState<AppPage>("home");
   const [selectedMarket, setSelectedMarket] = useState<string | null>(null);
+  const [selectedRestaurant, setSelectedRestaurant] = useState<string | null>(null);
   const [category, setCategory] = useState<ProductCategory>("전체");
   const [query, setQuery] = useState("");
   const [martType, setMartType] = useState<MartType>("all");
@@ -94,16 +96,25 @@ export default function Home() {
   const handleAuthChange = useCallback(() => setAuthRevision((revision) => revision + 1), []);
   const navigate = useCallback((
     nextPage: AppPage,
-    options: { selectedMarket?: string | null; replace?: boolean } = {},
+    options: {
+      selectedMarket?: string | null;
+      selectedRestaurant?: string | null;
+      replace?: boolean;
+    } = {},
   ) => {
     const nextMarket = nextPage === "markets" ? options.selectedMarket ?? null : null;
+    const nextRestaurant = nextPage === "restaurants"
+      ? options.selectedRestaurant ?? null
+      : null;
     setPage(nextPage);
     setSelectedMarket(nextMarket);
+    setSelectedRestaurant(nextRestaurant);
     if (typeof window === "undefined") return;
 
     const nextUrl = buildAppNavigationUrl(window.location.href, {
       page: nextPage,
       selectedMarket: nextMarket,
+      selectedRestaurant: nextRestaurant,
     });
     const currentUrl = `${window.location.pathname}${window.location.search}${window.location.hash}`;
     if (nextUrl === currentUrl) return;
@@ -134,6 +145,7 @@ export default function Home() {
       const navigation = readAppNavigationUrl(window.location.href);
       setPage(navigation.page);
       setSelectedMarket(navigation.selectedMarket);
+      setSelectedRestaurant(navigation.selectedRestaurant);
       if (closeTransientUi) {
         setAuthOpen(false);
         setTrendGroup(null);
@@ -235,6 +247,7 @@ export default function Home() {
       </div>
       <nav className={styles.nav} aria-label="주요 메뉴"><div className={styles.navInner}>
         <button className={page === "home" ? styles.navActive : ""} aria-current={page === "home" ? "page" : undefined} onClick={() => navigate("home")}>홈</button>
+        <button className={page === "restaurants" ? styles.navActive : ""} aria-current={page === "restaurants" ? "page" : undefined} onClick={() => navigate("restaurants")}>음식점</button>
         <button className={page === "products" ? styles.navActive : ""} aria-current={page === "products" ? "page" : undefined} onClick={() => navigate("products")}>상품 목록</button>
         <button className={page === "cart" ? styles.navActive : ""} aria-current={page === "cart" ? "page" : undefined} onClick={() => navigate("cart")}>장바구니 <span className={styles.navBadge}>{cartQuantityTotal}</span></button>
         <button className={page === "markets" ? styles.navActive : ""} aria-current={page === "markets" ? "page" : undefined} onClick={() => navigate("markets")}>판매처 기록</button>
@@ -243,7 +256,8 @@ export default function Home() {
     </header>
 
     <main className={styles.main}>
-      {page === "home" && <><section className={styles.hero}><p className={styles.kicker}>PRICE OBSERVATION PLATFORM</p><h1>상품 가격을<br /><span>관측 기록으로 비교하세요.</span></h1><p>판매처와 시점이 명확한 영수증 관측가를 비교하고<br />필요한 상품을 장바구니에 모을 수 있습니다.</p><button onClick={() => openProducts()}>상품 둘러보기 <span>→</span></button></section><section className={styles.homeGrid}><CategoryBox category={category} onSelect={openProducts} /><CartBox count={cartGroups.length} quantity={cartQuantityTotal} total={cartTotal} onOpen={() => navigate("cart")} /></section></>}
+      {page === "home" && <><section className={styles.hero}><p className={styles.kicker}>PRICE OBSERVATION PLATFORM</p><h1>음식점 메뉴와 상품 가격을<br /><span>관측 기록으로 비교하세요.</span></h1><p>판매처·지점과 시점이 명확한 영수증 관측가를 비교하고,<br />메뉴는 Fitness Nutrition DB의 영양성분까지 확인할 수 있습니다.</p><div className={styles.heroActions}><button onClick={() => navigate("restaurants")}>음식점 둘러보기 <span>→</span></button><button onClick={() => openProducts()}>상품 둘러보기 <span>→</span></button></div></section><section className={styles.homeGrid}><ExploreTypeBox onRestaurants={() => navigate("restaurants")} onProducts={() => openProducts()} /><CartBox count={cartGroups.length} quantity={cartQuantityTotal} total={cartTotal} onOpen={() => navigate("cart")} /></section></>}
+      {page === "restaurants" && <RestaurantBrowser selectedRestaurant={selectedRestaurant} onSelectRestaurant={(restaurantId) => navigate("restaurants", { selectedRestaurant: restaurantId, replace: restaurantId === null })} />}
       {page === "products" && <ProductBrowser groups={productGroups} query={query} setQuery={setQuery} category={category} setCategory={setCategory} martType={martType} setMartType={setMartType} selectedStore={selectedStore} setSelectedStore={setSelectedStore} sort={sort} setSort={setSort} authRevision={authRevision} onAdd={openCartModal} onTrend={setTrendGroup} onOpenStore={(store) => navigate("markets", { selectedMarket: store })} />}
       {page === "markets" && <MarketBrowser receipts={receipts} observations={observationListings} selectedStore={selectedMarket} onSelectStore={(store) => navigate("markets", { selectedMarket: store, replace: true })} onOpenTrend={setTrendGroup} />}
       {page === "cart" && <CartPage products={cartProducts} lines={lines} onQuantityChange={updateCartQuantity} onRemove={removeCart} onClear={clearCart} onBrowse={() => navigate("products")} />}
@@ -254,6 +268,7 @@ export default function Home() {
     {page !== "cart" && <FloatingCartButton quantity={cartQuantityTotal} total={cartTotal} onOpen={() => navigate("cart")} />}
     <nav className={styles.mobileNav} aria-label="모바일 주요 메뉴">
       <button className={page === "home" ? styles.mobileNavActive : ""} aria-current={page === "home" ? "page" : undefined} onClick={() => navigate("home")}><span aria-hidden="true">⌂</span>홈</button>
+      <button className={page === "restaurants" ? styles.mobileNavActive : ""} aria-current={page === "restaurants" ? "page" : undefined} onClick={() => navigate("restaurants")}><span aria-hidden="true">♨</span>음식점</button>
       <button className={page === "products" ? styles.mobileNavActive : ""} aria-current={page === "products" ? "page" : undefined} onClick={() => navigate("products")}><span aria-hidden="true">⌕</span>상품 목록</button>
       <button className={page === "cart" ? styles.mobileNavActive : ""} aria-current={page === "cart" ? "page" : undefined} onClick={() => navigate("cart")}><span aria-hidden="true">🛒</span>장바구니<b>{cartQuantityTotal || ""}</b></button>
       <button className={page === "markets" ? styles.mobileNavActive : ""} aria-current={page === "markets" ? "page" : undefined} onClick={() => navigate("markets")}><span aria-hidden="true">⌖</span>판매처 기록</button>
@@ -266,9 +281,22 @@ export default function Home() {
   </div>;
 }
 
-function CategoryBox({ category, onSelect }: { category: ProductCategory; onSelect: (category?: ProductCategory) => void }) {
-  const featured = PRODUCT_CATEGORIES.filter((item) => item !== "전체" && item !== "미분류");
-  return <section className={styles.panel}><div className={styles.panelTitle}><div><p className={styles.kicker}>EXPLORE</p><h2>카테고리</h2></div><button className={styles.textButton} onClick={() => onSelect("전체")}>전체 보기 →</button></div><div className={styles.categoryList}>{featured.map((item, index) => <button aria-pressed={category === item} className={category === item ? styles.categoryActive : ""} key={item} onClick={() => onSelect(item)}><span className={`${styles.categoryIcon} ${styles[`icon${index}`]}`} aria-hidden="true">{["🍚", "🧴", "🍳", "🥬", "🥤", "🍪"][index]}</span><span>{item}</span><span className={styles.arrow} aria-hidden="true">›</span></button>)}</div></section>;
+function ExploreTypeBox({ onRestaurants, onProducts }: { onRestaurants: () => void; onProducts: () => void }) {
+  return <section className={styles.panel}>
+    <div className={styles.panelTitle}><div><p className={styles.kicker}>EXPLORE</p><h2>무엇을 비교할까요?</h2></div></div>
+    <div className={styles.homeDomainList}>
+      <button type="button" onClick={onRestaurants}>
+        <span className={styles.homeDomainIcon} aria-hidden="true">🍽</span>
+        <span><strong>음식점</strong><small>식당 Brand · 메뉴 · 지점별 가격 · 영양성분</small></span>
+        <span className={styles.arrow} aria-hidden="true">›</span>
+      </button>
+      <button type="button" onClick={onProducts}>
+        <span className={styles.homeDomainIcon} aria-hidden="true">🛍</span>
+        <span><strong>상품</strong><small>표준 상품 · 정확 규격 · 판매처별 관측가</small></span>
+        <span className={styles.arrow} aria-hidden="true">›</span>
+      </button>
+    </div>
+  </section>;
 }
 
 function CartBox({ count, quantity, total, onOpen }: { count: number; quantity: number; total: number; onOpen: () => void }) {

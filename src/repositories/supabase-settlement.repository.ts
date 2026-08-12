@@ -1,6 +1,7 @@
 import type { Receipt, SettlementState } from "@/domain/types";
 import type { SettlementBackup } from "./settlement.repository";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
+import { nullableSourceProductCode, purchaseTypeForReceipt } from "@/domain/receipt";
 
 type RemoteRecipient = { id:string; name:string; created_at:string };
 type RemoteAllocation = { id:string; receipt_item_id:string; recipient_id:string; quantity:number; memo:string; created_at:string; updated_at:string };
@@ -15,22 +16,136 @@ export class SupabaseSettlementRepository {
   }
 
   async syncReceipt(receipt:Receipt) {
-    const client=this.client(); const user=await this.currentUser(); if(!client||!user) return;
-    const {data:store,error:storeError}=await client.from("stores").upsert({user_id:user.id,name:receipt.storeLabel},{onConflict:"user_id,name"}).select("id").single();
-    if(storeError) throw storeError;
-    const {data:remoteReceipt,error:receiptError}=await client.from("receipts").upsert({user_id:user.id,store_id:store.id,purchased_at:receipt.purchasedAt,transaction_number:receipt.transactionNumber,total_price_krw:receipt.totalPriceKrw,currency:"KRW"},{onConflict:"user_id,store_id,transaction_number"}).select("id").single();
-    if(receiptError) throw receiptError;
-    for(const item of receipt.items){
-      const {data:existingStoreProduct}=await client.from("store_products").select("id,product_id").eq("user_id",user.id).eq("store_id",store.id).eq("store_product_code",item.sourceProductCode).maybeSingle();
-      let storeProductId:string;
-      if(existingStoreProduct){storeProductId=existingStoreProduct.id;}
-      else {const {data:product,error:productError}=await client.from("products").insert({user_id:user.id,name:item.productName,purchase_type:"retail_product",category_tags:[]}).select("id").single();if(productError) throw productError;const {data:storeProduct,error:storeProductError}=await client.from("store_products").insert({user_id:user.id,store_id:store.id,product_id:product.id,store_product_code:item.sourceProductCode}).select("id").single();if(storeProductError) throw storeProductError;storeProductId=storeProduct.id;}
-      const {error:itemError}=await client.from("receipt_items").upsert({id:item.id,user_id:user.id,receipt_id:remoteReceipt.id,store_product_id:storeProductId,unit_price_krw:item.unitPriceKrw,purchased_quantity:item.quantityValue,total_price_krw:item.totalPriceKrw,purchase_numbers:item.sourceLineReferences});
-      if(itemError) throw itemError;
-      const {data:mapping,error:mappingError}=await client.from("source_product_mappings").select("catalog_product_id").eq("source_label",receipt.storeLabel).eq("source_product_code",item.sourceProductCode).eq("review_status","verified").maybeSingle();
-      if(mappingError) throw mappingError;
-      const {error:observationError}=await client.from("price_observations").upsert({user_id:user.id,store_product_id:storeProductId,receipt_item_id:item.id,catalog_product_id:mapping?.catalog_product_id??null,observed_at:receipt.purchasedAt,unit_price_krw:item.unitPriceKrw,quantity:item.quantityValue,measurement_unit:"each",location_label:receipt.storeLabel,verification_status:"verified",verified_at:new Date().toISOString()},{onConflict:"user_id,receipt_item_id"});
-      if(observationError) throw observationError;
+    const client = this.client();
+    const user = await this.currentUser();
+    if (!client || !user) return;
+
+    const purchaseType = purchaseTypeForReceipt(receipt);
+    const { data: store, error: storeError } = await client.from("stores").upsert({
+      user_id: user.id,
+      name: receipt.storeLabel,
+      merchant_name: receipt.storeName ?? receipt.storeLabel,
+      branch_name: receipt.storeBranchName ?? null,
+      business_kind: receipt.storeBusinessKind ?? "unknown",
+    }, { onConflict: "user_id,name" }).select("id").single();
+    if (storeError) throw storeError;
+
+    const { data: remoteReceipt, error: receiptError } = await client.from("receipts").upsert({
+      user_id: user.id,
+      store_id: store.id,
+      purchased_at: receipt.purchasedAt,
+      transaction_number: receipt.transactionNumber,
+      total_price_krw: receipt.totalPriceKrw,
+      currency: "KRW",
+    }, { onConflict: "user_id,store_id,transaction_number" }).select("id").single();
+    if (receiptError) throw receiptError;
+
+    for (const item of receipt.items) {
+      const sourceProductCode = nullableSourceProductCode(item.sourceProductCode);
+      let existingStoreProduct: { id: string; product_id: string } | null = null;
+
+      if (sourceProductCode) {
+        const { data, error } = await client.from("store_products")
+          .select("id,product_id")
+          .eq("user_id", user.id)
+          .eq("store_id", store.id)
+          .eq("store_product_code", sourceProductCode)
+          .maybeSingle();
+        if (error) throw error;
+        existingStoreProduct = data;
+      } else {
+        const { data: existingReceiptItem, error: existingReceiptItemError } = await client
+          .from("receipt_items")
+          .select("store_product_id")
+          .eq("user_id", user.id)
+          .eq("id", item.id)
+          .maybeSingle();
+        if (existingReceiptItemError) throw existingReceiptItemError;
+
+        if (existingReceiptItem) {
+          const { data, error } = await client.from("store_products")
+            .select("id,product_id")
+            .eq("user_id", user.id)
+            .eq("store_id", store.id)
+            .eq("id", existingReceiptItem.store_product_id)
+            .maybeSingle();
+          if (error) throw error;
+          existingStoreProduct = data;
+        }
+      }
+
+      let storeProductId: string;
+      if (existingStoreProduct) {
+        storeProductId = existingStoreProduct.id;
+        if (purchaseType === "menu_item") {
+          const { error: productTypeError } = await client.from("products")
+            .update({ purchase_type: "menu_item" })
+            .eq("user_id", user.id)
+            .eq("id", existingStoreProduct.product_id);
+          if (productTypeError) throw productTypeError;
+        }
+      } else {
+        const { data: product, error: productError } = await client.from("products").insert({
+          user_id: user.id,
+          name: item.productName,
+          purchase_type: purchaseType,
+          category_tags: [],
+        }).select("id").single();
+        if (productError) throw productError;
+
+        const { data: storeProduct, error: storeProductError } = await client
+          .from("store_products")
+          .insert({
+            user_id: user.id,
+            store_id: store.id,
+            product_id: product.id,
+            store_product_code: sourceProductCode,
+          })
+          .select("id")
+          .single();
+        if (storeProductError) throw storeProductError;
+        storeProductId = storeProduct.id;
+      }
+
+      const { error: itemError } = await client.from("receipt_items").upsert({
+        id: item.id,
+        user_id: user.id,
+        receipt_id: remoteReceipt.id,
+        store_product_id: storeProductId,
+        unit_price_krw: item.unitPriceKrw,
+        purchased_quantity: item.quantityValue,
+        total_price_krw: item.totalPriceKrw,
+        purchase_numbers: item.sourceLineReferences,
+      });
+      if (itemError) throw itemError;
+
+      let catalogProductId: string | null = null;
+      if (sourceProductCode) {
+        const { data: mapping, error: mappingError } = await client
+          .from("source_product_mappings")
+          .select("catalog_product_id")
+          .eq("source_label", receipt.storeLabel)
+          .eq("source_product_code", sourceProductCode)
+          .eq("review_status", "verified")
+          .maybeSingle();
+        if (mappingError) throw mappingError;
+        catalogProductId = mapping?.catalog_product_id ?? null;
+      }
+
+      const { error: observationError } = await client.from("price_observations").upsert({
+        user_id: user.id,
+        store_product_id: storeProductId,
+        receipt_item_id: item.id,
+        catalog_product_id: catalogProductId,
+        observed_at: receipt.purchasedAt,
+        unit_price_krw: item.unitPriceKrw,
+        quantity: item.quantityValue,
+        measurement_unit: "each",
+        location_label: receipt.storeLabel,
+        verification_status: "verified",
+        verified_at: new Date().toISOString(),
+      }, { onConflict: "user_id,receipt_item_id" });
+      if (observationError) throw observationError;
     }
   }
 

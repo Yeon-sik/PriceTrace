@@ -60,11 +60,13 @@ function NutritionFacts({ food }: { food: NutritionFood }) {
 }
 
 export function StandardProductNutritionModal({
+  title = "단위 무게 당 영양 정보",
   standardName,
   catalogProductIds,
   onClose,
   restoreFocusRef,
 }: {
+  title?: string;
   standardName: string;
   catalogProductIds: readonly string[];
   onClose: () => void;
@@ -94,7 +96,7 @@ export function StandardProductNutritionModal({
         aria-label="영양 정보 닫기"
       >×</button>
       <p className={styles.kicker}>NUTRITION FACTS</p>
-      <h2 id="standard-nutrition-title">단위 무게 당 영양 정보</h2>
+      <h2 id="standard-nutrition-title">{title}</h2>
       <p className={styles.nutritionProductName}>{standardName}</p>
 
       <div className={styles.nutritionModalContent} aria-live="polite" aria-busy={loading}>

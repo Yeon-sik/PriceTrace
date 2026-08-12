@@ -4,7 +4,7 @@ export interface Database {
   public: {
     Tables: {
       profiles: { Row: { id:string; display_name:string|null; created_at:string }; Insert: { id:string; display_name?:string|null }; Update: { display_name?:string|null } };
-      stores: { Row: { id:string; user_id:string; name:string; created_at:string }; Insert: { id?:string; user_id:string; name:string }; Update: { name?:string } };
+      stores: { Row: { id:string; user_id:string; name:string; merchant_name:string|null; branch_name:string|null; business_kind:string; created_at:string }; Insert: { id?:string; user_id:string; name:string; merchant_name?:string|null; branch_name?:string|null; business_kind?:string }; Update: { name?:string; merchant_name?:string|null; branch_name?:string|null; business_kind?:string } };
       catalog_categories: { Row: { id:string; purchase_type:string; parent_id:string|null; slug:string; display_name:string; depth:number }; Insert: { id?:string; purchase_type:string; parent_id?:string|null; slug:string; display_name:string; depth?:number }; Update: { parent_id?:string|null; display_name?:string; depth?:number } };
       brands: { Row: { id:string; canonical_name:string; normalized_name:string; logo_url:string|null; official_site_url:string|null; status:string; created_by:string|null; created_at:string; updated_at:string }; Insert: { id?:string; canonical_name:string; logo_url?:string|null; official_site_url?:string|null; status?:string; created_by?:string|null }; Update: { canonical_name?:string; logo_url?:string|null; official_site_url?:string|null; status?:string } };
       brand_aliases: { Row: { id:string; brand_id:string; alias_name:string; normalized_alias:string; locale:string|null; created_by:string|null; created_at:string }; Insert: { id?:string; brand_id:string; alias_name:string; locale?:string|null; created_by?:string|null }; Update: { brand_id?:string; alias_name?:string; locale?:string|null } };
@@ -21,11 +21,17 @@ export interface Database {
       standard_product_coupang_prices: { Row: { id:string; standard_product_id:string; catalog_product_id:string|null; link_execution_id:string|null; product_url:string; listed_price_krw:number; quantity:number; content_amount:number|null; content_unit:string|null; max_bundle_quantity:number|null; max_bundle_listed_price_krw:number|null; observed_at:string; created_by:string|null; created_at:string }; Insert: { id?:string; standard_product_id:string; catalog_product_id?:string|null; link_execution_id?:string|null; product_url:string; listed_price_krw:number; quantity?:number; content_amount?:number|null; content_unit?:string|null; max_bundle_quantity?:number|null; max_bundle_listed_price_krw?:number|null; observed_at?:string; created_by?:string|null }; Update: { catalog_product_id?:string|null; link_execution_id?:string|null; product_url?:string; listed_price_krw?:number; quantity?:number; content_amount?:number|null; content_unit?:string|null; max_bundle_quantity?:number|null; max_bundle_listed_price_krw?:number|null; observed_at?:string; created_by?:string|null } };
       market_price_observations: { Row: { id:string; catalog_product_id:string; seller_name:string; product_url:string; listed_price_krw:number; shipping_fee_krw:number; minimum_order_quantity:number; observed_at:string; verification_status:string; verified_by:string|null; verified_at:string|null; created_at:string }; Insert: { id?:string; catalog_product_id:string; seller_name:string; product_url:string; listed_price_krw:number; shipping_fee_krw?:number; minimum_order_quantity?:number; observed_at:string; verification_status?:string; verified_by?:string|null; verified_at?:string|null }; Update: { seller_name?:string; product_url?:string; listed_price_krw?:number; shipping_fee_krw?:number; minimum_order_quantity?:number; observed_at?:string; verification_status?:string; verified_by?:string|null; verified_at?:string|null } };
       source_product_mappings: { Row: { id:string; source_label:string; source_product_code:string; catalog_product_id:string; matching_method:string; confidence:number; review_status:string; created_by:string|null; reviewed_by:string|null; reviewed_at:string|null; created_at:string; updated_at:string }; Insert: { id?:string; source_label:string; source_product_code:string; catalog_product_id:string; matching_method?:string; confidence?:number; review_status?:string; created_by?:string|null; reviewed_by?:string|null; reviewed_at?:string|null }; Update: { source_label?:string; source_product_code?:string; catalog_product_id?:string; matching_method?:string; confidence?:number; review_status?:string; reviewed_by?:string|null; reviewed_at?:string|null } };
+      restaurants: { Row: { id:string; canonical_name:string; brand_id:string|null; legal_name:string|null; cuisine_type:string|null; official_site_url:string|null; review_status:"pending"|"verified"|"rejected"; status:"active"|"archived"; created_by:string|null; reviewed_by:string|null; reviewed_at:string|null; created_at:string; updated_at:string }; Insert: { id?:string; canonical_name:string; brand_id?:string|null; legal_name?:string|null; cuisine_type?:string|null; official_site_url?:string|null; review_status?:"pending"|"verified"|"rejected"; status?:"active"|"archived"; created_by?:string|null; reviewed_by?:string|null; reviewed_at?:string|null }; Update: { canonical_name?:string; brand_id?:string|null; legal_name?:string|null; cuisine_type?:string|null; official_site_url?:string|null; review_status?:"pending"|"verified"|"rejected"; status?:"active"|"archived"; reviewed_by?:string|null; reviewed_at?:string|null; updated_at?:string } };
+      restaurant_locations: { Row: { id:string; restaurant_id:string; source_namespace:string; source_location_code:string; location_label:string|null; official_url:string|null; review_status:"pending"|"verified"|"rejected"; created_by:string|null; reviewed_by:string|null; reviewed_at:string|null; created_at:string }; Insert: { id?:string; restaurant_id:string; source_namespace:string; source_location_code:string; location_label?:string|null; official_url?:string|null; review_status?:"pending"|"verified"|"rejected"; created_by?:string|null; reviewed_by?:string|null; reviewed_at?:string|null }; Update: { location_label?:string|null; official_url?:string|null; review_status?:"pending"|"verified"|"rejected"; reviewed_by?:string|null; reviewed_at?:string|null } };
+      restaurant_menus: { Row: { id:string; restaurant_id:string; catalog_product_id:string; canonical_name:string; category_label:string|null; serving_label:string; official_url:string|null; review_status:"pending"|"verified"|"rejected"; status:"active"|"archived"; created_by:string|null; reviewed_by:string|null; reviewed_at:string|null; created_at:string; updated_at:string }; Insert: { id?:string; restaurant_id:string; catalog_product_id:string; canonical_name:string; category_label?:string|null; serving_label?:string; official_url?:string|null; review_status?:"pending"|"verified"|"rejected"; status?:"active"|"archived"; created_by?:string|null; reviewed_by?:string|null; reviewed_at?:string|null }; Update: { canonical_name?:string; category_label?:string|null; serving_label?:string; official_url?:string|null; review_status?:"pending"|"verified"|"rejected"; status?:"active"|"archived"; reviewed_by?:string|null; reviewed_at?:string|null; updated_at?:string } };
+      restaurant_menu_source_mappings: { Row: { id:string; restaurant_id:string; restaurant_location_id:string; restaurant_menu_id:string; source_product_code_namespace:string; source_product_code:string; evidence_fingerprint:string; review_status:"pending"|"verified"|"rejected"; created_by:string|null; reviewed_by:string|null; reviewed_at:string|null; created_at:string }; Insert: { id?:string; restaurant_id:string; restaurant_location_id:string; restaurant_menu_id:string; source_product_code_namespace:string; source_product_code:string; evidence_fingerprint:string; review_status?:"pending"|"verified"|"rejected"; created_by?:string|null; reviewed_by?:string|null; reviewed_at?:string|null }; Update: { review_status?:"pending"|"verified"|"rejected"; reviewed_by?:string|null; reviewed_at?:string|null } };
+      restaurant_menu_receipt_observations: { Row: { id:string; restaurant_id:string; restaurant_location_id:string; restaurant_menu_id:string; source_menu_mapping_id:string|null; owner_user_id:string; price_observation_id:string; receipt_id:string; receipt_item_id:string; observed_on:string; time_precision:"date"; unit_price_krw:number; quantity:number; total_price_krw:number; source_type:"database_receipt"; evidence_snapshot:Json; evidence_fingerprint:string; verification_status:"verified"; verified_by:string; verified_at:string; created_at:string }; Insert: { id?:string; restaurant_id:string; restaurant_location_id:string; restaurant_menu_id:string; source_menu_mapping_id?:string|null; owner_user_id:string; price_observation_id:string; receipt_id:string; receipt_item_id:string; observed_on:string; time_precision?:"date"; unit_price_krw:number; quantity:number; total_price_krw:number; source_type?:"database_receipt"; evidence_snapshot:Json; evidence_fingerprint:string; verification_status?:"verified"; verified_by:string; verified_at?:string }; Update: Record<string, never> };
+      restaurant_menu_registration_executions: { Row: { id:string; idempotency_key:string; request_payload:Json; restaurant_id:string; restaurant_location_id:string; restaurant_menu_id:string; catalog_product_id:string; receipt_observation_id:string; created_by:string; created_at:string }; Insert: { id?:string; idempotency_key:string; request_payload:Json; restaurant_id:string; restaurant_location_id:string; restaurant_menu_id:string; catalog_product_id:string; receipt_observation_id:string; created_by:string }; Update: Record<string, never> };
       products: { Row: { id:string; user_id:string; name:string; purchase_type:string; category_id:string|null; category_tags:string[]; created_at:string }; Insert: { id?:string; user_id:string; name:string; purchase_type?:string; category_id?:string|null; category_tags?:string[] }; Update: { name?:string; purchase_type?:string; category_id?:string|null; category_tags?:string[] } };
-      store_products: { Row: { id:string; user_id:string; store_id:string; product_id:string; store_product_code:string }; Insert: { id?:string; user_id:string; store_id:string; product_id:string; store_product_code:string }; Update: { store_product_code?:string } };
+      store_products: { Row: { id:string; user_id:string; store_id:string; product_id:string; store_product_code:string|null }; Insert: { id?:string; user_id:string; store_id:string; product_id:string; store_product_code?:string|null }; Update: { store_product_code?:string|null } };
       receipts: { Row: { id:string; user_id:string; store_id:string; purchased_at:string; transaction_number:string; total_price_krw:number }; Insert: { id?:string; user_id:string; store_id:string; purchased_at:string; transaction_number:string; total_price_krw:number }; Update: { purchased_at?:string; transaction_number?:string; total_price_krw?:number } };
       receipt_items: { Row: { id:string; user_id:string; receipt_id:string; store_product_id:string; unit_price_krw:number; purchased_quantity:number; total_price_krw:number; purchase_numbers:number[] }; Insert: { id?:string; user_id:string; receipt_id:string; store_product_id:string; unit_price_krw:number; purchased_quantity:number; total_price_krw:number; purchase_numbers:number[] }; Update: { unit_price_krw?:number; purchased_quantity?:number; total_price_krw?:number; purchase_numbers?:number[] } };
-      price_observations: { Row: { id:string; user_id:string; store_product_id:string; receipt_item_id:string; catalog_product_id:string|null; observed_at:string; unit_price_krw:number; measurement_unit:string; location_label:string|null; attributes:Json }; Insert: { id?:string; user_id:string; store_product_id:string; receipt_item_id:string; catalog_product_id?:string|null; observed_at:string; unit_price_krw:number; measurement_unit?:string; location_label?:string|null; attributes?:Json }; Update: { catalog_product_id?:string|null; observed_at?:string; unit_price_krw?:number; measurement_unit?:string; location_label?:string|null; attributes?:Json } };
+      price_observations: { Row: { id:string; user_id:string; store_product_id:string; receipt_item_id:string; catalog_product_id:string|null; observed_at:string; unit_price_krw:number; quantity:number; measurement_unit:string; location_label:string|null; attributes:Json; verification_status:"pending"|"verified"|"rejected"; verified_at:string|null }; Insert: { id?:string; user_id:string; store_product_id:string; receipt_item_id:string; catalog_product_id?:string|null; observed_at:string; unit_price_krw:number; quantity:number; measurement_unit?:string; location_label?:string|null; attributes?:Json; verification_status?:"pending"|"verified"|"rejected"; verified_at?:string|null }; Update: { catalog_product_id?:string|null; observed_at?:string; unit_price_krw?:number; quantity?:number; measurement_unit?:string; location_label?:string|null; attributes?:Json; verification_status?:"pending"|"verified"|"rejected"; verified_at?:string|null } };
       recipients: { Row: { id:string; user_id:string; name:string; created_at:string }; Insert: { id?:string; user_id:string; name:string }; Update: { name?:string } };
       allocations: { Row: { id:string; user_id:string; receipt_item_id:string; recipient_id:string; quantity:number; memo:string }; Insert: { id?:string; user_id:string; receipt_item_id:string; recipient_id:string; quantity:number; memo?:string }; Update: { quantity?:number; memo?:string } };
       settlement_statuses: { Row: { recipient_id:string; user_id:string; delivery_status:string; payment_status:string; paid_at:string|null }; Insert: { recipient_id:string; user_id:string; delivery_status:string; payment_status:string; paid_at?:string|null }; Update: { delivery_status?:string; payment_status?:string; paid_at?:string|null } };
@@ -438,6 +444,61 @@ export interface Database {
           p_limit?:number;
         };
         Returns: Json;
+      };
+      get_restaurant_menu_read_v1: {
+        Args: {
+          p_restaurant_id?:string|null;
+          p_catalog_product_id?:string|null;
+          p_query?:string|null;
+          p_limit?:number;
+        };
+        Returns: Json;
+      };
+      get_admin_restaurant_menu_receipt_candidates_v1: {
+        Args: Record<string, never>;
+        Returns: {
+          price_observation_id:string;
+          store_id:string;
+          store_name:string;
+          location_label:string|null;
+          store_product_id:string;
+          store_product_code:string|null;
+          product_name:string;
+          receipt_id:string;
+          receipt_item_id:string;
+          observed_on:string;
+          unit_price_krw:number;
+          quantity:number;
+          total_price_krw:number;
+        }[];
+      };
+      admin_register_restaurant_menu_from_receipt_v1: {
+        Args: {
+          p_idempotency_key:string;
+          p_price_observation_id:string;
+          p_restaurant_id:string|null;
+          p_restaurant_name:string;
+          p_restaurant_legal_name:string|null;
+          p_cuisine_type:string|null;
+          p_restaurant_official_site_url:string|null;
+          p_restaurant_source_namespace:string;
+          p_restaurant_source_code:string;
+          p_location_label:string|null;
+          p_location_official_url:string|null;
+          p_restaurant_menu_id:string|null;
+          p_menu_name:string;
+          p_menu_category_label:string|null;
+          p_serving_label:string;
+          p_menu_official_url:string|null;
+        };
+        Returns: {
+          restaurant_id:string;
+          restaurant_location_id:string;
+          restaurant_menu_id:string;
+          catalog_product_id:string;
+          receipt_observation_id:string;
+          replayed:boolean;
+        }[];
       };
       get_public_exact_standard_product_catalog_v2: {
         Args: Record<string, never>;
