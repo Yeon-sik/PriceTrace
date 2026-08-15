@@ -449,7 +449,10 @@ const strictExecutionTargetSchema = z.object({
   caseId: z.string().min(1),
   inputFingerprint: fingerprintSchema,
   approvalPolicy: z.object({
-    mode: z.literal("authenticated_admin_explicit_second_step"),
+    mode: z.enum([
+      "authenticated_admin_explicit_second_step",
+      "authenticated_admin_direct_registration",
+    ]),
     requiredStatementPrefix: z.literal("APPROVE_STANDARD_PRODUCT_LINK"),
     statementTemplateVersion: z.literal("link-approval-ko-v1"),
     oneTimeTargetFingerprint: z.literal(true),
@@ -501,6 +504,18 @@ const strictExecutionTargetSchema = z.object({
 }).passthrough().superRefine((target, context) => {
   const executionMode = target.executionMode ?? "strict_v6";
   const hasCoupangEffect = target.plannedEffects.includes("register_coupang_offer");
+  const expectedApprovalPolicy = target.review.reviewerAgent === "admin_direct"
+    ? "authenticated_admin_direct_registration"
+    : target.review.reviewerAgent === "pricetrace_independent_reviewer"
+      ? "authenticated_admin_explicit_second_step"
+      : null;
+  if (expectedApprovalPolicy && target.approvalPolicy.mode !== expectedApprovalPolicy) {
+    context.addIssue({
+      code: "custom",
+      message: "The approval policy must match the registration reviewer.",
+      path: ["approvalPolicy", "mode"],
+    });
+  }
   if (executionMode === "strict_v6" && (!target.coupangOffer || !hasCoupangEffect)) {
     context.addIssue({
       code: "custom",
@@ -1733,10 +1748,17 @@ export async function buildStrictRegistrationIdentity(
     throw new Error("공식 규격 원문과 적용할 내용량·단위·개수가 일치하지 않습니다.");
   }
   if (
-    input.target.coupangContentAmount !== input.target.contentAmount
+    !Number.isFinite(input.target.coupangContentAmount)
+    || input.target.coupangContentAmount <= 0
     || input.target.coupangContentUnit !== input.target.contentUnit
+    || (
+      input.target.contentUnit === "each"
+      && input.target.coupangContentAmount !== input.target.contentAmount
+    )
   ) {
-    throw new Error("쿠팡 정확 옵션의 개당 규격이 적용할 판매 규격과 일치하지 않습니다.");
+    throw new Error(
+      "쿠팡 정확 옵션은 양수 개당 내용량과 적용 판매 규격과 같은 단위가 필요합니다. 개 단위는 판매 규격과 같아야 합니다.",
+    );
   }
   const receipt = {
     ...input.receipt,
@@ -1850,7 +1872,9 @@ export async function buildStrictRegistrationIdentity(
     caseId: input.caseId.trim(),
     inputFingerprint,
     approvalPolicy: {
-      mode: "authenticated_admin_explicit_second_step",
+      mode: options.assessmentMode === "admin_direct"
+        ? "authenticated_admin_direct_registration"
+        : "authenticated_admin_explicit_second_step",
       requiredStatementPrefix: "APPROVE_STANDARD_PRODUCT_LINK",
       statementTemplateVersion: "link-approval-ko-v1",
       oneTimeTargetFingerprint: true,
@@ -2224,7 +2248,9 @@ export async function buildLinkOnlyRegistrationIdentity(
     caseId: input.caseId.trim(),
     inputFingerprint,
     approvalPolicy: {
-      mode: "authenticated_admin_explicit_second_step",
+      mode: options.assessmentMode === "admin_direct"
+        ? "authenticated_admin_direct_registration"
+        : "authenticated_admin_explicit_second_step",
       requiredStatementPrefix: "APPROVE_STANDARD_PRODUCT_LINK",
       statementTemplateVersion: "link-approval-ko-v1",
       oneTimeTargetFingerprint: true,

@@ -880,7 +880,9 @@ function StandardProductConnectionModal({ directMode = false, candidate, legacy,
         p_source_labels: [receiptInput.sourceLabel],
       };
       const { data, error } = isLinkOnly
-        ? await client.rpc("approve_and_register_standard_product_link_only_v1", {
+        ? await client.rpc(directMode
+          ? "admin_register_standard_product_link_only_v1"
+          : "approve_and_register_standard_product_link_only_v1", {
             ...commonRpcArgs,
             p_specification: selectedApparelSize
               ? `${selectedApparelSize.kr}호`
@@ -889,7 +891,9 @@ function StandardProductConnectionModal({ directMode = false, candidate, legacy,
                 : officialListingInput.specificationTextRaw,
             p_apparel_size: selectedApparelSize,
           })
-        : await client.rpc("approve_and_register_standard_product_link_strict_v6", {
+        : await client.rpc(directMode
+          ? "admin_register_standard_product_link_strict_v1"
+          : "approve_and_register_standard_product_link_strict_v6", {
             ...commonRpcArgs,
             p_coupang_product_url: executionIdentity.executionTarget.coupangOffer!.productUrl,
             p_coupang_listed_price_krw:
