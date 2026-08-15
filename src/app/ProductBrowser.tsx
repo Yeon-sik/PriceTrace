@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { cartProductFromGroup, cartProductFromOfficialListing, type CartProduct } from "@/domain/cart";
+import { productNameWithoutBrand } from "@/domain/brand";
 import { distinctSellerCount, latestSellerRows, PRODUCT_CATEGORIES, type MartType, type ProductCategory, type ProductGroup, type ProductSort } from "@/domain/product-browser";
 import { formatKrw } from "@/domain/settlement";
 import {
@@ -41,6 +42,13 @@ function RecordedPriceBlock({ group }: { group: ProductGroup }) {
   return <div className={styles.listedPrice}><strong>{formatKrw(group.latestPriceKrw)}</strong></div>;
 }
 
+function StandardProductName({ brand, name }: { brand: string | null; name: string }) {
+  return <div className={styles.standardProductName}>
+    {brand && <small>{brand}</small>}
+    <h2>{productNameWithoutBrand(name, brand)}</h2>
+  </div>;
+}
+
 function OfficialLinkedStandardCard({
   standard,
   onOpen,
@@ -70,7 +78,7 @@ function OfficialLinkedStandardCard({
     </div>
     <div className={`${styles.productInfo} ${styles.officialChannelInfo}`}>
       <span className={styles.officialCategoryBadge}>{standard.category}</span>
-      <h2>{standard.name}</h2>
+      <StandardProductName brand={standard.brand} name={standard.name} />
       <p><b>공식 출처</b> PX 공식 판매상품 {standard.listings.length.toLocaleString("ko-KR")}개 연결</p>
       <div className={styles.officialChannelPrice}>
         <small>PX 공식 사이트 표시가</small>
@@ -102,6 +110,7 @@ export function ProductBrowser({ groups, query, setQuery, category, setCategory,
     exactStandardMappings,
     catalogSpecs,
     standardNames,
+    standardBrands,
     standardImages,
     coupangByStandard,
     catalogNotice,
@@ -117,10 +126,11 @@ export function ProductBrowser({ groups, query, setQuery, category, setCategory,
     exactStandardMappings,
     catalogSpecs,
     standardNames,
+    standardBrands,
     standardImages,
     coupangByStandard,
     linkedByStandardProduct,
-  }), [groups, officialProducts, standardMappings, exactStandardMappings, catalogSpecs, standardNames, standardImages, coupangByStandard, linkedByStandardProduct]);
+  }), [groups, officialProducts, standardMappings, exactStandardMappings, catalogSpecs, standardNames, standardBrands, standardImages, coupangByStandard, linkedByStandardProduct]);
 
   const stores = useMemo(
     () => selectStoreOptions({ productGroups, standardGroups, martType }),
@@ -137,8 +147,8 @@ export function ProductBrowser({ groups, query, setQuery, category, setCategory,
   const officialListingsEligible = officialListingsAreEligible(martType, selectedStore);
 
   const linkedStandardSummaries = useMemo<OfficialLinkedStandardSummary[]>(
-    () => selectLinkedStandardSummaries({ linkedByStandardProduct, standardNames, standardImages }),
-    [linkedByStandardProduct, standardImages, standardNames],
+    () => selectLinkedStandardSummaries({ linkedByStandardProduct, standardNames, standardBrands, standardImages }),
+    [linkedByStandardProduct, standardBrands, standardImages, standardNames],
   );
 
   const visibleLinkedStandardSummaries = useMemo(() => selectVisibleLinkedStandardSummaries({
@@ -176,6 +186,13 @@ export function ProductBrowser({ groups, query, setQuery, category, setCategory,
   const openStandard = visibleStandardGroups.find((standard) => standard.id === openStandardId)
     ?? standardGroups.find((standard) => standard.id === openStandardId)
     ?? null;
+  const nutritionCatalogProductIds = useMemo(() => {
+    if (!openStandard) return [];
+    const standardProductId = openStandard.id.replace("standard:", "");
+    return [...catalogSpecs.entries()]
+      .filter(([, specification]) => specification.standardProductId === standardProductId)
+      .map(([catalogProductId]) => catalogProductId);
+  }, [catalogSpecs, openStandard]);
   const showStandardOnly = catalogView === "standard";
   const showOfficialOnly = catalogView === "official";
   const showStandaloneOfficialListings = catalogView !== "standard"
@@ -245,7 +262,7 @@ export function ProductBrowser({ groups, query, setQuery, category, setCategory,
               <span className={styles.standardProductBadge}>표준 상품</span>
             </div>
             <div className={styles.productInfo}>
-              <h2>{entry.standard.name}</h2>
+              <StandardProductName brand={entry.standard.brand} name={entry.standard.name} />
               <StoreInfo sellerCount={entry.standard.sellerCount} onOpen={() => setStoreListTarget({ title: `${entry.standard.name} 판매처`, rows: latestSellerRows(entry.standard.items.flatMap((item) => item.observations)) })} />
               <div className={styles.standardPriceBlock}><strong>{formatKrw(entry.standard.lowestPriceKrw)} ~</strong><small>{entry.standard.unitPriceLabel} {formatKrw(entry.standard.lowestUnitPriceKrw)} ~ {formatKrw(entry.standard.highestUnitPriceKrw)}</small>{entry.standard.coupangComparison && <CoupangComparisonMessage compact unitPriceLabel={entry.standard.unitPriceLabel} comparison={entry.standard.coupangComparison} />}</div>
               {entry.standard.officialListings.length > 0 && <div className={styles.standardOfficialSource}>
@@ -264,7 +281,7 @@ export function ProductBrowser({ groups, query, setQuery, category, setCategory,
     {showStandaloneOfficialListings && <PxOfficialProductBrowser catalog={publicPxCatalog} listings={standaloneListings} query={query} category={category} onAdd={(listing) => onAdd(cartProductFromOfficialListing(listing))} />}
     {showOfficialOnly && !officialListingsEligible && <div className={styles.noResult}><strong>{selectedStore !== "all" ? "공식 상품은 특정 지점의 판매·재고로 확인할 수 없습니다." : "일반 마트 조건에 해당하는 공식 상품 컬렉션이 없습니다."}</strong><p>판매처 유형을 전체 또는 PX로 선택하고, 판매 마트는 전체 마트로 두세요.</p></div>}
 
-    {openStandard && <StandardProductDetailModal standard={openStandard} onClose={() => setOpenStandardId(null)} onOpenStore={onOpenStore} />}
+    {openStandard && <StandardProductDetailModal standard={openStandard} nutritionCatalogProductIds={nutritionCatalogProductIds} onClose={() => setOpenStandardId(null)} onOpenStore={onOpenStore} />}
     {storeListTarget && !showOfficialOnly && <StoreListModal title={storeListTarget.title} rows={storeListTarget.rows} onClose={() => setStoreListTarget(null)} onOpenStore={onOpenStore} />}
   </section>;
 }

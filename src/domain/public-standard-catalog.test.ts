@@ -11,6 +11,7 @@ function row(overrides: Record<string, unknown> = {}) {
     catalog_product_id: catalogProductId,
     standard_product_id: standardProductId,
     standard_name: "CJ 햇반",
+    brand_name: "CJ",
     content_amount: 210,
     content_unit: "g",
     package_count: 1,
@@ -34,6 +35,7 @@ describe("public standard catalog", () => {
 
     expect(index.exactStandardMappings.get("와마트 일산점:210157")).toBe(catalogProductId);
     expect(index.standardNames.get(standardProductId)).toBe("CJ 햇반");
+    expect(index.standardBrands.get(standardProductId)).toBe("CJ");
     expect(index.catalogSpecs.get(catalogProductId)).toMatchObject({ contentAmount: 210, contentUnit: "g", referenceUnit: 100 });
   });
 

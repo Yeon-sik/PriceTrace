@@ -53,6 +53,7 @@ export type PriceHistoryPoint = {
 export type StandardProductGroup = {
   id: string;
   name: string;
+  brand: string | null;
   imageUrl?: string;
   category: ProductCategory;
   items: StandardProductItem[];
@@ -73,6 +74,7 @@ export type OfficialLinkedStandardSummary = {
   id: string;
   standardProductId: string;
   name: string;
+  brand: string | null;
   imageUrl?: string;
   category: ProductCategory;
   listings: PublicOfficialChannelListing[];
@@ -110,6 +112,7 @@ export function selectProductCatalogGroups({
   catalogSpecs,
   standardNames,
   standardImages,
+  standardBrands,
   coupangByStandard,
   linkedByStandardProduct,
 }: {
@@ -120,6 +123,7 @@ export function selectProductCatalogGroups({
   catalogSpecs: ReadonlyMap<string, CatalogSpecification>;
   standardNames: ReadonlyMap<string, string>;
   standardImages: ReadonlyMap<string, string>;
+  standardBrands: ReadonlyMap<string, string>;
   coupangByStandard: ReadonlyMap<string, PublicCoupangPrice>;
   linkedByStandardProduct: ReadonlyMap<string, PublicOfficialChannelListing[]>;
 }) {
@@ -211,6 +215,7 @@ export function selectProductCatalogGroups({
     const ordered = [...items].sort((left, right) => left.unitPriceKrw - right.unitPriceKrw);
     const lowest = ordered[0];
     const name = standardNames.get(standardProductId) ?? lowest.productName;
+    const brand = standardBrands.get(standardProductId) ?? null;
     const coupangEntry = coupangByStandard.get(standardProductId);
     const coupangPrice = coupangEntry
       ? buildCoupangPrice(coupangEntry, lowest.referenceUnit)
@@ -232,6 +237,7 @@ export function selectProductCatalogGroups({
     return {
       id: `standard:${standardProductId}`,
       name,
+      brand,
       imageUrl: officialChannelRepresentativeImageUrl(officialListings)
         ?? standardImages.get(standardProductId),
       category: categoryForProduct(name),
@@ -300,18 +306,22 @@ export function selectLinkedStandardSummaries({
   linkedByStandardProduct,
   standardNames,
   standardImages,
+  standardBrands,
 }: {
   linkedByStandardProduct: ReadonlyMap<string, PublicOfficialChannelListing[]>;
   standardNames: ReadonlyMap<string, string>;
   standardImages: ReadonlyMap<string, string>;
+  standardBrands: ReadonlyMap<string, string>;
 }): OfficialLinkedStandardSummary[] {
   return [...linkedByStandardProduct.entries()].map(([standardProductId, listings]) => {
     const name = standardNames.get(standardProductId) ?? listings[0].sourceNameRaw;
+    const brand = standardBrands.get(standardProductId) ?? null;
     const inferredCategory = categoryForProduct(name);
     return {
       id: `official-standard:${standardProductId}`,
       standardProductId,
       name,
+      brand,
       imageUrl: officialChannelRepresentativeImageUrl(listings)
         ?? standardImages.get(standardProductId),
       category: inferredCategory === "미분류" ? listings[0].category : inferredCategory,

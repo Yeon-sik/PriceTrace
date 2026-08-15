@@ -10,7 +10,7 @@ import { StandardProductNutritionModal } from "./StandardProductNutritionModal";
 import type { StandardProductGroup, StandardProductItem } from "./ProductBrowser";
 import styles from "./page.module.css";
 
-export function StandardProductDetailModal({ standard, onClose, onOpenStore }: { standard: StandardProductGroup; onClose: () => void; onOpenStore: (store: string) => void }) {
+export function StandardProductDetailModal({ standard, nutritionCatalogProductIds: nutritionCatalogProductIdsFromCatalog = [], onClose, onOpenStore }: { standard: StandardProductGroup; nutritionCatalogProductIds?: readonly string[]; onClose: () => void; onOpenStore: (store: string) => void }) {
   const [trendItem, setTrendItem] = useState<StandardProductItem | null>(null);
   const [nutritionOpen, setNutritionOpen] = useState(false);
   const closeButtonRef = useRef<HTMLButtonElement>(null);
@@ -37,8 +37,11 @@ export function StandardProductDetailModal({ standard, onClose, onOpenStore }: {
     source: item.latest.source ?? "receipt",
   }))), [standard.items]);
   const nutritionCatalogProductIds = useMemo(
-    () => [...new Set(standard.items.map((item) => item.catalogProductId))],
-    [standard.items],
+    () => [...new Set([
+      ...nutritionCatalogProductIdsFromCatalog,
+      ...standard.items.map((item) => item.catalogProductId),
+    ])],
+    [nutritionCatalogProductIdsFromCatalog, standard.items],
   );
   const lowestItem = useMemo(() => [...standard.items].sort((left, right) => left.unitPriceKrw - right.unitPriceKrw || right.latest.observedAt.localeCompare(left.latest.observedAt))[0] ?? null, [standard.items]);
 

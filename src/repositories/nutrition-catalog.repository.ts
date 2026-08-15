@@ -20,6 +20,12 @@ function unwrapRpcObject(data: unknown) {
   return Array.isArray(data) && data.length === 1 ? data[0] : data;
 }
 
+function nutritionRpcRows(data: unknown) {
+  if (Array.isArray(data)) return data;
+  if (data && typeof data === "object") return [data];
+  throw new Error("공개 영양 RPC가 객체 또는 배열 계약을 반환하지 않았습니다.");
+}
+
 export class NutritionCatalogRepository {
   constructor(private readonly client: SupabaseClient) {}
 
@@ -31,10 +37,7 @@ export class NutritionCatalogRepository {
     if (error) {
       throw new Error(remoteErrorMessage(error, "공개 영양정보를 불러오지 못했습니다."));
     }
-    if (!Array.isArray(data)) {
-      throw new Error("공개 영양 RPC가 배열 계약을 반환하지 않았습니다.");
-    }
-    return data.map((row) => {
+    return nutritionRpcRows(data).map((row) => {
       const food = nutritionFoodFromReadRow(row);
       if (food.approvedCatalogProductId !== catalogProductId) {
         throw new Error("공개 영양 RPC가 요청하지 않은 정확 규격을 반환했습니다.");

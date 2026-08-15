@@ -27,6 +27,7 @@ describe("market price normalization", () => {
   it("excludes pending and rejected offers from the tracked-seller minimum", () => {
     const lowest = lowestVerifiedMarketPrice([
       { sellerName: "pending", listedPriceKrw: 100, shippingFeeKrw: 0, minimumOrderQuantity: 1, observedAt: "2026-07-23T00:00:00.000Z", verificationStatus: "pending" as const },
+      { sellerName: "unverified", listedPriceKrw: 50, shippingFeeKrw: 0, minimumOrderQuantity: 1, observedAt: "2026-07-24T00:00:00.000Z", verificationStatus: "unverified" as const },
       { sellerName: "verified", listedPriceKrw: 7_000, shippingFeeKrw: 0, minimumOrderQuantity: 1, observedAt: "2026-07-22T00:00:00.000Z", verificationStatus: "verified" as const },
     ], specification);
     expect(lowest?.sellerName).toBe("verified");

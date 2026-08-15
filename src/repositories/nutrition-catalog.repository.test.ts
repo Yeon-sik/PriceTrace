@@ -36,6 +36,45 @@ function publicFoodRow() {
     source_revision: "label-v2",
     revision: 2,
     catalog_product_id: null,
+    catalog_product_revision: `sha256:${"c".repeat(64)}`,
+    catalog_content_amount: 100,
+    catalog_content_unit: "g",
+    catalog_package_count: 1,
+  };
+}
+
+function kaguriPublicFoodRow() {
+  return {
+    contract_version: "nutrition-read.v1",
+    nutrition_food_id: "eddcbbb8-eaa6-4be0-9bae-cbc4dc37f41f",
+    name: "카구리 큰사발면",
+    kind: "external_menu",
+    basis_amount: 103,
+    basis_unit: "g",
+    prep_state: "unspecified",
+    nutrition_values: {
+      fat_grams: 15,
+      sodium_mg: 1550,
+      carbs_grams: 73,
+      fiber_grams: null,
+      sugars_grams: 5,
+      calories_kcal: 455,
+      protein_grams: 7,
+      cholesterol_mg: 0,
+      trans_fat_grams: null,
+      added_sugars_grams: null,
+      saturated_fat_grams: 8,
+    },
+    micronutrients: {},
+    source_type: "pricetrace_manual",
+    source_reference: "catalogProductId:96eed0f6-1cfa-401a-850f-670d71c44d6f",
+    source_revision: null,
+    revision: 1,
+    catalog_product_id: "96eed0f6-1cfa-401a-850f-670d71c44d6f",
+    catalog_product_revision: "sha256:4a0e24d2150802a2a85d228f35104e56ec5ff75c3366f1e17414f63963a6864b",
+    catalog_content_amount: 103,
+    catalog_content_unit: "g",
+    catalog_package_count: 1,
   };
 }
 
@@ -83,6 +122,10 @@ describe("NutritionCatalogRepository", () => {
       sourceType: "manufacturer_label",
       sourceRevision: "label-v2",
       revision: 2,
+      catalogProductRevision: `sha256:${"c".repeat(64)}`,
+      catalogContentAmount: 100,
+      catalogContentUnit: "g",
+      catalogPackageCount: 1,
     });
   });
 
@@ -103,6 +146,30 @@ describe("NutritionCatalogRepository", () => {
     expect(foods[0]).toMatchObject({
       id: nutritionFoodId,
       approvedCatalogProductId: catalogProductId,
+    });
+  });
+
+  it("accepts the live Kaguri public RPC object and preserves its basis and catalog metadata", async () => {
+    const kaguriCatalogProductId = "96eed0f6-1cfa-401a-850f-670d71c44d6f";
+    const rpc = vi.fn().mockResolvedValue({ data: kaguriPublicFoodRow(), error: null });
+    const repository = new NutritionCatalogRepository({ rpc } as unknown as SupabaseClient);
+
+    const foods = await repository.readPublicFoods(kaguriCatalogProductId);
+
+    expect(foods).toHaveLength(1);
+    expect(foods[0]).toMatchObject({
+      id: "eddcbbb8-eaa6-4be0-9bae-cbc4dc37f41f",
+      name: "카구리 큰사발면",
+      basisAmount: 103,
+      basisUnit: "g",
+      caloriesKcal: 455,
+      fiberGrams: null,
+      transFatGrams: null,
+      approvedCatalogProductId: kaguriCatalogProductId,
+      catalogProductRevision: "sha256:4a0e24d2150802a2a85d228f35104e56ec5ff75c3366f1e17414f63963a6864b",
+      catalogContentAmount: 103,
+      catalogContentUnit: "g",
+      catalogPackageCount: 1,
     });
   });
 

@@ -13,6 +13,10 @@ export const NUTRITION_READ_SCHEMA_VERSION = "nutrition-read.v1" as const;
 
 const offsetDateTimeSchema = z.string().datetime({ offset: true });
 const nullableNonnegativeNumberSchema = z.coerce.number().nonnegative().nullable();
+const optionalCatalogProductRevisionSchema = Sha256RevisionSchema.nullable().optional();
+const optionalCatalogContentAmountSchema = z.coerce.number().positive().nullable().optional();
+const optionalCatalogContentUnitSchema = z.enum(["g", "ml", "each"]).nullable().optional();
+const optionalCatalogPackageCountSchema = z.coerce.number().int().positive().nullable().optional();
 
 export const NutritionReadV1RowSchema = z.object({
   contract_version: z.literal(NUTRITION_READ_SCHEMA_VERSION),
@@ -44,6 +48,10 @@ export const NutritionReadV1RowSchema = z.object({
   source_revision: z.string().trim().min(1).max(200).nullable(),
   revision: z.coerce.number().int().positive(),
   catalog_product_id: z.string().uuid().nullable(),
+  catalog_product_revision: optionalCatalogProductRevisionSchema,
+  catalog_content_amount: optionalCatalogContentAmountSchema,
+  catalog_content_unit: optionalCatalogContentUnitSchema,
+  catalog_package_count: optionalCatalogPackageCountSchema,
 }).strict();
 
 export type NutritionReadV1Row = z.infer<typeof NutritionReadV1RowSchema>;
@@ -72,6 +80,10 @@ export type NutritionFood = {
   sourceRevision: string | null;
   revision: number;
   approvedCatalogProductId: string | null;
+  catalogProductRevision: string | null;
+  catalogContentAmount: number | null;
+  catalogContentUnit: "g" | "ml" | "each" | null;
+  catalogPackageCount: number | null;
 };
 
 export function nutritionFoodFromReadRow(rowInput: unknown): NutritionFood {
@@ -100,6 +112,10 @@ export function nutritionFoodFromReadRow(rowInput: unknown): NutritionFood {
     sourceRevision: row.source_revision,
     revision: row.revision,
     approvedCatalogProductId: row.catalog_product_id,
+    catalogProductRevision: row.catalog_product_revision ?? null,
+    catalogContentAmount: row.catalog_content_amount ?? null,
+    catalogContentUnit: row.catalog_content_unit ?? null,
+    catalogPackageCount: row.catalog_package_count ?? null,
   };
 }
 

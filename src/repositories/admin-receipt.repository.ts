@@ -45,7 +45,7 @@ export function localReceiptsToAdminRecords(receipts: Receipt[]): AdminReceiptRe
 
 type StoreRow = { id: string; name: string };
 type ProductRow = { id: string; name: string };
-type StoreProductRow = { id: string; product_id: string; store_product_code: string };
+type StoreProductRow = { id: string; product_id: string; store_product_code: string | null };
 type ReceiptRow = { id: string; user_id: string; store_id: string; purchased_at: string; transaction_number: string; total_price_krw: number };
 type ReceiptItemRow = { id: string; receipt_id: string; store_product_id: string; purchased_quantity: number; unit_price_krw: number; total_price_krw: number };
 
@@ -72,7 +72,7 @@ export class AdminReceiptRepository {
       const item: AdminReceiptItemRecord = {
         id: row.id,
         productName: products.get(storeProduct?.product_id ?? "") ?? "상품 정보 없음",
-        sourceProductCode: storeProduct?.store_product_code ?? "-",
+        sourceProductCode: storeProduct?.store_product_code || "-",
         quantity: row.purchased_quantity,
         unitPriceKrw: row.unit_price_krw,
         totalPriceKrw: row.total_price_krw,
