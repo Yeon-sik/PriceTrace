@@ -149,6 +149,7 @@ function selectCatalog(groups: ProductGroup[], options: {
     exactStandardMappings,
     catalogSpecs,
     standardNames: new Map([[STANDARD_PRODUCT_ID, "표준 쌀"]]),
+    standardBrands: new Map([[STANDARD_PRODUCT_ID, "테스트 브랜드"]]),
     standardImages: new Map([[STANDARD_PRODUCT_ID, "https://example.com/fallback.jpg"]]),
     coupangByStandard: new Map<string, PublicCoupangPrice>(),
     linkedByStandardProduct: new Map([[STANDARD_PRODUCT_ID, officialListings]]),
@@ -189,6 +190,7 @@ describe("product browser selectors", () => {
       },
     });
 
+    expect(result.standardGroups[0].brand).toBe("테스트 브랜드");
     expect(result.productGroups).toHaveLength(1);
     expect(result.productGroups[0].officialProduct).toEqual(officialProduct);
     expect(result.standardGroups).toHaveLength(1);
@@ -278,6 +280,7 @@ describe("product browser selectors", () => {
     const summaries = selectLinkedStandardSummaries({
       linkedByStandardProduct: new Map([[STANDARD_PRODUCT_ID, [listing]]]),
       standardNames: new Map(),
+      standardBrands: new Map(),
       standardImages: new Map(),
     });
 
@@ -349,6 +352,7 @@ describe("product browser selectors", () => {
     const summaries = selectLinkedStandardSummaries({
       linkedByStandardProduct: new Map([[STANDARD_PRODUCT_ID, [listing]]]),
       standardNames: new Map([[STANDARD_PRODUCT_ID, "표준 쌀"]]),
+      standardBrands: new Map([[STANDARD_PRODUCT_ID, "테스트 브랜드"]]),
       standardImages: new Map(),
     });
 

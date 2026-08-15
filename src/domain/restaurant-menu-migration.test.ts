@@ -5,6 +5,10 @@ const migration = readFileSync(
   new URL("../../supabase/migrations/20260812110235_restaurant_menu_price_tracking.sql", import.meta.url),
   "utf8",
 );
+const directoryMigration = readFileSync(
+  new URL("../../supabase/migrations/20260812170053_restaurant_directory_and_detail.sql", import.meta.url),
+  "utf8",
+);
 const publicReadFunction = migration.slice(
   migration.indexOf("create function public.get_restaurant_menu_read_v1"),
   migration.indexOf("create function public.get_admin_restaurant_menu_receipt_candidates_v1"),
@@ -63,5 +67,20 @@ describe("restaurant-menu-read.v1 migration contract", () => {
     expect(migration).toContain("standard.purchase_type = 'retail_product'");
     expect(migration).not.toMatch(/create table public\..*nutrition/i);
     expect(migration).not.toMatch(/name.*auto.*match/i);
+  });
+
+  it("keeps list metadata and exact restaurant detail in separate public RPCs", () => {
+    expect(directoryMigration).toContain("create or replace function public.get_restaurant_directory_v1");
+    expect(directoryMigration).toContain("create or replace function public.get_restaurant_detail_v1");
+    expect(directoryMigration).toContain("restaurant-directory.v1");
+    expect(directoryMigration).toContain("restaurant-detail.v1");
+    expect(directoryMigration).toContain("restaurant.review_status = 'verified'");
+    expect(directoryMigration).toContain("menu.review_status = 'verified'");
+    expect(directoryMigration).toContain("count(distinct menu.id)::integer as menu_count");
+    expect(directoryMigration).toContain("observation.verification_status = 'verified'");
+    expect(directoryMigration).toContain("revoke all on function public.get_restaurant_directory_v1");
+    expect(directoryMigration).toContain("grant execute on function public.get_restaurant_directory_v1(text, integer)");
+    expect(directoryMigration).toContain("grant execute on function public.get_restaurant_detail_v1(uuid)");
+    expect(directoryMigration).not.toContain("evidence_snapshot");
   });
 });

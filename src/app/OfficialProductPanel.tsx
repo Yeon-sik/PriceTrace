@@ -112,7 +112,8 @@ export function StandardProductWorkspace({ candidates, approvalRequest, onOpenAp
   const [message, setMessage] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedStandardCategory, setSelectedStandardCategory] = useState<ProductCategory | null>(null);
-  const [lowerTab, setLowerTab] = useState<"connection" | "specification">("connection");
+  const [lowerTab, setLowerTab] = useState<"direct" | "ai" | "specification">("direct");
+  const [connectionMode, setConnectionMode] = useState<"direct" | "ai">("direct");
   const [catalogSelection, setCatalogSelection] = useState<CatalogExplorerSelectionRequest>();
   const [refreshing, setRefreshing] = useState(false);
   const [catalogReady, setCatalogReady] = useState(false);
@@ -319,6 +320,8 @@ export function StandardProductWorkspace({ candidates, approvalRequest, onOpenAp
               : undefined;
             const actionLabel = entry.pendingApproval
               ? "승인 대기열 보기"
+              : connectionMode === "direct"
+                ? "직접 연결"
               : entry.sameCodeMappedProducts.length > 0
                 ? "기존 연결 검토"
                 : candidate.officialSourceProductCode
@@ -336,7 +339,7 @@ export function StandardProductWorkspace({ candidates, approvalRequest, onOpenAp
               </div>
               <div className={styles.queueActions}>
                 <a href={legacyRecord?.officialUrl ?? officialSearchUrl(candidate)} target="_blank" rel="noreferrer">상품 정보 찾기</a>
-                <button type="button" onClick={() => entry.pendingApproval ? onOpenApprovalQueue?.() : setSelected(candidate)} disabled={entry.pendingApproval && !onOpenApprovalQueue}>{actionLabel}</button>
+                <button type="button" onClick={() => { if (entry.pendingApproval) onOpenApprovalQueue?.(); else setSelected(candidate); }} disabled={entry.pendingApproval && !onOpenApprovalQueue}>{actionLabel}</button>
               </div>
             </div>;
           })}</div>
@@ -413,24 +416,25 @@ export function StandardProductWorkspace({ candidates, approvalRequest, onOpenAp
       const pendingCount = registeredVariants.filter((variant) => variant.specification_status === "placeholder").length;
       return <article className={styles.registeredStandardCard} key={standard.id}><button type="button" className={styles.registeredStandardProduct} aria-label={`${standard.canonical_name} 규격·판매처 코드 관리`} onClick={() => openStandardInCatalog(standard)}><span className={styles.officialThumb}><ProductImagePreview imageUrl={image?.image_url} productName={standard.canonical_name} /></span><span className={styles.registeredStandardInfo}><span>표준 상품</span><strong>{standard.canonical_name}</strong><small>브랜드 {standard.brand ?? "미지정"}</small><small>판매 규격 {registeredVariants.length}개 · {image ? image.source_type === "upload" ? "Supabase 저장 이미지" : "외부 이미지 링크" : "대표 이미지 없음"}</small>{pendingCount > 0 && <span className={styles.specificationBadge}>규격 확인 필요 {pendingCount}개</span>}<span className={styles.registeredStandardHint}>규격·판매처 코드 관리 →</span></span></button><button type="button" className={styles.registeredStandardImageButton} onClick={() => setImageTarget(standard)}>{image ? "대표 이미지 변경" : "대표 이미지 추가"}</button></article>;
     })}</div> : <p className={styles.muted}>카테고리를 선택하면 해당 표준 상품만 표시됩니다.</p>}</> : <p>검색 조건에 맞는 표준 상품이 없습니다.</p>}</section>
-    <div className={styles.standardWorkspaceTabs} role="tablist" aria-label="표준 상품 관리 영역"><button type="button" role="tab" aria-selected={lowerTab === "connection"} className={lowerTab === "connection" ? styles.standardWorkspaceTabActive : ""} onClick={() => { setLowerTab("connection"); void load(); }}>연결 대기 상품</button><button type="button" role="tab" aria-selected={lowerTab === "specification"} className={lowerTab === "specification" ? styles.standardWorkspaceTabActive : ""} onClick={() => setLowerTab("specification")}>규격·판매처 코드 관리</button></div>
-    {lowerTab === "connection" ? <section className={styles.officialSection}><h2>PX 표준 상품 연결 대기열</h2><p className={styles.manualHint}>PX 공용 코드별로 묶되 영수증 원문은 각각 보존합니다. 공식명 후보와 검토 표시명은 조사 우선순위일 뿐 자동 연결 근거가 아니며, 승인 대기 항목은 이 탭의 연결 작업 수에서 제외됩니다.</p>{visibleQueueEntries.length === 0 ? <p className={styles.emptyState}>검색 조건에 맞는 PX 연결 작업이 없습니다.</p> : <div className={styles.pxQueueBuckets}>{renderQueueGroups("승인 대기", "검증된 제안서가 현재 브라우저의 연결 승인 탭에 있어 중복 조사하지 않습니다.", pendingQueueGroups)}{renderQueueGroups("기존 연결 재사용 검토", "같은 PX 영수증 코드에 검증된 판매 규격 연결이 있습니다. 이름·규격 충돌을 확인한 뒤 해당 판매처 연결만 별도로 승인합니다.", mappingReviewGroups)}{renderQueueGroups("공식 PX 후보 확인", "공식 카탈로그에서 정확 일치 또는 오타·축약 후보를 찾았습니다. 공식 규격과 브랜드 근거를 확인해야 합니다.", officialReviewGroups)}{renderQueueGroups("추가 조사 필요", "공식 후보가 아직 하나로 좁혀지지 않아 상품별 증거 조사가 필요합니다.", researchGroups)}</div>}</section> : <CatalogExplorerPanel selectionRequest={catalogSelection} />}
-    {selected && <StandardProductConnectionModal candidate={selected} legacy={selectedState?.legacy} brands={brands} standards={standards} variants={variants} standardImages={standardImages} onClose={() => setSelected(null)} onSaved={(notice) => { void load().then(() => notice && setMessage(notice)); }} />}
+    <div className={styles.standardWorkspaceTabs} role="tablist" aria-label="표준 상품 연결 방식"><button type="button" role="tab" aria-selected={lowerTab === "direct"} className={lowerTab === "direct" ? styles.standardWorkspaceTabActive : ""} onClick={() => { setLowerTab("direct"); setConnectionMode("direct"); setSelected(null); void load(); }}>직접 연결</button><button type="button" role="tab" aria-selected={lowerTab === "ai"} className={lowerTab === "ai" ? styles.standardWorkspaceTabActive : ""} onClick={() => { setLowerTab("ai"); setConnectionMode("ai"); setSelected(null); void load(); }}>AI 제안 연결</button><button type="button" role="tab" aria-selected={lowerTab === "specification"} className={lowerTab === "specification" ? styles.standardWorkspaceTabActive : ""} onClick={() => { setLowerTab("specification"); setSelected(null); }}>규격·판매처 코드 관리</button></div>
+    {lowerTab === "specification" ? <CatalogExplorerPanel selectionRequest={catalogSelection} /> : <section className={styles.officialSection}><h2>{connectionMode === "direct" ? "표준 상품 직접 등록" : "AI 제안 연결 대기열"}</h2><p className={styles.manualHint}>{connectionMode === "direct" ? "AI 연결서와 같은 상품·브랜드·규격·공식 URL·대표 이미지·가격 정보를 입력하지만 LinkProposal 등록 없이 바로 관리자 등록합니다." : "AI가 만든 LinkProposal을 입력하거나 검토된 제안을 불러와 상품·규격·공식 listing·가격 등록을 승인합니다."}</p>{visibleQueueEntries.length === 0 ? <p className={styles.emptyState}>검색 조건에 맞는 PX 연결 작업이 없습니다.</p> : <div className={styles.pxQueueBuckets}>{renderQueueGroups("승인 대기", "검토된 AI 제안은 관리자 승인 대기열에서 확인합니다.", pendingQueueGroups)}{renderQueueGroups("기존 연결 재사용 검토", "같은 PX 영수증 코드에 기존 판매 규격 후보가 있습니다.", mappingReviewGroups)}{renderQueueGroups("공식 PX 후보 확인", "공식 카탈로그 후보의 규격과 브랜드 근거를 확인합니다.", officialReviewGroups)}{renderQueueGroups("추가 조사 필요", "공식 후보가 하나로 좁혀지지 않아 상품별 조사가 필요합니다.", researchGroups)}</div>}</section>}
+    {selected && <StandardProductConnectionModal directMode={connectionMode === "direct"} candidate={selected} legacy={selectedState?.legacy} brands={brands} standards={standards} variants={variants} standardImages={standardImages} onClose={() => setSelected(null)} onSaved={(notice) => { void load().then(() => notice && setMessage(notice)); }} />}
     {imageTarget && <StandardProductImageModal standard={imageTarget} existing={standardImages.get(imageTarget.id)} userId={userId} onClose={() => setImageTarget(null)} onSaved={() => { setImageTarget(null); void load(); }} />}
   </section>;
 }
 
-function StandardProductConnectionModal({ candidate, legacy, brands, standards, variants, standardImages, approvalProposal, onClose, onSaved, onApproved }: { candidate: OfficialProductCandidate; legacy?: { officialName: string; officialUrl: string; imageUrl?: string }; brands: Brand[]; standards: StandardProduct[]; variants: Variant[]; standardImages: Map<string, StandardProductImageRecord>; approvalProposal?: ReviewedLinkProposal; onClose: () => void; onSaved: (notice?: string) => void; onApproved?: () => void }) {
+function StandardProductConnectionModal({ directMode = false, candidate, legacy, brands, standards, variants, standardImages, approvalProposal, onClose, onSaved, onApproved }: { directMode?: boolean; candidate: OfficialProductCandidate; legacy?: { officialName: string; officialUrl: string; imageUrl?: string }; brands: Brand[]; standards: StandardProduct[]; variants: Variant[]; standardImages: Map<string, StandardProductImageRecord>; approvalProposal?: ReviewedLinkProposal; onClose: () => void; onSaved: (notice?: string) => void; onApproved?: () => void }) {
   const client = getSupabaseBrowserClient();
   const approvalTarget = approvalProposal?.executionTarget;
-  const isLinkOnlyApproval = approvalTarget?.executionMode === "link_only_v1";
+  const [directExecutionMode, setDirectExecutionMode] = useState<"strict_v6" | "link_only_v1">("strict_v6");
+  const isLinkOnlyApproval = directMode
+    ? directExecutionMode === "link_only_v1"
+    : approvalTarget?.executionMode === "link_only_v1";
   const approvalApparelSize = approvalTarget?.normalizedIdentity.apparelSize ?? null;
   const initialListingName = candidate.officialSourceNameRaw ?? legacy?.officialName ?? candidate.productName;
   const [standardProductId, setStandardProductId] = useState(approvalTarget?.decision.standardProductId ?? "");
   const [standardName, setStandardName] = useState(approvalTarget?.normalizedIdentity.productFamilyName ?? initialListingName);
   const [brandName, setBrandName] = useState(approvalTarget?.brandEvidence.canonicalName ?? "");
-  const [receiptBrandName, setReceiptBrandName] = useState(approvalTarget?.brandEvidence.receiptObservedName ?? "");
-  const [officialBrandName, setOfficialBrandName] = useState(approvalTarget?.brandEvidence.officialObservedName ?? "");
   const [listingName, setListingName] = useState(approvalTarget?.normalizedIdentity.variantName ?? candidate.productName);
   const [productUrl, setProductUrl] = useState(approvalTarget?.brandEvidence.productReferenceUrl ?? legacy?.officialUrl ?? "");
   const [contentAmount, setContentAmount] = useState(approvalTarget?.normalizedIdentity.contentAmount.toString() ?? "");
@@ -462,8 +466,6 @@ function StandardProductConnectionModal({ candidate, legacy, brands, standards, 
     standardProductId !== (approvalTarget.decision.standardProductId ?? "")
     || (!standardProductId && standardName.trim() !== approvalTarget.normalizedIdentity.productFamilyName)
     || brandName.trim() !== approvalTarget.brandEvidence.canonicalName
-    || (receiptBrandName.trim() || null) !== approvalTarget.brandEvidence.receiptObservedName
-    || officialBrandName.trim() !== approvalTarget.brandEvidence.officialObservedName
     || listingName.trim() !== approvalTarget.normalizedIdentity.variantName
     || (!standardProductId && productUrl.trim() !== approvalTarget.brandEvidence.productReferenceUrl)
     || contentAmount.trim() !== approvalTarget.normalizedIdentity.contentAmount.toString()
@@ -509,23 +511,31 @@ function StandardProductConnectionModal({ candidate, legacy, brands, standards, 
       setMessage("영수증 revision 또는 공식 카탈로그 스냅샷이 없어 연결할 수 없습니다.");
       return;
     }
-    let reviewedProposalEnvelope;
-    try {
-      reviewedProposalEnvelope = parseReviewedLinkProposalEnvelope(reviewedProposalJson);
-    } catch (error) {
-      setMessage(error instanceof Error ? error.message : "검토된 LinkProposal을 확인하세요.");
-      return;
+    let reviewedProposalEnvelope: ReviewedLinkProposal | null = null;
+    if (!directMode) {
+      try {
+        reviewedProposalEnvelope = parseReviewedLinkProposalEnvelope(reviewedProposalJson);
+      } catch (error) {
+        setMessage(error instanceof Error ? error.message : "검토된 LinkProposal을 확인하세요.");
+        return;
+      }
     }
-    const caseId = reviewedProposalEnvelope.caseId;
-    const executionMode = reviewedProposalEnvelope.executionTarget.executionMode ?? "strict_v6";
+    const caseId = directMode
+      ? `admin-direct:${candidate.receiptId}:${candidate.receiptItemId}:${candidate.sourceProductCode}`
+      : reviewedProposalEnvelope!.caseId;
+    const executionMode = directMode
+      ? directExecutionMode
+      : reviewedProposalEnvelope!.executionTarget.executionMode ?? "strict_v6";
     const isLinkOnly = executionMode === "link_only_v1";
     const isApparelLink = Boolean(
-      reviewedProposalEnvelope.executionTarget.normalizedIdentity.apparelSize,
+      !directMode && reviewedProposalEnvelope!.executionTarget.normalizedIdentity.apparelSize,
     );
     const selectedApparelSize = isApparelLink
       ? apparelSizes.find((size) => size.label === apparelSizeLabel) ?? null
       : null;
-    const requiresOfficialPrice = Boolean(reviewedProposalEnvelope.officialListing.officialPrice);
+    const requiresOfficialPrice = directMode
+      ? false
+      : Boolean(reviewedProposalEnvelope!.officialListing.officialPrice);
     if (
       requiresOfficialPrice
       && (
@@ -537,28 +547,36 @@ function StandardProductConnectionModal({ candidate, legacy, brands, standards, 
       setMessage("검토된 포함 관계를 다시 확인할 공식 판매가가 없습니다.");
       return;
     }
-    const resolvedListingName = approvalProposal
+    const resolvedListingName = directMode
       ? listingName.trim()
-      : reviewedProposalEnvelope.decision.proposedVariantName ?? reusedListingName;
-    const resolvedProductUrl = selectedStandard ? reusedProductUrl : productUrl.trim();
+      : approvalProposal
+      ? listingName.trim()
+      : reviewedProposalEnvelope!.decision.proposedVariantName
+        ?? (selectedStandard
+          ? reviewedProposalEnvelope!.executionTarget.normalizedIdentity.variantName
+          : reusedListingName);
+    const resolvedProductUrl = selectedStandard
+      ? directMode ? productUrl.trim() : reusedProductUrl
+      : productUrl.trim();
     if (!client || !resolvedListingName || !/^https?:\/\//.test(resolvedProductUrl)) { setMessage("상품명과 확인 URL을 확인하세요."); return; }
-    if (
+    if (!directMode && (
       !receiptAndOfficialNamesMatch(candidate.productName, candidate.officialSourceNameRaw)
-      && reviewedProposalEnvelope.sameChannelNameRule.outcome
+      && reviewedProposalEnvelope!.sameChannelNameRule.outcome
         !== "apply_verified_name_equivalence"
-    ) {
+    )) {
       setMessage("영수증명과 공식 상품명이 다르며 검증된 이름 동등성 근거가 없습니다.");
       return;
     }
     const brandRegistration = prepareBrandRegistration({
-      canonicalName: brandName,
-      receiptObservedName: receiptBrandName,
-      officialObservedName: officialBrandName,
+      canonicalName: brandName.trim()
+        || (selectedStandard
+          ? (directMode ? selectedStandard.brand ?? "" : reviewedProposalEnvelope!.executionTarget.normalizedIdentity.brand)
+          : ""),
       officialSourceUrl: resolvedProductUrl,
     });
     if (!brandRegistration.value) { setMessage(brandRegistration.error); return; }
-    if (!brandRegistration.value.canonicalName || !brandRegistration.value.officialObservedName) {
-      setMessage("공식 브랜드 원문과 적용할 표준 브랜드를 모두 입력하세요.");
+    if (!brandRegistration.value.canonicalName) {
+      setMessage("표준 브랜드명을 입력하세요.");
       return;
     }
     const specificationStatus: CatalogSpecificationStatus = usesPlaceholderSpecification ? "placeholder" : "verified";
@@ -577,7 +595,9 @@ function StandardProductConnectionModal({ candidate, legacy, brands, standards, 
       : parseOptionalCoupangBundle(coupangMaxBundleQuantity, coupangMaxBundleListedPriceKrw);
     if (!isLinkOnly && !parsedCoupangBundle?.value) { setMessage(parsedCoupangBundle?.error ?? "쿠팡 묶음 가격을 확인하세요."); return; }
       const specification = resolveCatalogSpecification(specificationStatus, { contentAmount: parsedContentAmount, contentUnit, packageCount: parsedPackageCount, referenceUnit });
-      const reviewedTargetIdentity = reviewedProposalEnvelope.executionTarget.normalizedIdentity;
+      const reviewedTargetIdentity = directMode
+        ? { apparelSize: null, kitComponents: null, wiperBladeFitment: null }
+        : reviewedProposalEnvelope!.executionTarget.normalizedIdentity;
       const expectedAttributes = reviewedTargetIdentity.apparelSize
         ? { apparelSize: reviewedTargetIdentity.apparelSize }
         : reviewedTargetIdentity.kitComponents
@@ -671,37 +691,85 @@ function StandardProductConnectionModal({ candidate, legacy, brands, standards, 
           byteLength: candidate.officialImageByteLength,
         },
       };
-      const reviewedProposal = await parseReviewedLinkProposalForLiveCandidate(reviewedProposalJson, {
-        receipt: currentReceiptInput,
-        officialListing: currentOfficialListingInput,
-      });
-      const approvedCatalogNamespace = reviewedProposal.receipt.sourceCatalogNamespace;
+      const directAssessment = {
+        decision: {
+          confidence: "high" as const,
+          matchedFields: ["receipt_source", "official_source", "product_name", "specification"],
+          conflictingFields: [],
+          missingFields: [],
+        },
+        evidence: [
+          {
+            sourceType: "receipt" as const,
+            sourceId: `${candidate.receiptId}:${candidate.receiptItemId}`,
+            authority: "transactional" as const,
+            url: null,
+            capturedAt: candidate.receiptObservedAt,
+            claims: ["관리자가 현재 영수증 행을 직접 확인함"],
+            sourceRefs: [candidate.receiptId, candidate.receiptItemId],
+          },
+          {
+            sourceType: "official_channel" as const,
+            sourceId: `${candidate.officialChannelId}:${candidate.officialSourceProductCodeNamespace}:${candidate.officialSourceProductCode}`,
+            authority: "primary" as const,
+            url: resolvedProductUrl,
+            capturedAt: candidate.officialSnapshotId,
+            claims: ["관리자가 공식 판매채널 상품과 규격을 직접 확인함"],
+            sourceRefs: candidate.officialSourceRefs,
+          },
+          ...(!isLinkOnly ? [{
+            sourceType: "coupang" as const,
+            sourceId: coupangProductUrl.trim(),
+            authority: "primary" as const,
+            url: coupangProductUrl.trim(),
+            capturedAt: new Date().toISOString(),
+            claims: ["관리자가 쿠팡 가격과 정확 옵션을 직접 확인함"],
+            sourceRefs: [coupangProductUrl.trim()],
+          }] : []),
+        ],
+        review: {
+          verdict: "approve" as const,
+          reviewerAgent: "admin_direct",
+          counterCandidates: [],
+          conflicts: [],
+          evidenceQuality: "sufficient" as const,
+          notes: ["관리자 직접 등록 경로에서 확인함"],
+        },
+      };
+      const reviewedProposal = directMode
+        ? null
+        : await parseReviewedLinkProposalForLiveCandidate(reviewedProposalJson, {
+            receipt: currentReceiptInput,
+            officialListing: currentOfficialListingInput,
+          });
+      const approvedCatalogNamespace = directMode
+        ? currentReceiptInput.sourceCatalogNamespace
+        : reviewedProposal!.receipt.sourceCatalogNamespace;
       if (!approvedCatalogNamespace) {
         throw new Error("승인된 영수증 카탈로그 채널이 없습니다.");
       }
-      const receiptInput = {
-        ...reviewedProposal.receipt,
-        sourceCatalogNamespace: approvedCatalogNamespace,
-      };
-      const officialListingInput = reviewedProposal.officialListing;
+      const receiptInput = directMode
+        ? currentReceiptInput
+        : { ...reviewedProposal!.receipt, sourceCatalogNamespace: approvedCatalogNamespace };
+      const officialListingInput = directMode ? currentOfficialListingInput : reviewedProposal!.officialListing;
       const commonIdentityInput = {
         caseId,
         receipt: receiptInput,
         officialListing: officialListingInput,
         assessment: {
           decision: {
-            confidence: reviewedProposal.decision.confidence,
-            matchedFields: reviewedProposal.decision.matchedFields,
-            conflictingFields: reviewedProposal.decision.conflictingFields,
-            missingFields: reviewedProposal.decision.missingFields,
+            confidence: directMode ? directAssessment.decision.confidence : reviewedProposal!.decision.confidence,
+            matchedFields: directMode ? directAssessment.decision.matchedFields : reviewedProposal!.decision.matchedFields,
+            conflictingFields: directMode ? directAssessment.decision.conflictingFields : reviewedProposal!.decision.conflictingFields,
+            missingFields: directMode ? directAssessment.decision.missingFields : reviewedProposal!.decision.missingFields,
           },
-          evidence: reviewedProposal.evidence,
-          review: reviewedProposal.review,
+          evidence: directMode ? directAssessment.evidence : reviewedProposal!.evidence,
+          review: directMode ? directAssessment.review : reviewedProposal!.review,
         },
         verifiedNameEquivalence:
-          reviewedProposal.sameChannelNameRule.verifiedEquivalence ?? null,
+          directMode ? null : reviewedProposal!.sameChannelNameRule.verifiedEquivalence ?? null,
         userSelectedOfficialVariant:
-          reviewedProposal.executionTarget.userSelectedOfficialVariant ?? null,
+          directMode ? null : reviewedProposal!.executionTarget.userSelectedOfficialVariant ?? null,
       };
       const commonTarget = {
         standardProductId: selectedStandard?.id ?? null,
@@ -709,8 +777,9 @@ function StandardProductConnectionModal({ candidate, legacy, brands, standards, 
         standardName: resolvedStandardName,
         listingName: resolvedListingName,
         brandName: brandRegistration.value.canonicalName ?? "",
-        receiptBrandName: brandRegistration.value.receiptObservedName,
-        officialBrandName: brandRegistration.value.officialObservedName ?? "",
+        // Legacy RPC compatibility: the application has one brand value.
+        receiptBrandName: brandRegistration.value.canonicalName,
+        officialBrandName: brandRegistration.value.canonicalName ?? "",
         officialBrandSourceLabel: brandRegistration.value.officialSourceLabel ?? "",
         productReferenceUrl: resolvedProductUrl,
         specificationStatus,
@@ -727,15 +796,15 @@ function StandardProductConnectionModal({ candidate, legacy, brands, standards, 
         ? await buildLinkOnlyRegistrationIdentity({
             ...commonIdentityInput,
             target: {
-              ...commonTarget,
-              apparelSize: selectedApparelSize,
-              kitComponents: reviewedProposal.executionTarget.normalizedIdentity.kitComponents
-                ?? null,
-              wiperBladeFitment: reviewedProposal.executionTarget.normalizedIdentity.wiperBladeFitment
-                ?? null,
-            },
-          })
-        : await buildStrictRegistrationIdentity({
+               ...commonTarget,
+               apparelSize: selectedApparelSize,
+               kitComponents: (directMode ? null : reviewedProposal!.executionTarget.normalizedIdentity.kitComponents)
+                 ?? null,
+               wiperBladeFitment: (directMode ? null : reviewedProposal!.executionTarget.normalizedIdentity.wiperBladeFitment)
+                 ?? null,
+             },
+           }, { assessmentMode: directMode ? "admin_direct" : "independent" })
+         : await buildStrictRegistrationIdentity({
             ...commonIdentityInput,
             target: {
               ...commonTarget,
@@ -745,21 +814,25 @@ function StandardProductConnectionModal({ candidate, legacy, brands, standards, 
               coupangContentAmount: parsedCoupangContentAmount,
               coupangContentUnit: specification.contentUnit,
               coupangMaxBundleQuantity: parsedCoupangBundle!.value!.maxBundleQuantity,
-              coupangMaxBundleListedPriceKrw:
-                parsedCoupangBundle!.value!.maxBundleListedPriceKrw,
-            },
-          });
+               coupangMaxBundleListedPriceKrw:
+                 parsedCoupangBundle!.value!.maxBundleListedPriceKrw,
+             },
+           }, { assessmentMode: directMode ? "admin_direct" : "independent" });
       const executionProposal = approvalProposal && approvalFormEdited
-        ? rebuildReviewedLinkProposalForAdminTarget(reviewedProposal, identity)
+        ? rebuildReviewedLinkProposalForAdminTarget(reviewedProposal!, identity)
         : reviewedProposal;
       const executionIdentity = approvalProposal
-        ? await buildReviewedLinkProposalExecutionIdentity(executionProposal)
-        : { ...identity, executionTarget: executionProposal.executionTarget };
-      assertReviewedProposalMatchesExecutionTarget(
-        executionProposal,
-        executionIdentity.targetCanonicalJson,
-      );
-      if (!approvalProposal && pendingProposal?.targetFingerprint !== identity.targetFingerprint) {
+        ? await buildReviewedLinkProposalExecutionIdentity(executionProposal!)
+        : directMode
+          ? { ...identity, executionTarget: identity.executionTarget }
+          : { ...identity, executionTarget: reviewedProposal!.executionTarget };
+      if (!directMode) {
+        assertReviewedProposalMatchesExecutionTarget(
+          executionProposal!,
+          executionIdentity.targetCanonicalJson,
+        );
+      }
+      if (!approvalProposal && !directMode && pendingProposal?.targetFingerprint !== identity.targetFingerprint) {
         setPendingProposal({
           targetFingerprint: identity.targetFingerprint,
           receiptSummary: `${candidate.productName}, ${candidate.receiptId}, ${candidate.receiptObservedAt.slice(0, 10)}, 코드 ${candidate.sourceProductCode}`,
@@ -811,7 +884,9 @@ function StandardProductConnectionModal({ candidate, legacy, brands, standards, 
             ...commonRpcArgs,
             p_specification: selectedApparelSize
               ? `${selectedApparelSize.kr}호`
-              : officialListingInput.specificationTextRaw,
+              : expectedCatalogProductId
+                ? variants.find((variant) => variant.id === expectedCatalogProductId)?.specification ?? null
+                : officialListingInput.specificationTextRaw,
             p_apparel_size: selectedApparelSize,
           })
         : await client.rpc("approve_and_register_standard_product_link_strict_v6", {
@@ -850,7 +925,7 @@ function StandardProductConnectionModal({ candidate, legacy, brands, standards, 
   return <div className={styles.modalBackdrop} role="presentation" onMouseDown={(event) => event.target === event.currentTarget && !saving && onClose()}>
     <section className={`${styles.authModal} ${styles.officialModal} ${styles.standardConnectionModal}`} role="dialog" aria-modal="true" aria-labelledby="standard-product-title">
       <button className={styles.closeButton} onClick={onClose} disabled={saving} aria-label="표준 상품 연결 닫기">×</button>
-      <p className={styles.kicker}>STANDARD PRODUCT</p><h2 id="standard-product-title">{approvalProposal ? "표준 상품 연결 승인" : "표준 상품과 판매 규격 연결"}</h2><p className={styles.productCode}>판매처 {sellers(candidate).join(", ")} · 코드 {candidate.sourceProductCode}</p>
+       <p className={styles.kicker}>STANDARD PRODUCT</p><h2 id="standard-product-title">{approvalProposal ? "표준 상품 연결 승인" : directMode ? "표준 상품 직접 등록" : "표준 상품과 판매 규격 연결"}</h2><p className={styles.productCode}>판매처 {sellers(candidate).join(", ")} · 코드 {candidate.sourceProductCode}</p>
       {approvalProposal && <p className={styles.approvalModalHint}>GPT 제안 내용을 확인하고 그대로 승인하거나, 적용할 상품 정보만 수정한 뒤 승인하세요. 영수증·공식 상품 근거는 수정되지 않습니다.</p>}
       <div className={styles.standardConnectionModalGrid}>
         <div className={styles.standardConnectionPane}>
@@ -858,13 +933,12 @@ function StandardProductConnectionModal({ candidate, legacy, brands, standards, 
           <form className={styles.manualForm} onSubmit={saveMapping}>
             <label>기존 표준 상품<select value={standardProductId} onChange={(event) => { const nextStandard = standards.find((standard) => standard.id === event.target.value); setStandardProductId(event.target.value); setBrandName(nextStandard?.brand ?? ""); setMappingSaved(false); setMessage(""); }}><option value="">새 표준 상품 만들기</option>{standards.map((standard) => <option key={standard.id} value={standard.id}>{standard.brand ? `${standard.brand} · ` : ""}{standard.canonical_name}</option>)}</select></label>
             {whitespaceEquivalentStandard && <p className={styles.standardNameCollision} role="alert">같은 이름의 표준 상품 <b>{whitespaceEquivalentStandard.canonical_name}</b>이 이미 있습니다. 새로 만들지 말고 위 목록에서 해당 표준 상품을 직접 선택하세요.</p>}
-            {selectedStandard ? <><section className={styles.reusedProductInfo} aria-label="사용할 표준 상품 정보"><span>표준 상품 <b>{selectedStandard.canonical_name}</b></span><span>브랜드 <b>{selectedStandard.brand ?? "미지정"}</b></span><span>하위 상품명 <b>{approvalProposal ? listingName : reusedListingName}</b></span>{reusedProductUrl ? <a href={reusedProductUrl} target="_blank" rel="noreferrer">기존 상품 URL 확인</a> : <strong>기존 URL이 없어 연결할 수 없습니다.</strong>}</section>{approvalProposal && <label>적용할 판매 규격명<input required value={listingName} onChange={(event) => setListingName(event.target.value)} /><small>공식 카탈로그 원문: {candidate.officialSourceNameRaw}</small></label>}</> : <><label>새 표준 상품명<input required value={standardName} onChange={(event) => setStandardName(event.target.value)} placeholder="예: 햇반" /></label><label>{approvalProposal ? "적용할 판매 규격명" : "공식 판매 규격명"}<input required value={approvalProposal ? listingName : candidate.officialSourceNameRaw ?? listingName} onChange={(event) => setListingName(event.target.value)} readOnly={!approvalProposal && Boolean(candidate.officialSourceNameRaw)} placeholder="공식 카탈로그 원문" /><small>{approvalProposal ? `공식 카탈로그 원문: ${candidate.officialSourceNameRaw}` : "공식 스냅샷 원문은 수정하지 않습니다."}</small></label><label>상품 확인 URL<input required type="url" placeholder="https://" value={productUrl} onChange={(event) => setProductUrl(event.target.value)} /></label></>}
+             {selectedStandard ? <><section className={styles.reusedProductInfo} aria-label="사용할 표준 상품 정보"><span>표준 상품 <b>{selectedStandard.canonical_name}</b></span><span>브랜드 <b>{selectedStandard.brand ?? "미지정"}</b></span><span>하위 상품명 <b>{directMode || approvalProposal ? listingName : reusedListingName}</b></span>{reusedProductUrl ? <a href={reusedProductUrl} target="_blank" rel="noreferrer">기존 상품 URL 확인</a> : <strong>기존 URL이 없어 연결할 수 없습니다.</strong>}</section>{(approvalProposal || directMode) && <><label>적용할 판매 규격명<input required value={listingName} onChange={(event) => setListingName(event.target.value)} /><small>공식 카탈로그 원문: {candidate.officialSourceNameRaw}</small></label>{directMode && <label>상품 확인 URL<input required type="url" placeholder="https://" value={productUrl} onChange={(event) => setProductUrl(event.target.value)} /></label>}</>}</> : <><label>새 표준 상품명<input required value={standardName} onChange={(event) => setStandardName(event.target.value)} placeholder="예: 햇반" /></label><label>{approvalProposal ? "적용할 판매 규격명" : "공식 판매 규격명"}<input required value={approvalProposal || directMode ? listingName : candidate.officialSourceNameRaw ?? listingName} onChange={(event) => setListingName(event.target.value)} readOnly={!approvalProposal && !directMode && Boolean(candidate.officialSourceNameRaw)} placeholder="공식 카탈로그 원문" /><small>{approvalProposal || directMode ? `공식 카탈로그 원문: ${candidate.officialSourceNameRaw}` : "공식 스냅샷 원문은 수정하지 않습니다."}</small></label><label>상품 확인 URL<input required type="url" placeholder="https://" value={productUrl} onChange={(event) => setProductUrl(event.target.value)} /></label></>}
             <section className={styles.reusedProductInfo} aria-label="공식 대표 이미지"><span>공식 대표 이미지 <b>표준 상품군에 적용</b></span>{candidate.officialImageUrl ? <a href={candidate.officialImageUrl} target="_blank" rel="noreferrer">공식 이미지 링크 확인</a> : <strong>공식 이미지 근거가 없어 연결할 수 없습니다.</strong>}</section>
             <label>표준 브랜드<input list="standard-brand-options" value={brandName} onChange={(event) => setBrandName(event.target.value)} placeholder="예: Baskin Robbins" /><small>상품명과 분리해 표준 상품군에 지정하며, 하위 판매 규격이 이 값을 상속합니다.</small></label>
             <datalist id="standard-brand-options">{brands.map((brand) => <option key={brand.id} value={brand.canonical_name} />)}</datalist>
-            <label>영수증 브랜드 표기<input value={receiptBrandName} onChange={(event) => setReceiptBrandName(event.target.value)} placeholder="영수증에서 직접 확인한 경우만 입력" /><small>판매처와 상품 코드는 브랜드 근거 출처로 함께 보존됩니다.</small></label>
-            <label>공식몰 브랜드 표기<input value={officialBrandName} onChange={(event) => setOfficialBrandName(event.target.value)} placeholder="공식 페이지에서 직접 확인한 경우만 입력" /><small>공식 카탈로그의 업체명은 브랜드로 자동 사용하지 않습니다. 확인 URL의 도메인과 브랜드 원문을 별도 근거로 보존합니다.</small></label>
-            {!approvalProposal && <label>검토된 LinkProposal v3<textarea required rows={7} value={reviewedProposalJson} onChange={(event) => { setReviewedProposalJson(event.target.value); setPendingProposal(null); }} placeholder="독립 검토 후 생성·검증된 pricetrace-link-proposal.v3 JSON을 붙여넣으세요." /><small>내용은 이 화면의 메모리에만 유지됩니다. 공식 대표 이미지와 원본 입력 지문, 검토 대상 지문, 현재 적용값이 모두 일치해야 승인 단계가 열립니다.</small></label>}
+             {!approvalProposal && !directMode && <label>검토된 LinkProposal v3<textarea required rows={7} value={reviewedProposalJson} onChange={(event) => { setReviewedProposalJson(event.target.value); setPendingProposal(null); }} placeholder="독립 검토 후 생성·검증된 pricetrace-link-proposal.v3 JSON을 붙여넣으세요." /><small>내용은 이 화면의 메모리에만 유지됩니다. 공식 대표 이미지와 원본 입력 지문, 검토 대상 지문, 현재 적용값이 모두 일치해야 승인 단계가 열립니다.</small></label>}
+             {directMode && <label>등록 범위<select value={directExecutionMode} onChange={(event) => setDirectExecutionMode(event.target.value as "strict_v6" | "link_only_v1")}><option value="link_only_v1">영수증·공식 상품 연결만</option><option value="strict_v6">쿠팡 가격까지 함께 등록</option></select><small>직접 등록은 이 화면의 입력값을 관리자가 확인한 뒤 바로 표준상품 등록 RPC를 실행합니다.</small></label>}
             {!approvalProposal && <label className={styles.placeholderToggle}><input type="checkbox" checked={usesPlaceholderSpecification} onChange={(event) => setUsesPlaceholderSpecification(event.target.checked)} /><span><b>규격 확인 전 임시값 사용</b><small>임시 규격은 공개 단위가격 계산에서 제외됩니다.</small></span></label>}
             {approvalApparelSize ? <label>의류 사이즈<select value={apparelSizeLabel} onChange={(event) => setApparelSizeLabel(event.target.value as ApparelSizeLabel)}>{apparelSizes.map((size) => <option key={size.label} value={size.label}>{size.label}</option>)}</select><small>공식 숫자 규격은 보존하고 판매수량 1개와 분리해 저장합니다.</small></label> : !usesPlaceholderSpecification && <><label>개당 내용량<input required inputMode="decimal" placeholder="예: 210" value={contentAmount} onChange={(event) => setContentAmount(event.target.value)} /></label><label>내용 단위<select value={contentUnit} onChange={(event) => setContentUnit(event.target.value as "g" | "ml" | "each")}><option value="g">g</option><option value="ml">ml</option><option value="each">개</option></select></label><label>묶음 수<input required type="number" min="1" step="1" value={packageCount} onChange={(event) => setPackageCount(event.target.value)} /><small>공식 상품명에 수량 표기가 없으면 1개로 등록합니다.</small></label><label>단위 가격 기준<select value={referenceUnit} onChange={(event) => setReferenceUnit(Number(event.target.value) as ReferenceUnit)} disabled={contentUnit === "each"}><option value="10">{referenceLabel(contentUnit, 10)}</option><option value="100">{referenceLabel(contentUnit, 100)}</option><option value="1000">{referenceLabel(contentUnit, 1000)}</option></select></label></>}
             {pendingProposal && <section className={styles.reusedProductInfo} aria-label="연결 제안서">
@@ -879,7 +953,7 @@ function StandardProductConnectionModal({ candidate, legacy, brands, standards, 
               <small>승인 문구 : {pendingProposal.approvalStatement}</small>
               <small>입력값을 바꾸면 이 승인은 자동 무효화됩니다.</small>
             </section>}
-            <button type="submit" disabled={saving || mappingSaved || Boolean(whitespaceEquivalentStandard) || Boolean(selectedStandard && !reusedProductUrl)}>{mappingSaved ? "등록 완료" : saving ? (approvalProposal ? "승인 및 등록 중..." : "검증 중...") : approvalProposal ? (approvalFormEdited ? "수정 후 승인" : "연결 승인") : pendingProposal ? "이 제안 승인하고 등록" : "연결 제안서 만들기"}</button>
+             <button type="submit" disabled={saving || mappingSaved || Boolean(whitespaceEquivalentStandard) || Boolean(selectedStandard && !reusedProductUrl && !directMode)}>{mappingSaved ? "등록 완료" : saving ? (approvalProposal ? "승인 및 등록 중..." : directMode ? "직접 등록 중..." : "검증 중...") : approvalProposal ? (approvalFormEdited ? "수정 후 승인" : "연결 승인") : directMode ? "표준 상품 바로 등록" : pendingProposal ? "이 제안 승인하고 등록" : "연결 제안서 만들기"}</button>
           </form>
         </div>
         {isLinkOnlyApproval ? <aside className={styles.coupangModalPane} aria-label="쿠팡 가격 없음"><h3>쿠팡 가격</h3><p className={styles.muted}>이 제안은 공식 채널과 영수증 상품만 연결합니다.</p><strong>쿠팡가 없음</strong></aside> : <CoupangPriceFields productUrl={coupangProductUrl} onProductUrlChange={setCoupangProductUrl} listedPriceKrw={coupangListedPriceKrw} onListedPriceKrwChange={setCoupangListedPriceKrw} quantity={coupangQuantity} onQuantityChange={setCoupangQuantity} contentAmount={coupangContentAmount} onContentAmountChange={setCoupangContentAmount} contentUnit={usesPlaceholderSpecification ? "each" : contentUnit} maxBundleQuantity={coupangMaxBundleQuantity} onMaxBundleQuantityChange={setCoupangMaxBundleQuantity} maxBundleListedPriceKrw={coupangMaxBundleListedPriceKrw} onMaxBundleListedPriceKrwChange={setCoupangMaxBundleListedPriceKrw} />}

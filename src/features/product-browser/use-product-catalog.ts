@@ -29,6 +29,7 @@ export function useProductCatalog(authRevision: number) {
   const [exactStandardMappings, setExactStandardMappings] = useState<Map<string, string>>(new Map());
   const [catalogSpecs, setCatalogSpecs] = useState<Map<string, CatalogSpecification>>(new Map());
   const [standardNames, setStandardNames] = useState<Map<string, string>>(new Map());
+  const [standardBrands, setStandardBrands] = useState<Map<string, string>>(new Map());
   const [standardImages, setStandardImages] = useState<Map<string, string>>(new Map());
   const [coupangByStandard, setCoupangByStandard] = useState<Map<string, PublicCoupangPrice>>(new Map());
   const [catalogNotice, setCatalogNotice] = useState("");
@@ -52,10 +53,14 @@ export function useProductCatalog(authRevision: number) {
       const exactMappings = new Map<string, string>();
       let specs = new Map<string, CatalogSpecification>();
       let names = new Map<string, string>();
+      let brands = new Map<string, string>();
       let images = new Map<string, string>();
       let coupangPrices = new Map<string, PublicCoupangPrice>();
 
-      const v2PublicResult = await client.rpc("get_public_exact_standard_product_catalog_v2");
+      const v3PublicResult = await client.rpc("get_public_exact_standard_product_catalog_v3");
+      const v2PublicResult = v3PublicResult.error && isMissingCatalogRpc(v3PublicResult.error)
+        ? await client.rpc("get_public_exact_standard_product_catalog_v2")
+        : v3PublicResult;
       const exactPublicResult = v2PublicResult.error && isMissingCatalogRpc(v2PublicResult.error)
         ? await client.rpc("get_public_exact_standard_product_catalog")
         : v2PublicResult;
@@ -72,6 +77,7 @@ export function useProductCatalog(authRevision: number) {
           }
           specs = publicIndex.catalogSpecs;
           names = publicIndex.standardNames;
+          brands = publicIndex.standardBrands;
           coupangPrices = publicIndex.coupangByStandard;
           publicCatalogReady = true;
           coupangReady = true;
@@ -104,7 +110,7 @@ export function useProductCatalog(authRevision: number) {
             .eq("specification_status", "verified"),
           client
             .from("standard_products")
-            .select("id,canonical_name")
+            .select("id,canonical_name,brand")
             .eq("status", "active"),
           client
             .from("standard_product_coupang_prices")
@@ -144,6 +150,12 @@ export function useProductCatalog(authRevision: number) {
               row.canonical_name as string,
             ] as const),
           ]);
+          brands = new Map([
+            ...brands,
+            ...(standardResult.data ?? [])
+              .filter((row) => typeof row.brand === "string" && row.brand.trim().length > 0)
+              .map((row) => [row.id as string, row.brand as string] as const),
+          ]);
         }
         if (!coupangResult.error) {
           const mergedCoupang = new Map(coupangPrices);
@@ -177,6 +189,7 @@ export function useProductCatalog(authRevision: number) {
       setExactStandardMappings(exactMappings);
       setCatalogSpecs(specs);
       setStandardNames(names);
+      setStandardBrands(brands);
       setStandardImages(images);
       setCoupangByStandard(coupangPrices);
       setCatalogNotice(
@@ -198,6 +211,7 @@ export function useProductCatalog(authRevision: number) {
     exactStandardMappings,
     catalogSpecs,
     standardNames,
+    standardBrands,
     standardImages,
     coupangByStandard,
     catalogNotice,

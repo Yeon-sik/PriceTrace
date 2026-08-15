@@ -359,6 +359,43 @@ describe("strict standard product registration", () => {
     })).toBeNull();
   });
 
+  it("reuses a verified legacy variant when only its specification text is null", () => {
+    const variants = [{
+      id: "legacy-420g",
+      standardProductId: "standard",
+      canonicalName: "product 420g",
+      specification: "",
+      attributes: {},
+      specificationStatus: "verified" as const,
+      contentAmount: 420,
+      contentUnit: "g" as const,
+      packageCount: 1,
+      referenceUnit: 100,
+    }];
+    expect(findExpectedCatalogProductId(variants, {
+      standardProductId: "standard",
+      canonicalName: "product 420g",
+      specification: "420g",
+      attributes: {},
+      specificationStatus: "verified",
+      contentAmount: 420,
+      contentUnit: "g",
+      packageCount: 1,
+      referenceUnit: 100,
+    })).toBe("legacy-420g");
+    expect(findExpectedCatalogProductId(variants, {
+      standardProductId: "standard",
+      canonicalName: "product 420g",
+      specification: "420g",
+      attributes: {},
+      specificationStatus: "verified",
+      contentAmount: 90,
+      contentUnit: "g",
+      packageCount: 1,
+      referenceUnit: 100,
+    })).toBeNull();
+  });
+
   it("produces stable fingerprints and changes the target fingerprint when an effect changes", async () => {
     const base = {
       caseId: "merchant:와마트 일산점:35276",

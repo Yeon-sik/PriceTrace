@@ -1,6 +1,8 @@
 import { z } from "zod";
 
 export const RESTAURANT_MENU_READ_SCHEMA_VERSION = "restaurant-menu-read.v1" as const;
+export const RESTAURANT_DIRECTORY_SCHEMA_VERSION = "restaurant-directory.v1" as const;
+export const RESTAURANT_DETAIL_SCHEMA_VERSION = "restaurant-detail.v1" as const;
 export const RESTAURANT_MENU_READ_NAMESPACE = "pricetrace" as const;
 
 const sha256RevisionSchema = z.string().regex(/^sha256:[a-f0-9]{64}$/);
@@ -80,16 +82,18 @@ export const RestaurantLocationSchema = z.object({
   sourceUrl: nullableUrlSchema,
 }).strict();
 
+export const RestaurantProfileSchema = z.object({
+  id: z.string().uuid(),
+  brandId: z.string().uuid().nullable(),
+  brand: z.string().trim().min(1),
+  legalName: nullableTrimmedStringSchema,
+  cuisineType: nullableTrimmedStringSchema,
+  officialSiteUrl: nullableUrlSchema,
+  updatedAt: offsetDateTimeSchema,
+}).strict();
+
 export const RestaurantMenuReadEntrySchema = z.object({
-  restaurant: z.object({
-    id: z.string().uuid(),
-    brandId: z.string().uuid().nullable(),
-    brand: z.string().trim().min(1),
-    legalName: nullableTrimmedStringSchema,
-    cuisineType: nullableTrimmedStringSchema,
-    officialSiteUrl: nullableUrlSchema,
-    updatedAt: offsetDateTimeSchema,
-  }).strict(),
+  restaurant: RestaurantProfileSchema,
   locations: z.array(RestaurantLocationSchema).min(1),
   menus: z.array(RestaurantMenuSchema).min(1),
   revision: sha256RevisionSchema,
@@ -204,10 +208,101 @@ export const RestaurantMenuReadV1Schema = z.object({
   }
 });
 
+export const RestaurantDirectoryEntrySchema = z.object({
+  restaurant: RestaurantProfileSchema,
+  locations: z.array(RestaurantLocationSchema),
+  menuCount: z.number().int().nonnegative(),
+  latestObservedAt: offsetDateTimeSchema.nullable(),
+  revision: sha256RevisionSchema,
+}).strict();
+
+export const RestaurantDirectoryV1Schema = z.object({
+  schemaVersion: z.literal(RESTAURANT_DIRECTORY_SCHEMA_VERSION),
+  namespace: z.literal(RESTAURANT_MENU_READ_NAMESPACE),
+  revision: sha256RevisionSchema,
+  restaurants: z.array(RestaurantDirectoryEntrySchema),
+}).strict().superRefine((payload, context) => {
+  const restaurantIds = new Set<string>();
+  for (const [index, entry] of payload.restaurants.entries()) {
+    if (restaurantIds.has(entry.restaurant.id)) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["restaurants", index, "restaurant", "id"],
+        message: "음식점 디렉터리에서 ID가 중복되었습니다.",
+      });
+    }
+    restaurantIds.add(entry.restaurant.id);
+  }
+});
+
+export const RestaurantDetailV1Schema = z.object({
+  schemaVersion: z.literal(RESTAURANT_DETAIL_SCHEMA_VERSION),
+  namespace: z.literal(RESTAURANT_MENU_READ_NAMESPACE),
+  revision: sha256RevisionSchema,
+  restaurant: RestaurantProfileSchema,
+  locations: z.array(RestaurantLocationSchema),
+  menus: z.array(RestaurantMenuSchema),
+}).strict().superRefine((detail, context) => {
+  const locationIds = new Set<string>();
+  const sourceIdentities = new Set<string>();
+  for (const [index, location] of detail.locations.entries()) {
+    if (locationIds.has(location.id)) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["locations", index, "id"],
+        message: "음식점 상세 지점 ID가 중복되었습니다.",
+      });
+    }
+    locationIds.add(location.id);
+    const sourceIdentity = `${location.sourceLabel}\u0000${location.sourceRestaurantCode}`;
+    if (sourceIdentities.has(sourceIdentity)) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["locations", index],
+        message: "음식점 상세 source identity가 중복되었습니다.",
+      });
+    }
+    sourceIdentities.add(sourceIdentity);
+  }
+
+  const menuIds = new Set<string>();
+  const catalogProductIds = new Set<string>();
+  for (const [index, menu] of detail.menus.entries()) {
+    if (menuIds.has(menu.id)) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["menus", index, "id"],
+        message: "음식점 상세 메뉴 ID가 중복되었습니다.",
+      });
+    }
+    menuIds.add(menu.id);
+    if (catalogProductIds.has(menu.catalogProductId)) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["menus", index, "catalogProductId"],
+        message: "음식점 상세 catalog_product_id가 중복되었습니다.",
+      });
+    }
+    catalogProductIds.add(menu.catalogProductId);
+    for (const [observationIndex, observation] of menu.observations.entries()) {
+      if (!locationIds.has(observation.restaurantSourceId)) {
+        context.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["menus", index, "observations", observationIndex, "restaurantSourceId"],
+          message: "음식점 상세 가격 관측이 이 음식점의 지점에 속하지 않습니다.",
+        });
+      }
+    }
+  }
+});
+
 export type RestaurantMenuPriceObservation = z.infer<typeof RestaurantMenuPriceObservationSchema>;
 export type RestaurantMenu = z.infer<typeof RestaurantMenuSchema>;
 export type RestaurantMenuReadEntry = z.infer<typeof RestaurantMenuReadEntrySchema>;
 export type RestaurantMenuReadV1 = z.infer<typeof RestaurantMenuReadV1Schema>;
+export type RestaurantDirectoryEntry = z.infer<typeof RestaurantDirectoryEntrySchema>;
+export type RestaurantDirectoryV1 = z.infer<typeof RestaurantDirectoryV1Schema>;
+export type RestaurantDetailV1 = z.infer<typeof RestaurantDetailV1Schema>;
 
 const optionalTextInputSchema = z.string().trim().max(500).nullable();
 const optionalUrlInputSchema = httpUrlSchema.nullable();
@@ -331,5 +426,42 @@ export function filterRestaurantMenuEntries(
         .includes(normalized)
     ));
     return menus.length > 0 ? [{ ...entry, menus }] : [];
+  });
+}
+
+export function filterRestaurantDirectoryEntries(
+  entries: readonly RestaurantDirectoryEntry[],
+  query: string,
+): RestaurantDirectoryEntry[] {
+  const normalized = query.trim().toLocaleLowerCase("ko-KR");
+  if (!normalized) return [...entries];
+
+  return entries.filter((entry) => [
+    entry.restaurant.brand,
+    entry.restaurant.legalName,
+    entry.restaurant.cuisineType,
+    ...entry.locations.flatMap((location) => [location.locationLabel, location.sourceLabel]),
+  ].filter(Boolean).join(" ").toLocaleLowerCase("ko-KR").includes(normalized));
+}
+
+export function restaurantMenuCategories(menus: readonly RestaurantMenu[]): string[] {
+  return [...new Set(menus.map((menu) => menu.categoryLabel ?? "기타"))]
+    .sort((left, right) => left.localeCompare(right, "ko-KR"));
+}
+
+export function filterRestaurantMenus(
+  menus: readonly RestaurantMenu[],
+  query: string,
+  category: string,
+): RestaurantMenu[] {
+  const normalized = query.trim().toLocaleLowerCase("ko-KR");
+  return menus.filter((menu) => {
+    const matchesCategory = category === "전체" || (menu.categoryLabel ?? "기타") === category;
+    const matchesQuery = !normalized || [menu.name, menu.categoryLabel, menu.servingLabel]
+      .filter(Boolean)
+      .join(" ")
+      .toLocaleLowerCase("ko-KR")
+      .includes(normalized);
+    return matchesCategory && matchesQuery;
   });
 }

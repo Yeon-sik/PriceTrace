@@ -1,26 +1,28 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import type { RestaurantMenuReadV1 } from "../../domain/restaurant-menu";
 import { getSupabaseBrowserClient } from "../../lib/supabase/client";
 import { RestaurantMenuRepository } from "../../repositories/restaurant-menu.repository";
 
-export function useRestaurantMenuCatalog() {
+export function useRestaurantMenuCatalog(selectedRestaurant: string | null = null) {
   const client = getSupabaseBrowserClient();
   const repository = useMemo(
     () => client ? new RestaurantMenuRepository(client) : null,
     [client],
   );
-  const [payload, setPayload] = useState<RestaurantMenuReadV1 | null>(null);
+  const [directory, setDirectory] = useState<Awaited<ReturnType<RestaurantMenuRepository["readDirectory"]>> | null>(null);
+  const [detail, setDetail] = useState<Awaited<ReturnType<RestaurantMenuRepository["readDetail"]>> | null>(null);
   const [loading, setLoading] = useState(Boolean(repository));
+  const [detailLoading, setDetailLoading] = useState(false);
   const [error, setError] = useState("");
+  const [detailError, setDetailError] = useState("");
   const [reloadToken, setReloadToken] = useState(0);
   const refresh = useCallback(() => setReloadToken((current) => current + 1), []);
 
   useEffect(() => {
     let active = true;
     if (!repository) {
-      setPayload(null);
+      setDirectory(null);
       setLoading(false);
       setError("");
       return () => { active = false; };
@@ -28,11 +30,11 @@ export function useRestaurantMenuCatalog() {
 
     setLoading(true);
     setError("");
-    void repository.read({ limit: 200 }).then((nextPayload) => {
-      if (active) setPayload(nextPayload);
+    void repository.readDirectory({ limit: 200 }).then((nextDirectory) => {
+      if (active) setDirectory(nextDirectory);
     }).catch((reason: unknown) => {
       if (!active) return;
-      setPayload(null);
+      setDirectory(null);
       setError(reason instanceof Error ? reason.message : "음식점 메뉴 정보를 불러오지 못했습니다.");
     }).finally(() => {
       if (active) setLoading(false);
@@ -41,11 +43,38 @@ export function useRestaurantMenuCatalog() {
     return () => { active = false; };
   }, [reloadToken, repository]);
 
+  useEffect(() => {
+    let active = true;
+    if (!repository || !selectedRestaurant) {
+      setDetail(null);
+      setDetailLoading(false);
+      setDetailError("");
+      return () => { active = false; };
+    }
+
+    setDetailLoading(true);
+    setDetailError("");
+    void repository.readDetail(selectedRestaurant).then((nextDetail) => {
+      if (active) setDetail(nextDetail);
+    }).catch((reason: unknown) => {
+      if (!active) return;
+      setDetail(null);
+      setDetailError(reason instanceof Error ? reason.message : "음식점 상세 정보를 불러오지 못했습니다.");
+    }).finally(() => {
+      if (active) setDetailLoading(false);
+    });
+
+    return () => { active = false; };
+  }, [reloadToken, repository, selectedRestaurant]);
+
   return {
     configured: repository !== null,
-    payload,
+    directory,
+    detail,
     loading,
+    detailLoading,
     error,
+    detailError,
     refresh,
   };
 }

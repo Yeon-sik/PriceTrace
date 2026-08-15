@@ -61,6 +61,10 @@ const nutritionFood: NutritionFood = {
   sourceRevision: "label-v2",
   revision: 2,
   approvedCatalogProductId: null,
+  catalogProductRevision: null,
+  catalogContentAmount: null,
+  catalogContentUnit: null,
+  catalogPackageCount: null,
 };
 
 function nutritionFoodRow(revision = nutritionFood.revision) {
@@ -91,6 +95,10 @@ function nutritionFoodRow(revision = nutritionFood.revision) {
     source_revision: nutritionFood.sourceRevision,
     revision,
     catalog_product_id: null,
+    catalog_product_revision: nutritionFood.catalogProductRevision,
+    catalog_content_amount: nutritionFood.catalogContentAmount,
+    catalog_content_unit: nutritionFood.catalogContentUnit,
+    catalog_package_count: nutritionFood.catalogPackageCount,
   };
 }
 

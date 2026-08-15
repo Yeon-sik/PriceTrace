@@ -1,7 +1,12 @@
 import { describe, expect, it } from "vitest";
 import {
+  RestaurantDetailV1Schema,
+  RestaurantDirectoryV1Schema,
   RestaurantMenuReadV1Schema,
+  filterRestaurantDirectoryEntries,
   filterRestaurantMenuEntries,
+  filterRestaurantMenus,
+  restaurantMenuCategories,
   summarizeRestaurantMenuPrices,
 } from "./restaurant-menu";
 
@@ -74,6 +79,33 @@ function entry() {
 }
 
 describe("restaurant menu domain", () => {
+  it("validates the directory and detail contracts separately", () => {
+    const restaurant = entry();
+    const directory = RestaurantDirectoryV1Schema.parse({
+      schemaVersion: "restaurant-directory.v1",
+      namespace: "pricetrace",
+      revision,
+      restaurants: [{
+        revision,
+        restaurant: restaurant.restaurant,
+        locations: restaurant.locations,
+        menuCount: restaurant.menus.length,
+        latestObservedAt: restaurant.menus[0].observations[0].observedAt,
+      }],
+    });
+    const detail = RestaurantDetailV1Schema.parse({
+      schemaVersion: "restaurant-detail.v1",
+      namespace: "pricetrace",
+      revision,
+      restaurant: restaurant.restaurant,
+      locations: restaurant.locations,
+      menus: restaurant.menus,
+    });
+
+    expect(directory.restaurants[0].menuCount).toBe(1);
+    expect(detail.menus[0].catalogProductId).toBe(restaurant.menus[0].catalogProductId);
+  });
+
   it("keeps restaurant brand and exact catalog product identity separate", () => {
     const restaurant = entry();
     expect(restaurant.restaurant.brand).toBe("한결식당");
@@ -95,6 +127,27 @@ describe("restaurant menu domain", () => {
     expect(filterRestaurantMenuEntries([restaurant], "서울점")).toHaveLength(1);
     expect(filterRestaurantMenuEntries([restaurant], "비빔밥")[0].menus).toHaveLength(1);
     expect(filterRestaurantMenuEntries([restaurant], "없는 메뉴")).toEqual([]);
+  });
+
+  it("filters the directory and menu categories as separate navigation concerns", () => {
+    const restaurant = entry();
+    const directory = RestaurantDirectoryV1Schema.parse({
+      schemaVersion: "restaurant-directory.v1",
+      namespace: "pricetrace",
+      revision,
+      restaurants: [{
+        revision,
+        restaurant: restaurant.restaurant,
+        locations: restaurant.locations,
+        menuCount: 1,
+        latestObservedAt: null,
+      }],
+    }).restaurants;
+
+    expect(filterRestaurantDirectoryEntries(directory, "서울점")).toHaveLength(1);
+    expect(restaurantMenuCategories(restaurant.menus)).toEqual(["식사"]);
+    expect(filterRestaurantMenus(restaurant.menus, "비빔밥", "식사")).toHaveLength(1);
+    expect(filterRestaurantMenus(restaurant.menus, "비빔밥", "기타")).toEqual([]);
   });
 
   it("rejects public observations that break price conservation", () => {

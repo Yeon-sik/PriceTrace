@@ -98,6 +98,8 @@ export type StrictRegistrationIdentityInput = {
   };
 };
 
+export type RegistrationAssessmentMode = "independent" | "admin_direct";
+
 export type StrictLinkProposalEvidence = {
   sourceType:
     | "receipt"
@@ -1111,18 +1113,28 @@ export function findExpectedCatalogProductId(
   variants: StrictCatalogVariant[],
   expected: Omit<StrictCatalogVariant, "id">,
 ) {
-  const matches = variants.filter((variant) => (
+  const matches = variants.filter((variant) => {
+    const specificationMatches = variant.specification.trim() === expected.specification.trim()
+      || (
+        variant.specification.trim() === ""
+        && variant.specificationStatus === "verified"
+        && variant.contentAmount === expected.contentAmount
+        && variant.contentUnit === expected.contentUnit
+        && variant.packageCount === expected.packageCount
+      );
+    return (
     variant.standardProductId === expected.standardProductId
     && normalizeProductNameForExactMatch(variant.canonicalName)
       === normalizeProductNameForExactMatch(expected.canonicalName)
-    && variant.specification.trim() === expected.specification.trim()
+    && specificationMatches
     && canonicalJson(variant.attributes) === canonicalJson(expected.attributes)
     && variant.specificationStatus === expected.specificationStatus
     && variant.contentAmount === expected.contentAmount
     && variant.contentUnit === expected.contentUnit
     && variant.packageCount === expected.packageCount
     && variant.referenceUnit === expected.referenceUnit
-  ));
+    );
+  });
   if (matches.length > 1) {
     throw new Error("동일한 표준 판매 규격이 여러 건입니다. 중복을 먼저 정리하세요.");
   }
@@ -1591,12 +1603,13 @@ function assertCompleteAssessment(
     "receipt" | "officialListing" | "assessment"
   >,
   coupangProductUrl?: string,
+  assessmentMode: RegistrationAssessmentMode = "independent",
 ) {
   const requireCoupang = Boolean(coupangProductUrl);
   const { decision, evidence, review } = input.assessment;
   if (
     review.verdict !== "approve"
-    || review.reviewerAgent !== "pricetrace_independent_reviewer"
+    || (assessmentMode === "independent" && review.reviewerAgent !== "pricetrace_independent_reviewer")
     || review.evidenceQuality !== "sufficient"
     || review.conflicts.length > 0
     || decision.conflictingFields.length > 0
@@ -1648,7 +1661,10 @@ function assertCompleteAssessment(
   }
 }
 
-export async function buildStrictRegistrationIdentity(input: StrictRegistrationIdentityInput) {
+export async function buildStrictRegistrationIdentity(
+  input: StrictRegistrationIdentityInput,
+  options: { assessmentMode?: RegistrationAssessmentMode } = {},
+) {
   if (input.receipt.sourceCatalogNamespace !== input.officialListing.channelId) {
     throw new Error("영수증 판매처와 공식 상품의 카탈로그 채널이 일치하지 않습니다.");
   }
@@ -1681,7 +1697,7 @@ export async function buildStrictRegistrationIdentity(input: StrictRegistrationI
   ) {
     throw new Error("대표 이미지 생성·정확 재사용 상태가 현재 표준 상품과 일치하지 않습니다.");
   }
-  assertCompleteAssessment(input, input.target.coupangProductUrl);
+  assertCompleteAssessment(input, input.target.coupangProductUrl, options.assessmentMode);
   if (input.verifiedNameEquivalence) {
     assertVerifiedNameEquivalence(
       input.verifiedNameEquivalence,
@@ -1875,11 +1891,13 @@ export async function buildStrictRegistrationIdentity(input: StrictRegistrationI
     targetCanonicalJson,
     idempotencyKey: `standard-product-link:${targetFingerprint.slice("sha256:".length)}`,
     approvalStatement,
+    executionTarget: target,
   };
 }
 
 export async function buildLinkOnlyRegistrationIdentity(
   input: LinkOnlyRegistrationIdentityInput,
+  options: { assessmentMode?: RegistrationAssessmentMode } = {},
 ) {
   if (input.receipt.sourceCatalogNamespace !== input.officialListing.channelId) {
     throw new Error("영수증 판매처와 공식 상품의 카탈로그 채널이 일치하지 않습니다.");
@@ -1949,7 +1967,7 @@ export async function buildLinkOnlyRegistrationIdentity(
   ) {
     throw new Error("대표 이미지 생성·정확 재사용 상태가 현재 표준 상품과 일치하지 않습니다.");
   }
-  assertCompleteAssessment(input);
+  assertCompleteAssessment(input, undefined, options.assessmentMode);
   if (input.verifiedNameEquivalence) {
     assertVerifiedNameEquivalence(
       input.verifiedNameEquivalence,
@@ -2250,6 +2268,7 @@ export async function buildLinkOnlyRegistrationIdentity(
     targetCanonicalJson,
     idempotencyKey: `standard-product-link:${targetFingerprint.slice("sha256:".length)}`,
     approvalStatement,
+    executionTarget: target,
   };
 }
 

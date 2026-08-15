@@ -11,9 +11,10 @@ import { AdminApprovalExecutionPanel } from "./AdminApprovalExecutionPanel";
 import { StandardProductWorkspace } from "./OfficialProductPanel";
 import { MarketPricePanel } from "./MarketPricePanel";
 import { AdminRestaurantMenuPanel } from "./AdminRestaurantMenuPanel";
+import { AdminUnverifiedRegistrationPanel } from "./AdminUnverifiedRegistrationPanel";
 import styles from "./page.module.css";
 
-type AdminTab = "receipts" | "restaurants" | "official" | "approvals" | "market" | "quality";
+type AdminTab = "receipts" | "restaurants" | "unverified" | "official" | "approvals" | "market" | "quality";
 export function AdminPage({ candidates, approvalCandidates, receipts }: { candidates: OfficialProductCandidate[]; approvalCandidates: OfficialProductCandidate[]; receipts: Receipt[] }) {
   const [tab, setTab] = useState<AdminTab>("receipts");
   return <section className={styles.browser}>
@@ -21,13 +22,15 @@ export function AdminPage({ candidates, approvalCandidates, receipts }: { candid
     <div className={styles.adminTabs} role="tablist" aria-label="관리자 기능">
       <button role="tab" aria-selected={tab === "receipts"} onClick={() => setTab("receipts")}>영수증 기록</button>
       <button role="tab" aria-selected={tab === "restaurants"} onClick={() => setTab("restaurants")}>음식점·메뉴</button>
-      <button role="tab" aria-selected={tab === "official"} onClick={() => setTab("official")}>표준 상품 관리</button>
-      <button role="tab" aria-selected={tab === "approvals"} onClick={() => setTab("approvals")}>연결 승인</button>
+      <button role="tab" aria-selected={tab === "unverified"} onClick={() => setTab("unverified")}>미인증 직접 등록</button>
+      <button role="tab" aria-selected={tab === "official"} onClick={() => setTab("official")}>표준 상품 직접 연결</button>
+      <button role="tab" aria-selected={tab === "approvals"} onClick={() => setTab("approvals")}>AI 제안 승인</button>
       <button role="tab" aria-selected={tab === "market"} onClick={() => setTab("market")}>시장가</button>
       <button role="tab" aria-selected={tab === "quality"} onClick={() => setTab("quality")}>품질 검토</button>
     </div>
     {tab === "receipts" && <AdminReceiptHistory receipts={receipts} />}
     {tab === "restaurants" && <AdminRestaurantMenuPanel />}
+    {tab === "unverified" && <AdminUnverifiedRegistrationPanel />}
     {tab === "official" && <StandardProductWorkspace candidates={candidates} onOpenApprovalQueue={() => setTab("approvals")} />}
     {tab === "approvals" && <AdminApprovalExecutionPanel candidates={approvalCandidates} />}
     {tab === "market" && <MarketPricePanel />}

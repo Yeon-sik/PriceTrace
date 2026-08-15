@@ -21,7 +21,7 @@ export type MarketPriceObservation = {
   shippingFeeKrw: number;
   minimumOrderQuantity: number;
   observedAt: string;
-  verificationStatus: "pending" | "verified" | "rejected";
+  verificationStatus: "pending" | "verified" | "unverified" | "rejected";
 };
 
 export type NormalizedMarketPrice = MarketPriceObservation & {

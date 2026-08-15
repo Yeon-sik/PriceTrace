@@ -63,6 +63,78 @@ function readPayload(id = restaurantId) {
 }
 
 describe("RestaurantMenuRepository", () => {
+  it("reads a lightweight restaurant directory before loading a detail", async () => {
+    const rpc = vi.fn().mockResolvedValue({
+      data: {
+        schemaVersion: "restaurant-directory.v1",
+        namespace: "pricetrace",
+        revision,
+        restaurants: [{
+          revision,
+          restaurant: readPayload().restaurants[0].restaurant,
+          locations: readPayload().restaurants[0].locations,
+          menuCount: 1,
+          latestObservedAt: "2026-08-12T00:00:00+00:00",
+        }],
+      },
+      error: null,
+    });
+    const repository = new RestaurantMenuRepository({ rpc } as unknown as SupabaseClient);
+
+    const result = await repository.readDirectory({ query: "한식", limit: 500 });
+
+    expect(rpc).toHaveBeenCalledWith("get_restaurant_directory_v1", {
+      p_query: "한식",
+      p_limit: 200,
+    });
+    expect(result.restaurants[0].menuCount).toBe(1);
+  });
+
+  it("loads one restaurant detail by exact restaurant identity", async () => {
+    const restaurant = readPayload().restaurants[0];
+    const rpc = vi.fn().mockResolvedValue({
+      data: {
+        schemaVersion: "restaurant-detail.v1",
+        namespace: "pricetrace",
+        ...restaurant,
+      },
+      error: null,
+    });
+    const repository = new RestaurantMenuRepository({ rpc } as unknown as SupabaseClient);
+
+    const result = await repository.readDetail(restaurantId);
+
+    expect(rpc).toHaveBeenCalledWith("get_restaurant_detail_v1", {
+      p_restaurant_id: restaurantId,
+    });
+    expect(result.restaurant.id).toBe(restaurantId);
+    expect(result.menus[0].catalogProductId).toBe(catalogProductId);
+  });
+
+  it("falls back to the existing menu read RPC until the new directory RPC is deployed", async () => {
+    const rpc = vi.fn((name: string) => {
+      if (name === "get_restaurant_directory_v1") {
+        return Promise.resolve({
+          data: null,
+          error: { code: "PGRST202", message: "Could not find the function public.get_restaurant_directory_v1(p_limit, p_query) in the schema cache" },
+        });
+      }
+      return Promise.resolve({ data: readPayload(), error: null });
+    });
+    const repository = new RestaurantMenuRepository({ rpc } as unknown as SupabaseClient);
+
+    const result = await repository.readDirectory();
+
+    expect(result.schemaVersion).toBe("restaurant-directory.v1");
+    expect(result.restaurants[0].restaurant.id).toBe(restaurantId);
+    expect(rpc).toHaveBeenCalledWith("get_restaurant_menu_read_v1", {
+      p_restaurant_id: null,
+      p_catalog_product_id: null,
+      p_query: null,
+      p_limit: 100,
+    });
+  });
+
   it("reads the versioned restaurant and exact menu contract", async () => {
     const rpc = vi.fn().mockResolvedValue({ data: readPayload(), error: null });
     const repository = new RestaurantMenuRepository({ rpc } as unknown as SupabaseClient);
