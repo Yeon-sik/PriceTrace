@@ -727,6 +727,13 @@ describe("strict standard product registration", () => {
       },
     };
     const first = await buildStrictRegistrationIdentity(base);
+    const differentCoupangWeight = await buildStrictRegistrationIdentity({
+      ...base,
+      target: {
+        ...base.target,
+        coupangContentAmount: 360,
+      },
+    });
     const repeated = await buildStrictRegistrationIdentity(base);
     const verifiedMismatch = await buildStrictRegistrationIdentity(verifiedMismatchBase);
     const containedMismatch = await buildStrictRegistrationIdentity(containedMismatchBase);
@@ -821,6 +828,24 @@ describe("strict standard product registration", () => {
       },
     });
     expect(first).toEqual(repeated);
+    expect(JSON.parse(differentCoupangWeight.targetCanonicalJson)).toMatchObject({
+      normalizedIdentity: { contentAmount: 52, contentUnit: "g" },
+      coupangOffer: { contentAmount: 360, contentUnit: "g" },
+    });
+    await expect(buildStrictRegistrationIdentity({
+      ...base,
+      officialListing: {
+        ...base.officialListing,
+        specificationTextRaw: "4개",
+      },
+      target: {
+        ...base.target,
+        contentAmount: 4,
+        contentUnit: "each",
+        coupangContentAmount: 5,
+        coupangContentUnit: "each",
+      },
+    })).rejects.toThrow("개 단위는 판매 규격과 같아야 합니다.");
     expect(first.inputFingerprint).toMatch(/^sha256:[a-f0-9]{64}$/);
     expect(first.inputFingerprint).not.toBe(changedSnapshot.inputFingerprint);
     expect(first.targetFingerprint).not.toBe(changedPrice.targetFingerprint);
