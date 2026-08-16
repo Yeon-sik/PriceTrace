@@ -1692,7 +1692,7 @@ export async function buildStrictRegistrationIdentity(
   if (exactNameMatch && input.verifiedNameEquivalence) {
     throw new Error("완전 일치 이름에는 검증된 이름 동등성 예외를 사용할 수 없습니다.");
   }
-  if (!exactNameMatch && !input.verifiedNameEquivalence) {
+  if (!exactNameMatch && !input.verifiedNameEquivalence && options.assessmentMode !== "admin_direct") {
     throw new Error("영수증명과 공식 상품명이 다르면 검증된 이름 동등성 근거가 필요합니다.");
   }
   if (
@@ -1789,7 +1789,9 @@ export async function buildStrictRegistrationIdentity(
     exactNameMatch,
     outcome: exactNameMatch
       ? "apply_official_identity"
-      : "apply_verified_name_equivalence",
+      : input.verifiedNameEquivalence
+        ? "apply_verified_name_equivalence"
+        : "not_applicable",
     importedOfficialFields: officialHasExplicitPackageCount
       ? ["brand", "contentAmount", "contentUnit", "packageCount"]
       : ["brand", "contentAmount", "contentUnit"],
@@ -1970,7 +1972,7 @@ export async function buildLinkOnlyRegistrationIdentity(
   if (exactNameMatch && input.verifiedNameEquivalence) {
     throw new Error("완전 일치 이름에는 검증된 이름 동등성 예외를 사용할 수 없습니다.");
   }
-  if (!exactNameMatch && !input.verifiedNameEquivalence) {
+  if (!exactNameMatch && !input.verifiedNameEquivalence && options.assessmentMode !== "admin_direct") {
     throw new Error("영수증명과 공식 상품명이 다르면 검증된 이름 동등성 근거가 필요합니다.");
   }
   if (
@@ -2179,7 +2181,9 @@ export async function buildLinkOnlyRegistrationIdentity(
     exactNameMatch,
     outcome: exactNameMatch
       ? "apply_official_identity"
-      : "apply_verified_name_equivalence",
+      : input.verifiedNameEquivalence
+        ? "apply_verified_name_equivalence"
+        : "not_applicable",
     importedOfficialFields,
     ...(input.verifiedNameEquivalence
       ? { verifiedEquivalence: { ...input.verifiedNameEquivalence } }

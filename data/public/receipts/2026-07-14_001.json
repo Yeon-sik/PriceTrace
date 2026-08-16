@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "privacyPolicyVersion": 2,
-  "revision": "ce8c7a5da6309b7b",
+  "revision": "8cc63bfd7bc5641b",
   "id": "2026-07-14_001",
   "fileName": "2026-07-14_001.json",
   "merchant": {
@@ -677,7 +677,7 @@
     {
       "id": "line_fd1fc1ed8c3f3a19",
       "type": "product",
-      "description": "코주부 CLASSIC육포mild",
+      "description": "코주부 CLASSIC육포Mild",
       "sourceLineReferences": [
         "32",
         "34"
