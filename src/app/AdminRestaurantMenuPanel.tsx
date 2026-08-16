@@ -9,7 +9,10 @@ import type {
 import { formatKrw } from "@/domain/settlement";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import { RestaurantMenuRepository } from "@/repositories/restaurant-menu.repository";
+import { AdminDirectRestaurantMenuPanel } from "./AdminDirectRestaurantMenuPanel";
 import styles from "./page.module.css";
+
+type RegistrationTab = "receipt" | "direct";
 
 type FormState = {
   idempotencyKey: string;
@@ -80,6 +83,7 @@ export function AdminRestaurantMenuPanel() {
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
   const [result, setResult] = useState<RestaurantMenuRegistrationResult | null>(null);
+  const [registrationTab, setRegistrationTab] = useState<RegistrationTab>("receipt");
 
   const load = useCallback(async () => {
     if (!repository) return;
@@ -242,7 +246,7 @@ export function AdminRestaurantMenuPanel() {
 
   return <section className={styles.restaurantAdminPanel} aria-labelledby="restaurant-admin-title">
     <div className={styles.adminSectionHead}>
-      <div><p className={styles.kicker}>DATABASE RECEIPT-VERIFIED MENU</p><h2 id="restaurant-admin-title">음식점·메뉴 가격 등록</h2><p>브라우저에서 가격이나 영수증 ID를 입력받지 않습니다. 서버가 실제 menu_item 영수증 FK chain을 확인한 후보만 등록할 수 있습니다.</p></div>
+      <div><p className={styles.kicker}>RESTAURANT MENU REGISTRATION</p><h2 id="restaurant-admin-title">음식점·메뉴 가격 등록</h2><p>영수증 연결과 직접 연결을 분리합니다. 직접 연결에서는 전체 정보를 입력하거나 FitnessApp·CashOS에서 식당·메뉴 정보를 불러올 수 있습니다.</p></div>
       <button type="button" onClick={() => void load()} disabled={loading || saving}>후보 새로고침</button>
     </div>
 
@@ -256,7 +260,12 @@ export function AdminRestaurantMenuPanel() {
       <div><dt>영수증 관측 ID</dt><dd><code>{result.receiptObservationId}</code></dd></div>
     </dl>}
 
-    <form className={styles.restaurantAdminForm} onSubmit={register}>
+    <div className={styles.unverifiedModeTabs} role="tablist" aria-label="음식점 메뉴 등록 방식">
+      <button type="button" role="tab" aria-selected={registrationTab === "receipt"} onClick={() => setRegistrationTab("receipt")}>영수증 연결</button>
+      <button type="button" role="tab" aria-selected={registrationTab === "direct"} onClick={() => setRegistrationTab("direct")}>직접 연결</button>
+    </div>
+
+    {registrationTab === "receipt" && <form className={styles.restaurantAdminForm} onSubmit={register}>
       <fieldset>
         <legend>1. 서버 검증 영수증 관측</legend>
         <label className={styles.restaurantAdminWide}>등록 후보<select required value={form.priceObservationId} onChange={(event) => chooseCandidate(event.target.value)}><option value="">menu_item 영수증 관측을 선택하세요</option>{candidates.map((candidate) => <option key={candidate.price_observation_id} value={candidate.price_observation_id}>{candidateLabel(candidate)}</option>)}</select></label>
@@ -302,6 +311,7 @@ export function AdminRestaurantMenuPanel() {
         <p>등록 RPC가 DB 영수증·항목·가격 관측·store product·menu_item 타입을 잠그고 다시 검증합니다. 같은 source mapping은 정확한 메뉴를 재사용하지만 이름만 같은 다른 식당이나 메뉴는 재사용하지 않습니다.</p>
         <button type="submit" disabled={saving || !selectedCandidate}>{saving ? "서버 검증 및 등록 중…" : "영수증 관측으로 등록"}</button>
       </div>
-    </form>
+    </form>}
+    {registrationTab === "direct" && <AdminDirectRestaurantMenuPanel />}
   </section>;
 }

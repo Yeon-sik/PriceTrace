@@ -5,10 +5,10 @@ let nutritionBrowserClient: SupabaseClient | undefined;
 let nutritionPublicBrowserClient: SupabaseClient | undefined;
 
 /**
- * Public Nutrition database client.
+ * Session-capable Nutrition database client for administrator workflows.
  *
- * This boundary accepts only a browser-safe publishable key. A service-role
- * credential must never be added to this client or to NEXT_PUBLIC_* variables.
+ * The publishable key is safe for browser use; private rows remain protected
+ * by Nutrition RLS and require the user's Nutrition Supabase session.
  */
 export function getNutritionSupabaseBrowserClient() {
   const url = process.env.NEXT_PUBLIC_NUTRITION_SUPABASE_URL;
