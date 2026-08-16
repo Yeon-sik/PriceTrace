@@ -18,16 +18,25 @@ export function AuthPanel({ onChange, onOpen, modal = false, onClose }: Props) {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [userEmail, setUserEmail] = useState<string | null>(null);
-  const [mode, setMode] = useState<"login" | "signup">("login");
   const [message, setMessage] = useState("");
 
   useEffect(() => {
     if (!client) return;
-    void client.auth.getUser().then(({ data }) => {
-      setUserEmail(data.user?.email ?? null);
+    void client.auth.getUser().then(async ({ data }) => {
+      if (data.user?.app_metadata?.role === "admin") {
+        setUserEmail(data.user.email ?? null);
+        return;
+      }
+      setUserEmail(null);
+      if (data.user) await client.auth.signOut();
     });
     const { data } = client.auth.onAuthStateChange((_event, session) => {
-      setUserEmail(session?.user?.email ?? null);
+      if (session?.user?.app_metadata?.role === "admin") {
+        setUserEmail(session.user.email ?? null);
+      } else {
+        setUserEmail(null);
+        if (session) void client.auth.signOut();
+      }
       onChange();
     });
     return () => data.subscription.unsubscribe();
@@ -53,7 +62,7 @@ export function AuthPanel({ onChange, onOpen, modal = false, onClose }: Props) {
   if (!modal) {
     return (
       <button type="button" className={styles.loginButton} onClick={onOpen}>
-        로그인 <span aria-hidden="true">↗</span>
+        관리자 접근 <span aria-hidden="true">↗</span>
       </button>
     );
   }
@@ -65,18 +74,22 @@ export function AuthPanel({ onChange, onOpen, modal = false, onClose }: Props) {
       return;
     }
     setMessage("");
-    const result = mode === "login"
-      ? await client.auth.signInWithPassword({ email, password })
-      : await client.auth.signUp({ email, password });
+    const result = await client.auth.signInWithPassword({ email, password });
 
     if (result.error) {
       setMessage(result.error.message);
       return;
     }
 
-    setMessage(mode === "login" ? "로그인되었습니다." : "회원가입 요청이 완료되었습니다.");
     setPassword("");
-    if (mode === "login") onClose?.();
+    if (result.data.user?.app_metadata?.role !== "admin") {
+      await client.auth.signOut();
+      setMessage("관리자 계정으로만 접근할 수 있습니다.");
+      return;
+    }
+
+    setMessage("관리자 접근이 허용되었습니다.");
+    onClose?.();
   }
 
   return (
@@ -96,13 +109,13 @@ export function AuthPanel({ onChange, onOpen, modal = false, onClose }: Props) {
           type="button"
           className={styles.closeButton}
           onClick={onClose}
-          aria-label="로그인 창 닫기"
+          aria-label="관리자 접근 창 닫기"
         >
           ×
         </button>
-        <p className={styles.kicker}>WELCOME BACK</p>
-        <h2 id="auth-title">{mode === "login" ? "로그인" : "회원가입"}</h2>
-        <p>가격 추적 기록을 계정과 안전하게 연결하세요.</p>
+        <p className={styles.kicker}>ADMINISTRATION</p>
+        <h2 id="auth-title">관리자 접근</h2>
+        <p>관리자 계정으로만 접근할 수 있습니다.</p>
         <form onSubmit={submit}>
           <label>
             이메일
@@ -119,7 +132,7 @@ export function AuthPanel({ onChange, onOpen, modal = false, onClose }: Props) {
             비밀번호
             <input
               type="password"
-              autoComplete={mode === "login" ? "current-password" : "new-password"}
+              autoComplete="current-password"
               required
               minLength={6}
               value={password}
@@ -127,7 +140,7 @@ export function AuthPanel({ onChange, onOpen, modal = false, onClose }: Props) {
             />
           </label>
           <button className={styles.submitButton} type="submit">
-            {mode === "login" ? "로그인" : "회원가입"}
+            관리자 접근
           </button>
         </form>
         {message && (
@@ -135,16 +148,6 @@ export function AuthPanel({ onChange, onOpen, modal = false, onClose }: Props) {
             {message}
           </p>
         )}
-        <button
-          type="button"
-          className={styles.switchAuth}
-          onClick={() => {
-            setMode(mode === "login" ? "signup" : "login");
-            setMessage("");
-          }}
-        >
-          {mode === "login" ? "처음 오셨나요? 회원가입" : "이미 계정이 있나요? 로그인"}
-        </button>
       </section>
     </div>
   );
