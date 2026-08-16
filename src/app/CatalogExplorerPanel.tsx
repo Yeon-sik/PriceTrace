@@ -10,6 +10,7 @@ import {
   type CatalogContentUnit,
   type CatalogSpecificationStatus,
 } from "@/domain/catalog-specification";
+import { findSimilarBrandNames, normalizeBrandLabel } from "@/domain/brand";
 import type { PurchaseType } from "@/domain/types";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import { AdminStandardCatalogModal, type AdminCatalogVariant, type AdminCoupangPrice } from "./AdminStandardCatalogModal";
@@ -20,6 +21,7 @@ type StandardProduct = { id: string; canonical_name: string; brand_id: string | 
 type CatalogProduct = { id: string; standard_product_id: string; purchase_type: PurchaseType; canonical_name: string; specification: string | null; specification_status: CatalogSpecificationStatus; content_amount: number | null; content_unit: ContentUnit | null; package_count: number; reference_unit: ReferenceUnit; listing_reference_url: string | null };
 type RemoteObservation = { location_label: string | null; unit_price_krw: number; observed_at: string; measurement_unit: string };
 type SourceProductMapping = { id: string; source_label: string; source_product_code: string };
+type BrandOption = { id: string; canonical_name: string };
 
 export type CatalogExplorerSelectionRequest = {
   standardProductId: string;
@@ -59,7 +61,7 @@ function buildAdminCoupangPrice(row: { listed_price_krw: number; quantity: numbe
   }, referenceUnit);
 }
 
-export function CatalogExplorerPanel({ selectionRequest }: { selectionRequest?: CatalogExplorerSelectionRequest }) {
+export function CatalogExplorerPanel({ selectionRequest, brands = [] }: { selectionRequest?: CatalogExplorerSelectionRequest; brands?: BrandOption[] }) {
   const client = getSupabaseBrowserClient();
   const [userId, setUserId] = useState<string | null>(null);
   const [isAdmin, setIsAdmin] = useState(false);
@@ -69,7 +71,9 @@ export function CatalogExplorerPanel({ selectionRequest }: { selectionRequest?: 
   const [selectedStandardId, setSelectedStandardId] = useState("");
   const [showStandardDetail, setShowStandardDetail] = useState(false);
   const [standardName, setStandardName] = useState("");
-  const [standardNameSaving, setStandardNameSaving] = useState(false);
+  const [standardBrandId, setStandardBrandId] = useState("");
+  const [standardBrandName, setStandardBrandName] = useState("");
+  const [standardContentSaving, setStandardContentSaving] = useState(false);
   const [selectedVariantId, setSelectedVariantId] = useState("");
   const [observations, setObservations] = useState<RemoteObservation[]>([]);
   const [sourceMappings, setSourceMappings] = useState<SourceProductMapping[]>([]);
@@ -169,8 +173,15 @@ export function CatalogExplorerPanel({ selectionRequest }: { selectionRequest?: 
   const selectedVariant = variants.find((variant) => variant.id === selectedVariantId) ?? null;
   const selectedMapping = sourceMappings.find((mapping) => mapping.id === selectedMappingId) ?? null;
   const variantsForSelectedStandard = useMemo(() => variants.filter((variant) => variant.standard_product_id === selectedStandardId), [variants, selectedStandardId]);
+  const similarStandardBrands = useMemo(
+    () => findSimilarBrandNames(brands, standardBrandName),
+    [brands, standardBrandName],
+  );
+  const normalizedStandardBrandName = normalizeBrandLabel(standardBrandName).toLocaleLowerCase("ko-KR");
   useEffect(() => {
     setStandardName(selectedStandard?.canonical_name ?? "");
+    setStandardBrandId(selectedStandard?.brand_id ?? "");
+    setStandardBrandName(selectedStandard?.brand ?? "");
   }, [selectedStandard]);
 
   useEffect(() => {
@@ -186,7 +197,7 @@ export function CatalogExplorerPanel({ selectionRequest }: { selectionRequest?: 
     setProductReferenceUrl(selectedVariant.listing_reference_url ?? "");
   }, [selectedVariant]);
 
-  async function updateSelectedStandardName(event: React.FormEvent) {
+  async function updateSelectedStandardContent(event: React.FormEvent) {
     event.preventDefault();
     if (!client || !selectedStandard) return;
     const nextName = standardName.trim();
@@ -194,30 +205,50 @@ export function CatalogExplorerPanel({ selectionRequest }: { selectionRequest?: 
       setMessage("표준 상품명을 입력하세요.");
       return;
     }
-    if (nextName === selectedStandard.canonical_name) {
-      setMessage("변경된 표준 상품명이 없습니다.");
+    const nextBrandId = standardBrandId || null;
+    const nextBrandName = nextBrandId ? standardBrandName.trim() : "";
+    if (!nextBrandId && standardBrandName.trim()) {
+      setMessage("검색 결과에서 연결할 기존 canonical 브랜드를 선택하세요.");
+      return;
+    }
+    if (nextBrandId && !nextBrandName) {
+      setMessage("표준 브랜드명을 입력하세요.");
+      return;
+    }
+    if (nextName === selectedStandard.canonical_name && nextBrandId === selectedStandard.brand_id && nextBrandName === (selectedStandard.brand ?? "")) {
+      setMessage("변경된 표준 상품 정보가 없습니다.");
       return;
     }
 
-    setStandardNameSaving(true);
+    if (nextBrandId === selectedStandard.brand_id && nextBrandName !== (selectedStandard.brand ?? "") && typeof window !== "undefined" && !window.confirm(`브랜드명 "${selectedStandard.brand ?? "미지정"}"을 "${nextBrandName}"(으)로 수정할까요? 이 브랜드를 사용하는 모든 표준 상품에 반영됩니다.`)) {
+      return;
+    }
+
+    const selectedBrandCanonicalName = brands.find((brand) => brand.id === nextBrandId)?.canonical_name ?? selectedStandard.brand ?? "미지정";
+    if (nextBrandId !== selectedStandard.brand_id && nextBrandName !== selectedBrandCanonicalName && typeof window !== "undefined" && !window.confirm(`브랜드명 "${selectedBrandCanonicalName}"을 "${nextBrandName}"(으)로 수정할까요? 이 브랜드를 사용하는 모든 표준 상품에 반영됩니다.`)) {
+      return;
+    }
+
+    setStandardContentSaving(true);
     setMessage("");
     try {
-      const { data, error } = await client.rpc("admin_manage_standard_catalog", {
-        p_action: "update_standard_name",
-        p_target_id: selectedStandard.id,
-        p_payload: { canonicalName: nextName },
-        p_confirmation: `CONFIRM_STANDARD_CATALOG_ACTION:update_standard_name:${selectedStandard.id}`,
+      const { data, error } = await client.rpc("admin_update_standard_product_content_with_brand", {
+        p_standard_product_id: selectedStandard.id,
+        p_canonical_name: nextName,
+        p_brand_id: nextBrandId,
+        p_brand_name: nextBrandName || null,
+        p_confirmation: `CONFIRM_STANDARD_PRODUCT_CONTENT_WITH_BRAND:${selectedStandard.id}`,
       });
       if (error || !data) {
-        setMessage(error?.message ?? "표준 상품명을 수정하지 못했습니다.");
+        setMessage(error?.message ?? "표준 상품 정보를 수정하지 못했습니다.");
         return;
       }
       await loadCatalog();
-      setMessage(`표준 상품명을 “${nextName}”으로 수정했습니다.`);
+      setMessage("표준 상품 정보와 브랜드를 수정했습니다.");
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : "표준 상품명을 수정하지 못했습니다.");
+      setMessage(error instanceof Error ? error.message : "표준 상품 정보를 수정하지 못했습니다.");
     } finally {
-      setStandardNameSaving(false);
+      setStandardContentSaving(false);
     }
   }
 
@@ -326,9 +357,31 @@ export function CatalogExplorerPanel({ selectionRequest }: { selectionRequest?: 
       {selectedStandard && isAdmin ? <div className={styles.catalogAdmin} ref={managementPanelRef}>
         <h3>{selectedStandard.canonical_name}</h3>
         <p className={styles.muted}>브랜드: <b>{selectedStandard.brand ?? "미지정"}</b> · 하위 판매 규격은 표준 상품군의 브랜드를 상속합니다.</p>
-        <form className={styles.inline} onSubmit={updateSelectedStandardName}>
+        <h4>표준 상품 기본 정보</h4>
+        <form className={styles.inline} onSubmit={updateSelectedStandardContent}>
           <label>표준 상품명<input value={standardName} onChange={(event) => setStandardName(event.target.value)} required aria-label="표준 상품명" /></label>
-          <button type="submit" disabled={standardNameSaving || !standardName.trim()}>{standardNameSaving ? "상품명 저장 중..." : "표준 상품명 수정"}</button>
+          <label>표준 브랜드<select value={standardBrandId} onChange={(event) => { const nextBrandId = event.target.value; setStandardBrandId(nextBrandId); setStandardBrandName(brands.find((brand) => brand.id === nextBrandId)?.canonical_name ?? ""); }} aria-label="표준 브랜드"><option value="">브랜드 없음</option>{brands.map((brand) => <option key={brand.id} value={brand.id}>{brand.canonical_name}</option>)}</select><small>등록된 canonical 브랜드에서 선택하며, 하위 판매 규격에는 이 값이 상속됩니다.</small></label>
+          <label>표준 브랜드명<input list="catalog-standard-brand-options" value={standardBrandName} onChange={(event) => setStandardBrandName(event.target.value)} aria-label="표준 브랜드명" /><small>검색 결과에서 기존 브랜드를 선택하면 이 표준 상품에 연결됩니다. 연결된 브랜드명을 수정하면 같은 canonical 브랜드를 사용하는 모든 표준 상품에 반영됩니다.</small></label>
+          <datalist id="catalog-standard-brand-options">{brands.map((brand) => <option key={brand.id} value={brand.canonical_name} />)}</datalist>
+          {similarStandardBrands.length > 0 && <div className={styles.brandSuggestions} aria-live="polite">
+            <span>이미 등록된 유사 브랜드</span>
+            <div className={styles.brandSuggestionsList}>
+              {similarStandardBrands.map((brand) => {
+                const isExact = normalizeBrandLabel(brand.canonical_name).toLocaleLowerCase("ko-KR") === normalizedStandardBrandName;
+                return <button
+                  type="button"
+                  key={brand.id}
+                  onClick={() => {
+                    setStandardBrandId(brand.id);
+                    setStandardBrandName(brand.canonical_name);
+                  }}
+                >
+                  {brand.canonical_name}{isExact && <small>현재 입력과 일치 · 연결</small>}
+                </button>;
+              })}
+            </div>
+          </div>}
+          <button type="submit" disabled={standardContentSaving || !standardName.trim()}>{standardContentSaving ? "표준 상품 정보 저장 중..." : "표준 상품 정보 수정"}</button>
         </form>
         <button type="button" className={styles.secondaryButton} onClick={() => setShowStandardDetail(true)}>쿠팡가·상세 보기</button>
         <label>하위 상품 선택 (판매처 매핑 대상)<select value={selectedVariantId} onChange={(event) => setSelectedVariantId(event.target.value)}><option value="">하위 상품을 선택하세요</option>{variantsForSelectedStandard.map((variant) => <option key={variant.id} value={variant.id}>{variant.canonical_name} · {specLabelFor(variant)}</option>)}</select></label>

@@ -298,6 +298,7 @@ export const RestaurantDetailV1Schema = z.object({
 
 export type RestaurantMenuPriceObservation = z.infer<typeof RestaurantMenuPriceObservationSchema>;
 export type RestaurantMenu = z.infer<typeof RestaurantMenuSchema>;
+export type RestaurantLocation = z.infer<typeof RestaurantLocationSchema>;
 export type RestaurantMenuReadEntry = z.infer<typeof RestaurantMenuReadEntrySchema>;
 export type RestaurantMenuReadV1 = z.infer<typeof RestaurantMenuReadV1Schema>;
 export type RestaurantDirectoryEntry = z.infer<typeof RestaurantDirectoryEntrySchema>;

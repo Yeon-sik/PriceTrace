@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  findSimilarBrandNames,
   normalizeBrandLabel,
   officialBrandSourceLabel,
   prepareBrandRegistration,
@@ -41,6 +42,18 @@ describe("standard product summaries", () => {
 });
 
 describe("standard product brand registration", () => {
+  it("finds existing canonical brands while a new brand is being typed", () => {
+    const brands = [
+      { id: "baskin", canonical_name: "Baskin Robbins" },
+      { id: "nongshim", canonical_name: "Nongshim" },
+      { id: "samsung", canonical_name: "Samsung" },
+    ];
+
+    expect(findSimilarBrandNames(brands, "BaskinRobbins").map((brand) => brand.id)).toEqual(["baskin"]);
+    expect(findSimilarBrandNames(brands, "Nongshm").map((brand) => brand.id)).toEqual(["nongshim"]);
+    expect(findSimilarBrandNames(brands, "x")).toEqual([]);
+  });
+
   it("normalizes evidence labels without merging them into a product name", () => {
     expect(normalizeBrandLabel("  Baskin   Robbins  ")).toBe("Baskin Robbins");
     expect(prepareBrandRegistration({
@@ -740,6 +753,14 @@ describe("strict standard product registration", () => {
     const insertionDeletionMismatch = await buildLinkOnlyRegistrationIdentity(
       insertionDeletionMismatchBase,
     );
+    const directStrictMismatch = await buildStrictRegistrationIdentity({
+      ...verifiedMismatchBase,
+      verifiedNameEquivalence: null,
+    }, { assessmentMode: "admin_direct" });
+    const directLinkOnlyMismatch = await buildLinkOnlyRegistrationIdentity({
+      ...insertionDeletionMismatchBase,
+      verifiedNameEquivalence: null,
+    }, { assessmentMode: "admin_direct" });
     await expect(buildStrictRegistrationIdentity({
       ...verifiedMismatchBase,
       verifiedNameEquivalence: null,
@@ -860,6 +881,14 @@ describe("strict standard product registration", () => {
           conclusion: "same_exact_sellable_variant",
         },
       },
+    });
+    expect(JSON.parse(directStrictMismatch.targetCanonicalJson)).toMatchObject({
+      approvalPolicy: { mode: "authenticated_admin_direct_registration" },
+      sameChannelNameRule: { exactNameMatch: false, outcome: "not_applicable" },
+    });
+    expect(JSON.parse(directLinkOnlyMismatch.targetCanonicalJson)).toMatchObject({
+      approvalPolicy: { mode: "authenticated_admin_direct_registration" },
+      sameChannelNameRule: { exactNameMatch: false, outcome: "not_applicable" },
     });
     expect(JSON.parse(containedMismatch.targetCanonicalJson)).toMatchObject({
       sameChannelNameRule: {

@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "privacyPolicyVersion": 2,
-  "revision": "eeb0f5a2b47947b2",
+  "revision": "7f52fb76358fa0d6",
   "id": "2026-06-12_001",
   "fileName": "2026-06-12_001.json",
   "merchant": {
@@ -1285,7 +1285,7 @@
     {
       "id": "line_3bac64b8d5c8796a",
       "type": "product",
-      "description": "한입지식찐고구마",
+      "description": "한입자색찐고구마",
       "sourceLineReferences": [
         "051"
       ],
