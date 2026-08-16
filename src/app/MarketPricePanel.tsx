@@ -4,14 +4,22 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { lowestVerifiedMarketPrice, normalizeMarketPrice, type MarketPriceObservation, type ProductSpecification } from "@/domain/canonical-price";
 import { formatKrw } from "@/domain/settlement";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
+import { AdminUnverifiedRegistrationRepository } from "@/repositories/admin-unverified-registration.repository";
 import styles from "./page.module.css";
 
 type ContentUnit = "g" | "ml" | "each";
-type CatalogProduct = { id: string; standard_product_id: string; canonical_name: string; brand: string | null; specification: string | null; content_amount: number | null; content_unit: ContentUnit | null; package_count: number; listing_reference_url: string | null };
+type CatalogProduct = { id: string; standard_product_id: string; canonical_name: string; brand: string | null; specification: string | null; content_amount: number | null; content_unit: ContentUnit | null; package_count: number; listing_reference_url: string | null; verification_status: "verified" | "unverified" };
 type StandardBrand = { id: string; brand: string | null };
-type StoredObservation = { id: string; seller_name: string; product_url: string; listed_price_krw: number; shipping_fee_krw: number; minimum_order_quantity: number; observed_at: string; verification_status: "pending" | "verified" | "rejected" };
+type StoredObservation = { id: string; seller_name: string; product_url: string; listed_price_krw: number; shipping_fee_krw: number; minimum_order_quantity: number; observed_at: string; verification_status: "pending" | "verified" | "unverified" | "rejected" };
 
 const initialOffer = { sellerName: "", productUrl: "", listedPriceKrw: "", shippingFeeKrw: "0", minimumOrderQuantity: "1" };
+
+function newIdempotencyKey() {
+  const id = typeof crypto !== "undefined" && "randomUUID" in crypto
+    ? crypto.randomUUID()
+    : `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+  return `market-price-manual:${id}`;
+}
 
 function specificationFor(product: CatalogProduct | undefined): ProductSpecification | null {
   if (!product?.content_amount || !product.content_unit || !product.package_count) return null;
@@ -34,7 +42,7 @@ export function MarketPricePanel() {
   const loadProducts = useCallback(async () => {
     if (!client) return;
     const [catalogResult, standardResult] = await Promise.all([
-      client.from("catalog_products").select("id,standard_product_id,canonical_name,specification,content_amount,content_unit,package_count,listing_reference_url").eq("status", "active").order("canonical_name"),
+      client.from("catalog_products").select("id,standard_product_id,canonical_name,specification,content_amount,content_unit,package_count,listing_reference_url,verification_status").eq("status", "active").order("canonical_name"),
       client.from("standard_products").select("id,brand").eq("status", "active"),
     ]);
     if (catalogResult.error || standardResult.error) {
@@ -75,26 +83,48 @@ export function MarketPricePanel() {
       setMessage("판매처, URL, 가격, 배송비, 최소 구매 수량을 올바르게 입력하세요.");
       return;
     }
-    const verifiedAt = new Date().toISOString();
-    const { error } = await client.from("market_price_observations").insert({ catalog_product_id: selectedProductId, seller_name: offer.sellerName.trim(), product_url: offer.productUrl.trim(), listed_price_krw: listedPriceKrw, shipping_fee_krw: shippingFeeKrw, minimum_order_quantity: minimumOrderQuantity, observed_at: verifiedAt, verification_status: "verified", verified_by: userId, verified_at: verifiedAt });
-    if (error) { setMessage(error.message); return; }
+    try {
+      await new AdminUnverifiedRegistrationRepository(client).registerProductSale({
+        idempotencyKey: newIdempotencyKey(),
+        catalogProductId: selectedProductId,
+        standardName: "",
+        brandName: null,
+        listingName: "",
+        specification: null,
+        contentAmount: null,
+        contentUnit: null,
+        packageCount: null,
+        referenceUnit: null,
+        listingReferenceUrl: null,
+        sellerName: offer.sellerName.trim(),
+        sourceProductCode: null,
+        productUrl: offer.productUrl.trim(),
+        listedPriceKrw,
+        shippingFeeKrw,
+        minimumOrderQuantity,
+        observedAt: new Date().toISOString(),
+      });
+    } catch (reason) {
+      setMessage(reason instanceof Error ? reason.message : "미인증 판매 정보를 등록하지 못했습니다.");
+      return;
+    }
     setOffer(initialOffer);
-    setMessage("검증된 시장 관측가를 등록했습니다.");
+    setMessage("미인증 판매 정보를 등록했습니다. 별도 검증 전에는 공개 최저가 비교에서 제외됩니다.");
     const { data } = await client.from("market_price_observations").select("id,seller_name,product_url,listed_price_krw,shipping_fee_krw,minimum_order_quantity,observed_at,verification_status").eq("catalog_product_id", selectedProductId).order("observed_at", { ascending: false });
     setOffers((data ?? []) as StoredObservation[]);
   }
 
   if (!client || !userId) return null;
   return <section className={styles.marketPricePanel} aria-labelledby="market-price-title">
-    <div className={styles.adminSectionHead}><div><p className={styles.kicker}>TRACKED SELLER PRICES</p><h2 id="market-price-title">관측 판매처 기준 최저가</h2><p>관리자가 상품 규격과 URL을 확인한 관측가만 비교합니다. 배송비는 포함하고 쿠폰·회원가는 포함하지 않습니다.</p></div></div>
+    <div className={styles.adminSectionHead}><div><p className={styles.kicker}>TRACKED SELLER PRICES</p><h2 id="market-price-title">관측 판매처 기준 최저가</h2><p>검증된 관측가만 최저가 비교에 사용합니다. 영수증 없이 추가한 판매 정보에는 <b>미인증</b> 딱지가 붙고 검증 전 공개 비교에서 제외됩니다.</p></div></div>
     {message && <p role="status" className={styles.muted}>{message}</p>}
-    <label className={styles.marketProductSelect}>표준 상품<select value={selectedProductId} onChange={(event) => { setSelectedProductId(event.target.value); setMessage(""); }}><option value="">상품을 선택하세요</option>{products.map((product) => <option key={product.id} value={product.id}>{[product.canonical_name, product.brand, product.specification].filter(Boolean).join(" | ")}</option>)}</select></label>
+    <label className={styles.marketProductSelect}>표준 상품<select value={selectedProductId} onChange={(event) => { setSelectedProductId(event.target.value); setMessage(""); }}><option value="">상품을 선택하세요</option>{products.map((product) => <option key={product.id} value={product.id}>{[product.canonical_name, product.brand, product.specification].filter(Boolean).join(" | ")}{product.verification_status === "unverified" ? " [미인증]" : ""}</option>)}</select></label>
     {selectedProduct && <div className={styles.marketSpecification}><strong>{selectedProduct.canonical_name}</strong>{specification ? <><span>규격 {specification.contentAmount}{specification.contentUnit} × {specification.packageCount}</span>{selectedProduct.listing_reference_url && <a href={selectedProduct.listing_reference_url} target="_blank" rel="noreferrer">상품 확인 출처</a>}</> : <span>규격이 없어 단위가격을 계산할 수 없습니다. 카탈로그 관리에서 내용량과 확인 URL을 먼저 등록하세요.</span>}</div>}
     {specification && <><div className={styles.marketLowest}>{lowest ? <><span>현재 관측 판매처 기준 최저가</span><strong>{lowest.sellerName} · {formatKrw(lowest.effectivePriceKrw)}</strong><b>{lowest.referenceLabel} {formatKrw(lowest.pricePerReferenceUnitKrw)}</b></> : <span>검증된 시장 관측가가 없습니다.</span>}</div>
       <form className={styles.marketOfferForm} onSubmit={saveOffer}>
-        <h3>수동 시장 관측가 등록</h3><label>판매처<input required value={offer.sellerName} onChange={(event) => setOffer({ ...offer, sellerName: event.target.value })} /></label><label>상품 URL<input required type="url" placeholder="https://" value={offer.productUrl} onChange={(event) => setOffer({ ...offer, productUrl: event.target.value })} /></label><label>판매가<input required inputMode="numeric" value={offer.listedPriceKrw} onChange={(event) => setOffer({ ...offer, listedPriceKrw: event.target.value })} /></label><label>배송비<input required inputMode="numeric" value={offer.shippingFeeKrw} onChange={(event) => setOffer({ ...offer, shippingFeeKrw: event.target.value })} /></label><label>최소 구매 수량<input required type="number" min="1" step="1" value={offer.minimumOrderQuantity} onChange={(event) => setOffer({ ...offer, minimumOrderQuantity: event.target.value })} /></label><button type="submit">검증 후 등록</button>
+        <h3>영수증 없는 판매 정보 등록 <span className={styles.unverifiedBadge}>미인증</span></h3><label>판매처<input required value={offer.sellerName} onChange={(event) => setOffer({ ...offer, sellerName: event.target.value })} /></label><label>상품 URL<input required type="url" placeholder="https://" value={offer.productUrl} onChange={(event) => setOffer({ ...offer, productUrl: event.target.value })} /></label><label>판매가<input required inputMode="numeric" value={offer.listedPriceKrw} onChange={(event) => setOffer({ ...offer, listedPriceKrw: event.target.value })} /></label><label>배송비<input required inputMode="numeric" value={offer.shippingFeeKrw} onChange={(event) => setOffer({ ...offer, shippingFeeKrw: event.target.value })} /></label><label>최소 구매 수량<input required type="number" min="1" step="1" value={offer.minimumOrderQuantity} onChange={(event) => setOffer({ ...offer, minimumOrderQuantity: event.target.value })} /></label><button type="submit">미인증으로 등록</button>
       </form>
-      <div className={styles.marketOfferList}>{offers.map((item) => { const normalized = normalizeMarketPrice(asDomainObservation(item), specification); return <article key={item.id}><div><strong>{item.seller_name}</strong><small>{new Date(item.observed_at).toLocaleDateString("ko-KR")} · 최소 {item.minimum_order_quantity}개</small></div><div><b>{formatKrw(normalized.effectivePriceKrw)}</b><small>{normalized.referenceLabel} {formatKrw(normalized.pricePerReferenceUnitKrw)}</small></div><a href={item.product_url} target="_blank" rel="noreferrer">상품 보기</a></article>; })}</div>
+      <div className={styles.marketOfferList}>{offers.map((item) => { const normalized = normalizeMarketPrice(asDomainObservation(item), specification); return <article key={item.id}><div><strong>{item.seller_name}</strong><small>{new Date(item.observed_at).toLocaleDateString("ko-KR")} · 최소 {item.minimum_order_quantity}개 · <span className={item.verification_status === "unverified" ? styles.unverifiedText : undefined}>{item.verification_status === "unverified" ? "미인증" : item.verification_status === "verified" ? "검증" : item.verification_status}</span></small></div><div><b>{formatKrw(normalized.effectivePriceKrw)}</b><small>{normalized.referenceLabel} {formatKrw(normalized.pricePerReferenceUnitKrw)}</small></div><a href={item.product_url} target="_blank" rel="noreferrer">상품 보기</a></article>; })}</div>
     </>}
   </section>;
 }

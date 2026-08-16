@@ -1,12 +1,17 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { groupProductObservations, martTagFor, PRODUCT_CATEGORIES, type MartType, type ProductCategory, type ProductGroup, type ProductSort } from "@/domain/product-browser";
+import { buildAppNavigationUrl, readAppNavigationUrl, type AppPage } from "@/domain/app-navigation";
+import { cartProductFromGroup, cartProductFromOfficialListing, summarizeCart, type CartProduct } from "@/domain/cart";
+import { groupProductObservations, martTagFor, type MartType, type ProductCategory, type ProductGroup, type ProductObservationListing, type ProductSort } from "@/domain/product-browser";
+import type { OfficialProductCandidate } from "@/domain/official-product";
+import { findOfficialListingCandidate } from "@/domain/official-listing-candidate";
 import { formatKrw } from "@/domain/settlement";
-import { findUniqueOfficialExactNameMatch } from "@/domain/standard-product-registration";
+import { findPxProductNameReview } from "@/domain/px-product-name-review";
 import { useAdminAccess } from "@/hooks/use-admin-access";
 import { PublicReceiptRepository } from "@/repositories/public-receipt.repository";
 import { PublicOfficialChannelCatalogRepository } from "@/repositories/public-official-channel-catalog.repository";
+import { PxProductNameReviewRepository } from "@/repositories/px-product-name-review.repository";
 import { useCartStore } from "@/stores/cart.store";
 import { AdminPage } from "./AdminPage";
 import { AuthPanel } from "./AuthPanel";
@@ -15,16 +20,59 @@ import { CartPage } from "./CartPage";
 import { PriceTrendModal } from "./PriceTrendModal";
 import { ProductBrowser } from "./ProductBrowser";
 import { MarketBrowser } from "./MarketBrowser";
+import { RestaurantBrowser } from "./RestaurantBrowser";
 import styles from "./page.module.css";
 
 const publicReceiptData = new PublicReceiptRepository().loadAll();
 const publicOfficialCatalog = new PublicOfficialChannelCatalogRepository().loadPxCatalog();
+const pxProductNameReviews = new PxProductNameReviewRepository().load(publicOfficialCatalog);
 const publicReceiptById = new Map(publicReceiptData.receipts.map((receipt) => [receipt.id, receipt]));
-type Page = "home" | "products" | "markets" | "cart" | "admin";
+
+function receiptRevisionFor(observation: ProductObservationListing) {
+  const receipt = publicReceiptById.get(observation.item.receiptId);
+  return [
+    "receipt-v1",
+    receipt?.publicReceiptFileName ?? observation.item.receiptId,
+    observation.item.id,
+    observation.observedAt,
+    observation.item.productName,
+    observation.item.sourceProductCode,
+    observation.item.unitPriceKrw,
+    observation.item.quantityValue,
+    observation.item.totalPriceKrw,
+  ].join(":");
+}
+
+function receiptObservationCandidate(
+  observation: ProductObservationListing,
+): OfficialProductCandidate {
+  const candidate: OfficialProductCandidate = {
+    sourceProductCode: observation.item.sourceProductCode,
+    productName: observation.item.productName,
+    storeLabel: observation.storeLabel,
+    martTag: martTagFor(observation),
+    catalogNamespace: observation.catalogNamespace,
+    receiptId: observation.item.receiptId,
+    receiptItemId: observation.item.id,
+    receiptRevision: receiptRevisionFor(observation),
+    receiptObservedAt: observation.observedAt,
+    receiptUnitPriceKrw: observation.item.unitPriceKrw,
+    receiptQuantity: observation.item.quantityValue,
+    receiptTotalPriceKrw: observation.item.totalPriceKrw,
+    receiptConfidence: observation.item.confidence,
+  };
+  const reviewedName = findPxProductNameReview(candidate, pxProductNameReviews);
+  return reviewedName ? {
+    ...candidate,
+    reviewedProductName: reviewedName.reviewedDisplayName,
+    reviewedProductNameSourceRefs: reviewedName.sourceRefs,
+  } : candidate;
+}
 
 export default function Home() {
-  const [page, setPage] = useState<Page>("home");
+  const [page, setPage] = useState<AppPage>("home");
   const [selectedMarket, setSelectedMarket] = useState<string | null>(null);
+  const [selectedRestaurant, setSelectedRestaurant] = useState<string | null>(null);
   const [category, setCategory] = useState<ProductCategory>("전체");
   const [query, setQuery] = useState("");
   const [martType, setMartType] = useState<MartType>("all");
@@ -33,7 +81,7 @@ export default function Home() {
   const [authOpen, setAuthOpen] = useState(false);
   const [authRevision, setAuthRevision] = useState(0);
   const [trendGroup, setTrendGroup] = useState<ProductGroup | null>(null);
-  const [cartGroupToAdd, setCartGroupToAdd] = useState<ProductGroup | null>(null);
+  const [cartProductToAdd, setCartProductToAdd] = useState<CartProduct | null>(null);
   const [cartQuantity, setCartQuantity] = useState("1");
   const [cartQuantityError, setCartQuantityError] = useState("");
   const [cartNotice, setCartNotice] = useState<{ productName: string; quantity: number } | null>(null);
@@ -46,45 +94,109 @@ export default function Home() {
   const clearCart = useCartStore((state) => state.clear);
   const { isAdmin, loading: adminLoading } = useAdminAccess(authRevision);
   const handleAuthChange = useCallback(() => setAuthRevision((revision) => revision + 1), []);
+  const navigate = useCallback((
+    nextPage: AppPage,
+    options: {
+      selectedMarket?: string | null;
+      selectedRestaurant?: string | null;
+      replace?: boolean;
+    } = {},
+  ) => {
+    const nextMarket = nextPage === "markets" ? options.selectedMarket ?? null : null;
+    const nextRestaurant = nextPage === "restaurants"
+      ? options.selectedRestaurant ?? null
+      : null;
+    setPage(nextPage);
+    setSelectedMarket(nextMarket);
+    setSelectedRestaurant(nextRestaurant);
+    if (typeof window === "undefined") return;
+
+    const nextUrl = buildAppNavigationUrl(window.location.href, {
+      page: nextPage,
+      selectedMarket: nextMarket,
+      selectedRestaurant: nextRestaurant,
+    });
+    const currentUrl = `${window.location.pathname}${window.location.search}${window.location.hash}`;
+    if (nextUrl === currentUrl) return;
+
+    window.history[options.replace ? "replaceState" : "pushState"](
+      { priceTracePage: nextPage },
+      "",
+      nextUrl,
+    );
+    window.scrollTo({ top: 0, behavior: "auto" });
+  }, []);
 
   const receipts = publicReceiptData.receipts;
   const observationListings = publicReceiptData.observations;
   const productGroups = useMemo(() => groupProductObservations(observationListings), [observationListings]);
+  const approvalCandidates = useMemo(
+    () => observationListings.map(receiptObservationCandidate),
+    [observationListings],
+  );
+  const cartProducts = useMemo(() => [
+    ...productGroups.map(cartProductFromGroup),
+    ...publicOfficialCatalog.listings.map(cartProductFromOfficialListing),
+  ], [productGroups]);
 
   useEffect(() => { if (!hydrated) hydrateCart(); }, [hydrateCart, hydrated]);
-  useEffect(() => { if (page === "admin" && !adminLoading && !isAdmin) setPage("home"); }, [adminLoading, isAdmin, page]);
-  const cartGroups = useMemo(() => productGroups.filter((group) => lines[group.id] > 0), [lines, productGroups]);
-  const cartTotal = cartGroups.reduce((sum, group) => sum + group.latestPriceKrw * lines[group.id], 0);
-  const cartQuantityTotal = cartGroups.reduce((sum, group) => sum + lines[group.id], 0);
+  useEffect(() => {
+    const syncFromUrl = (closeTransientUi: boolean) => {
+      const navigation = readAppNavigationUrl(window.location.href);
+      setPage(navigation.page);
+      setSelectedMarket(navigation.selectedMarket);
+      setSelectedRestaurant(navigation.selectedRestaurant);
+      if (closeTransientUi) {
+        setAuthOpen(false);
+        setTrendGroup(null);
+        setCartProductToAdd(null);
+        setCartNotice(null);
+      }
+
+      const canonicalUrl = buildAppNavigationUrl(window.location.href, navigation);
+      const currentUrl = `${window.location.pathname}${window.location.search}${window.location.hash}`;
+      if (canonicalUrl !== currentUrl) {
+        window.history.replaceState({ priceTracePage: navigation.page }, "", canonicalUrl);
+      }
+    };
+    const handlePopState = () => syncFromUrl(true);
+    syncFromUrl(false);
+    window.addEventListener("popstate", handlePopState);
+    return () => window.removeEventListener("popstate", handlePopState);
+  }, []);
+  useEffect(() => {
+    if (page === "admin" && !adminLoading && !isAdmin) {
+      navigate("home", { replace: true });
+    }
+  }, [adminLoading, isAdmin, navigate, page]);
+  const cartSummary = useMemo(() => summarizeCart(cartProducts, lines), [cartProducts, lines]);
+  const cartGroups = cartSummary.items;
+  const cartTotal = cartSummary.totalKrw;
+  const cartQuantityTotal = cartSummary.totalQuantity;
   const officialCandidates = useMemo(() => productGroups.map((group) => {
-    const receipt = publicReceiptById.get(group.latest.item.receiptId);
-    const officialListing = group.catalogNamespace === publicOfficialCatalog.channel.id
-      ? findUniqueOfficialExactNameMatch(publicOfficialCatalog.listings, group.productName) ?? undefined
+    const receiptCandidate = receiptObservationCandidate(group.latest);
+    const reviewedName = findPxProductNameReview(receiptCandidate, pxProductNameReviews);
+    const reviewedListing = reviewedName
+      ? publicOfficialCatalog.listings.find((listing) => (
+        listing.sourceProductCodeNamespace
+          === reviewedName.officialListing.sourceProductCodeNamespace
+        && listing.sourceProductCode
+          === reviewedName.officialListing.sourceProductCode
+      ))
       : undefined;
-    const receiptRevision = [
-      "receipt-v1",
-      receipt?.publicReceiptFileName ?? group.latest.item.receiptId,
-      group.latest.item.id,
-      group.latest.observedAt,
-      group.latest.item.productName,
-      group.latest.item.sourceProductCode,
-      group.latest.item.unitPriceKrw,
-      group.latest.item.quantityValue,
-      group.latest.item.totalPriceKrw,
-    ].join(":");
+    const discovered = group.catalogNamespace === publicOfficialCatalog.channel.id
+      ? findOfficialListingCandidate(
+        publicOfficialCatalog.listings,
+        group.productName,
+        group.latest.item.unitPriceKrw,
+      )
+      : null;
+    const officialListing = reviewedListing ?? discovered?.listing;
     return {
-      sourceProductCode: group.sourceProductCode,
-      productName: group.productName,
-      storeLabel: group.storeLabel,
-      martTag: martTagFor(group),
-      catalogNamespace: group.catalogNamespace,
-      receiptId: group.latest.item.receiptId,
-      receiptItemId: group.latest.item.id,
-      receiptRevision,
-      receiptObservedAt: group.latest.observedAt,
-      receiptUnitPriceKrw: group.latest.item.unitPriceKrw,
-      receiptQuantity: group.latest.item.quantityValue,
-      receiptTotalPriceKrw: group.latest.item.totalPriceKrw,
+      ...receiptCandidate,
+      officialDiscoveryMethod: reviewedListing
+        ? "reviewed_display_name" as const
+        : discovered?.method,
       officialChannelId: officialListing ? publicOfficialCatalog.channel.id : undefined,
       officialSourceProductCodeNamespace: officialListing?.sourceProductCodeNamespace,
       officialSourceProductCode: officialListing?.sourceProductCode,
@@ -93,6 +205,9 @@ export default function Home() {
       officialSourceNameRaw: officialListing?.sourceNameRaw,
       officialVendorNameRaw: officialListing?.vendorNameRaw ?? undefined,
       officialSpecificationTextRaw: officialListing?.specificationTextRaw ?? undefined,
+      officialPriceAmountKrw: officialListing?.officialPrice.amountKrw,
+      officialPriceSourceText: officialListing?.officialPrice.sourceText,
+      officialPriceObservedAt: officialListing?.officialPrice.observedAt,
       officialSourceRefs: officialListing?.sourceRefs,
       officialImageUrl: officialListing?.image?.url,
       officialImageContentHash: officialListing?.image?.contentHash,
@@ -101,71 +216,87 @@ export default function Home() {
     };
   }), [productGroups]);
 
-  function openCartModal(group: ProductGroup) {
-    setCartGroupToAdd(group);
+  function openCartModal(product: CartProduct) {
+    setCartProductToAdd(product);
     setCartQuantity("1");
     setCartQuantityError("");
   }
 
   function confirmAddToCart() {
-    if (!cartGroupToAdd) return;
+    if (!cartProductToAdd) return;
     const quantity = Number(cartQuantity);
     if (!Number.isInteger(quantity) || quantity < 1) {
       setCartQuantityError("1개 이상의 정수를 입력하세요.");
       return;
     }
-    addCart(cartGroupToAdd.id, quantity);
-    setCartNotice({ productName: cartGroupToAdd.productName, quantity });
-    setCartGroupToAdd(null);
+    addCart(cartProductToAdd.id, quantity);
+    setCartNotice({ productName: cartProductToAdd.productName, quantity });
+    setCartProductToAdd(null);
   }
 
   function openProducts(nextCategory: ProductCategory = "전체") {
     setCategory(nextCategory);
-    setPage("products");
+    navigate("products");
   }
 
   return <div className={styles.shell}>
     <header className={styles.header}>
       <div className={styles.headerInner}>
-        <button className={styles.logo} onClick={() => setPage("home")} aria-label="가격 추적기 홈">가격 추적기</button>
-        <div className={styles.account}>{isAdmin && <button className={styles.adminShortcut} onClick={() => setPage("admin")}>관리자</button>}<AuthPanel onChange={handleAuthChange} onOpen={() => setAuthOpen(true)} /></div>
+        <button className={styles.logo} onClick={() => navigate("home")} aria-label="가격 추적기 홈">가격 추적기</button>
+        <div className={styles.account}>{isAdmin && <button className={styles.adminShortcut} onClick={() => navigate("admin")}>관리자</button>}<AuthPanel onChange={handleAuthChange} onOpen={() => setAuthOpen(true)} /></div>
       </div>
       <nav className={styles.nav} aria-label="주요 메뉴"><div className={styles.navInner}>
-        <button className={page === "home" ? styles.navActive : ""} aria-current={page === "home" ? "page" : undefined} onClick={() => setPage("home")}>홈</button>
-        <button className={page === "products" ? styles.navActive : ""} aria-current={page === "products" ? "page" : undefined} onClick={() => setPage("products")}>상품 목록</button>
-        <button className={page === "cart" ? styles.navActive : ""} aria-current={page === "cart" ? "page" : undefined} onClick={() => setPage("cart")}>장바구니 <span className={styles.navBadge}>{cartQuantityTotal}</span></button>
-        <button className={page === "markets" ? styles.navActive : ""} aria-current={page === "markets" ? "page" : undefined} onClick={() => { setSelectedMarket(null); setPage("markets"); }}>판매처 기록</button>
-        {isAdmin && <button className={page === "admin" ? styles.navActive : ""} aria-current={page === "admin" ? "page" : undefined} onClick={() => setPage("admin")}>관리자</button>}
+        <button className={page === "home" ? styles.navActive : ""} aria-current={page === "home" ? "page" : undefined} onClick={() => navigate("home")}>홈</button>
+        <button className={page === "restaurants" ? styles.navActive : ""} aria-current={page === "restaurants" ? "page" : undefined} onClick={() => navigate("restaurants")}>음식점</button>
+        <button className={page === "products" ? styles.navActive : ""} aria-current={page === "products" ? "page" : undefined} onClick={() => navigate("products")}>상품 목록</button>
+        <button className={page === "cart" ? styles.navActive : ""} aria-current={page === "cart" ? "page" : undefined} onClick={() => navigate("cart")}>장바구니 <span className={styles.navBadge}>{cartQuantityTotal}</span></button>
+        <button className={page === "markets" ? styles.navActive : ""} aria-current={page === "markets" ? "page" : undefined} onClick={() => navigate("markets")}>판매처 기록</button>
+        {isAdmin && <button className={page === "admin" ? styles.navActive : ""} aria-current={page === "admin" ? "page" : undefined} onClick={() => navigate("admin")}>관리자</button>}
       </div></nav>
     </header>
 
     <main className={styles.main}>
-      {page === "home" && <><section className={styles.hero}><p className={styles.kicker}>PRICE OBSERVATION PLATFORM</p><h1>상품 가격을<br /><span>관측 기록으로 비교하세요.</span></h1><p>판매처와 시점이 명확한 영수증 관측가를 비교하고<br />필요한 상품을 장바구니에 모을 수 있습니다.</p><button onClick={() => openProducts()}>상품 둘러보기 <span>→</span></button></section><section className={styles.homeGrid}><CategoryBox category={category} onSelect={openProducts} /><CartBox count={cartGroups.length} quantity={cartQuantityTotal} total={cartTotal} onOpen={() => setPage("cart")} /></section></>}
-      {page === "products" && <ProductBrowser groups={productGroups} query={query} setQuery={setQuery} category={category} setCategory={setCategory} martType={martType} setMartType={setMartType} selectedStore={selectedStore} setSelectedStore={setSelectedStore} sort={sort} setSort={setSort} authRevision={authRevision} onAdd={openCartModal} onTrend={setTrendGroup} onOpenStore={(store) => { setSelectedMarket(store); setPage("markets"); }} />}
-      {page === "markets" && <MarketBrowser receipts={receipts} observations={observationListings} selectedStore={selectedMarket} onSelectStore={setSelectedMarket} onOpenTrend={setTrendGroup} />}
-      {page === "cart" && <CartPage groups={productGroups} lines={lines} onQuantityChange={updateCartQuantity} onRemove={removeCart} onClear={clearCart} onBrowse={() => setPage("products")} />}
-      {page === "admin" && isAdmin && <AdminPage candidates={officialCandidates} receipts={receipts} />}
+      {page === "home" && <><section className={styles.hero}><p className={styles.kicker}>PRICE OBSERVATION PLATFORM</p><h1>음식점 메뉴와 상품 가격을<br /><span>관측 기록으로 비교하세요.</span></h1><p>판매처·지점과 시점이 명확한 영수증 관측가를 비교하고,<br />메뉴는 Fitness Nutrition DB의 영양성분까지 확인할 수 있습니다.</p><div className={styles.heroActions}><button onClick={() => navigate("restaurants")}>음식점 둘러보기 <span>→</span></button><button onClick={() => openProducts()}>상품 둘러보기 <span>→</span></button></div></section><section className={styles.homeGrid}><ExploreTypeBox onRestaurants={() => navigate("restaurants")} onProducts={() => openProducts()} /><CartBox count={cartGroups.length} quantity={cartQuantityTotal} total={cartTotal} onOpen={() => navigate("cart")} /></section></>}
+      {page === "restaurants" && <RestaurantBrowser selectedRestaurant={selectedRestaurant} onSelectRestaurant={(restaurantId) => navigate("restaurants", { selectedRestaurant: restaurantId, replace: restaurantId === null })} />}
+      {page === "products" && <ProductBrowser groups={productGroups} query={query} setQuery={setQuery} category={category} setCategory={setCategory} martType={martType} setMartType={setMartType} selectedStore={selectedStore} setSelectedStore={setSelectedStore} sort={sort} setSort={setSort} authRevision={authRevision} onAdd={openCartModal} onTrend={setTrendGroup} onOpenStore={(store) => navigate("markets", { selectedMarket: store })} />}
+      {page === "markets" && <MarketBrowser receipts={receipts} observations={observationListings} selectedStore={selectedMarket} onSelectStore={(store) => navigate("markets", { selectedMarket: store, replace: true })} onOpenTrend={setTrendGroup} />}
+      {page === "cart" && <CartPage products={cartProducts} lines={lines} onQuantityChange={updateCartQuantity} onRemove={removeCart} onClear={clearCart} onBrowse={() => navigate("products")} />}
+      {page === "admin" && isAdmin && <AdminPage candidates={officialCandidates} approvalCandidates={approvalCandidates} receipts={receipts} />}
     </main>
 
     <footer className={styles.footer}>가격 추적기 <span>영수증 관측가로 투명하게 비교하세요.</span></footer>
-    {page !== "cart" && <FloatingCartButton quantity={cartQuantityTotal} total={cartTotal} onOpen={() => setPage("cart")} />}
+    {page !== "cart" && <FloatingCartButton quantity={cartQuantityTotal} total={cartTotal} onOpen={() => navigate("cart")} />}
     <nav className={styles.mobileNav} aria-label="모바일 주요 메뉴">
-      <button className={page === "home" ? styles.mobileNavActive : ""} aria-current={page === "home" ? "page" : undefined} onClick={() => setPage("home")}><span aria-hidden="true">⌂</span>홈</button>
-      <button className={page === "products" ? styles.mobileNavActive : ""} aria-current={page === "products" ? "page" : undefined} onClick={() => setPage("products")}><span aria-hidden="true">⌕</span>상품 목록</button>
-      <button className={page === "cart" ? styles.mobileNavActive : ""} aria-current={page === "cart" ? "page" : undefined} onClick={() => setPage("cart")}><span aria-hidden="true">🛒</span>장바구니<b>{cartQuantityTotal || ""}</b></button>
-      <button className={page === "markets" ? styles.mobileNavActive : ""} aria-current={page === "markets" ? "page" : undefined} onClick={() => { setSelectedMarket(null); setPage("markets"); }}><span aria-hidden="true">⌖</span>판매처 기록</button>
+      <button className={page === "home" ? styles.mobileNavActive : ""} aria-current={page === "home" ? "page" : undefined} onClick={() => navigate("home")}><span aria-hidden="true">⌂</span>홈</button>
+      <button className={page === "restaurants" ? styles.mobileNavActive : ""} aria-current={page === "restaurants" ? "page" : undefined} onClick={() => navigate("restaurants")}><span aria-hidden="true">♨</span>음식점</button>
+      <button className={page === "products" ? styles.mobileNavActive : ""} aria-current={page === "products" ? "page" : undefined} onClick={() => navigate("products")}><span aria-hidden="true">⌕</span>상품 목록</button>
+      <button className={page === "cart" ? styles.mobileNavActive : ""} aria-current={page === "cart" ? "page" : undefined} onClick={() => navigate("cart")}><span aria-hidden="true">🛒</span>장바구니<b>{cartQuantityTotal || ""}</b></button>
+      <button className={page === "markets" ? styles.mobileNavActive : ""} aria-current={page === "markets" ? "page" : undefined} onClick={() => navigate("markets")}><span aria-hidden="true">⌖</span>판매처 기록</button>
     </nav>
 
     {authOpen && <AuthPanel onChange={handleAuthChange} modal onClose={() => setAuthOpen(false)} />}
-    {trendGroup && <PriceTrendModal group={trendGroup} onClose={() => setTrendGroup(null)} onOpenStore={(store) => { setTrendGroup(null); setSelectedMarket(store); setPage("markets"); }} />}
-    {cartGroupToAdd && <CartQuantityModal group={cartGroupToAdd} value={cartQuantity} error={cartQuantityError} onChange={(value) => { setCartQuantity(value); setCartQuantityError(""); }} onClose={() => setCartGroupToAdd(null)} onConfirm={confirmAddToCart} />}
-    {cartNotice && <CartNoticeModal productName={cartNotice.productName} quantity={cartNotice.quantity} onClose={() => setCartNotice(null)} onGoCart={() => { setCartNotice(null); setPage("cart"); }} />}
+    {trendGroup && <PriceTrendModal group={trendGroup} onClose={() => setTrendGroup(null)} onOpenStore={(store) => { setTrendGroup(null); navigate("markets", { selectedMarket: store }); }} />}
+    {cartProductToAdd && <CartQuantityModal product={cartProductToAdd} value={cartQuantity} error={cartQuantityError} onChange={(value) => { setCartQuantity(value); setCartQuantityError(""); }} onClose={() => setCartProductToAdd(null)} onConfirm={confirmAddToCart} />}
+    {cartNotice && <CartNoticeModal productName={cartNotice.productName} quantity={cartNotice.quantity} onClose={() => setCartNotice(null)} onGoCart={() => { setCartNotice(null); navigate("cart"); }} />}
   </div>;
 }
 
-function CategoryBox({ category, onSelect }: { category: ProductCategory; onSelect: (category?: ProductCategory) => void }) {
-  const featured = PRODUCT_CATEGORIES.filter((item) => item !== "전체" && item !== "미분류");
-  return <section className={styles.panel}><div className={styles.panelTitle}><div><p className={styles.kicker}>EXPLORE</p><h2>카테고리</h2></div><button className={styles.textButton} onClick={() => onSelect("전체")}>전체 보기 →</button></div><div className={styles.categoryList}>{featured.map((item, index) => <button aria-pressed={category === item} className={category === item ? styles.categoryActive : ""} key={item} onClick={() => onSelect(item)}><span className={`${styles.categoryIcon} ${styles[`icon${index}`]}`} aria-hidden="true">{["🍚", "🧴", "🍳", "🥬", "🥤", "🍪"][index]}</span><span>{item}</span><span className={styles.arrow} aria-hidden="true">›</span></button>)}</div></section>;
+function ExploreTypeBox({ onRestaurants, onProducts }: { onRestaurants: () => void; onProducts: () => void }) {
+  return <section className={styles.panel}>
+    <div className={styles.panelTitle}><div><p className={styles.kicker}>EXPLORE</p><h2>무엇을 비교할까요?</h2></div></div>
+    <div className={styles.homeDomainList}>
+      <button type="button" onClick={onRestaurants}>
+        <span className={styles.homeDomainIcon} aria-hidden="true">🍽</span>
+        <span><strong>음식점</strong><small>식당 Brand · 메뉴 · 지점별 가격 · 영양성분</small></span>
+        <span className={styles.arrow} aria-hidden="true">›</span>
+      </button>
+      <button type="button" onClick={onProducts}>
+        <span className={styles.homeDomainIcon} aria-hidden="true">🛍</span>
+        <span><strong>상품</strong><small>표준 상품 · 정확 규격 · 판매처별 관측가</small></span>
+        <span className={styles.arrow} aria-hidden="true">›</span>
+      </button>
+    </div>
+  </section>;
 }
 
 function CartBox({ count, quantity, total, onOpen }: { count: number; quantity: number; total: number; onOpen: () => void }) {

@@ -42,11 +42,13 @@ export function PxOfficialProductBrowser({
   listings: sourceListings,
   query,
   category,
+  onAdd,
 }: {
   catalog: PublicOfficialChannelCatalog;
   listings: PublicOfficialChannelListing[];
   query: string;
   category: ProductCategory;
+  onAdd: (listing: PublicOfficialChannelListing) => void;
 }) {
   const [sort, setSort] = useState<OfficialChannelListingSort>("price-asc");
   const [page, setPage] = useState(1);
@@ -65,17 +67,19 @@ export function PxOfficialProductBrowser({
       <div>
         <p className={styles.kicker}>OFFICIAL CHANNEL COLLECTION</p>
         <h2>표준 상품 연결 전 공식 판매상품</h2>
-        <p>{catalog.channel.name} 공식 사이트 전체상품 {catalog.collection.listingCount.toLocaleString("ko-KR")}개 중 연결 전 상품 {sourceListings.length.toLocaleString("ko-KR")}개를 표시합니다.</p>
+        <p>연결 전 {sourceListings.length.toLocaleString("ko-KR")}개 · {formatObservedAt(catalog.sourceSnapshot.capturedAt)} 기준</p>
       </div>
-      <dl>
-        <div><dt>수집 범위</dt><dd>마트 판매상품 컬렉션</dd></div>
-        <div><dt>수집 상태</dt><dd>{catalog.collection.completeness === "full" ? "전체 페이지 수집 완료" : "부분 수집"}</dd></div>
-        <div><dt>기준 시각</dt><dd>{formatObservedAt(catalog.sourceSnapshot.capturedAt)}</dd></div>
-      </dl>
-    </div>
-
-    <div className={styles.officialChannelNotice} role="note">
-      {catalog.notices.map((notice) => <p key={notice}>{notice}</p>)}
+      <details className={styles.officialChannelAbout}>
+        <summary>출처·수집 기준 보기</summary>
+        <dl>
+          <div><dt>공식 채널</dt><dd>{catalog.channel.name}</dd></div>
+          <div><dt>전체 상품</dt><dd>{catalog.collection.listingCount.toLocaleString("ko-KR")}개</dd></div>
+          <div><dt>수집 상태</dt><dd>{catalog.collection.completeness === "full" ? "전체 페이지 수집 완료" : "부분 수집"}</dd></div>
+        </dl>
+        <div className={styles.officialChannelNotice} role="note">
+          {catalog.notices.map((notice) => <p key={notice}>{notice}</p>)}
+        </div>
+      </details>
     </div>
 
     <div className={styles.officialChannelToolbar}>
@@ -98,8 +102,8 @@ export function PxOfficialProductBrowser({
         <div className={`${styles.productInfo} ${styles.officialChannelInfo}`}>
           <span className={styles.officialCategoryBadge}>{listing.category}</span>
           <h2>{listing.sourceNameRaw}</h2>
-          <p><b>업체명 원문</b> {listing.vendorNameRaw ?? "미표시"}</p>
-          <p><b>규격 원문</b> {listing.specificationTextRaw ?? "미표시"}</p>
+          <p><b>업체</b> {listing.vendorNameRaw ?? "미표시"}</p>
+          <p><b>규격</b> {listing.specificationTextRaw ?? "미표시"}</p>
           <div className={styles.officialChannelPrice}>
             <small>공식 사이트 표시가</small>
             <strong>{formatKrw(listing.officialPrice.amountKrw)}</strong>
@@ -108,7 +112,7 @@ export function PxOfficialProductBrowser({
             <span>상품코드 {listing.sourceProductCode}</span>
             <span>{formatObservedAt(listing.officialPrice.observedAt)} 관측</span>
           </div>
-          <span className={styles.standardLinkStatus}>표준 상품 연결 전</span>
+          <div className={styles.productActions}><button type="button" aria-label={`${listing.sourceNameRaw} 장바구니에 담기`} onClick={() => onAdd(listing)}>+ 담기</button></div>
         </div>
       </article>)}
     </div>

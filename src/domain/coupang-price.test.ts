@@ -42,6 +42,22 @@ describe("Coupang price options", () => {
     expect(resolved.bundleSavingsKrw).toBe(0);
   });
 
+  it("normalizes a different Coupang weight against the requested reference unit", () => {
+    const resolved = resolveCoupangPrice({
+      ...baseObservation,
+      listedPriceKrw: 3_600,
+      maxBundleQuantity: null,
+      maxBundleListedPriceKrw: null,
+      contentAmount: 360,
+    }, 100);
+
+    expect(resolved.contentAmount).toBe(360);
+    expect(resolved.requiredOffer).toMatchObject({
+      unitPriceKrw: 1_000,
+      referenceLabel: "100g당",
+    });
+  });
+
   it("uses exact totals to choose a bundle even when displayed unit prices round to a tie", () => {
     const resolved = resolveCoupangPrice({
       ...baseObservation,

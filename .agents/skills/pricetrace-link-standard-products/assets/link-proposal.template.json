@@ -2,7 +2,7 @@
   "schemaVersion": "pricetrace-link-proposal.v3",
   "caseId": "case-20260731-demo",
   "status": "approval_requested",
-  "inputFingerprint": "sha256:c4645b3119aec15356aea40beace604ffbcbc5d45464e87851a32cc12637f870",
+  "inputFingerprint": "sha256:62193ee012771e989f8654ff261ca8e98716a1889e9b4604ef4987c58b2b9836",
   "receipt": {
     "receiptId": "receipt-demo",
     "receiptItemId": "item-demo",
@@ -22,7 +22,7 @@
     "snapshotId": "33333333-3333-4333-8333-333333333333",
     "snapshotHash": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
     "sourceNameRaw": "Demo Product 500 ml",
-    "specificationTextRaw": "500 ml, one bottle",
+    "specificationTextRaw": "500 ml",
     "sourceRefs": [
       "private-data/official/demo.json#official-code-001"
     ],
@@ -43,8 +43,7 @@
     "importedOfficialFields": [
       "brand",
       "contentAmount",
-      "contentUnit",
-      "packageCount"
+      "contentUnit"
     ]
   },
   "normalizedIdentity": {
@@ -57,11 +56,11 @@
     "gtin": null
   },
   "decision": {
-    "action": "reuse_variant",
-    "standardProductId": "11111111-1111-4111-8111-111111111111",
-    "catalogProductId": "22222222-2222-4222-8222-222222222222",
-    "proposedStandardName": null,
-    "proposedVariantName": null,
+    "action": "create_family_and_variant",
+    "standardProductId": null,
+    "catalogProductId": null,
+    "proposedStandardName": "Demo Product",
+    "proposedVariantName": "Demo Product 500 ml",
     "confidence": "high",
     "matchedFields": [
       "brand",
@@ -73,7 +72,16 @@
     "conflictingFields": [],
     "missingFields": []
   },
-  "coupangOffer": null,
+  "coupangOffer": {
+    "url": "https://www.coupang.com/vp/products/123?itemId=456&vendorItemId=789",
+    "totalPriceKrw": 1200,
+    "quantity": 1,
+    "contentAmount": 500,
+    "contentUnit": "ml",
+    "observedAt": "2026-07-31T10:10:00+09:00",
+    "maxBundleQuantity": null,
+    "maxBundleTotalPriceKrw": null
+  },
   "representativeImage": {
     "scope": "standard_product_family",
     "action": "create",
@@ -83,6 +91,153 @@
     "mediaType": "image/webp",
     "byteLength": 12345,
     "expectedCurrent": null
+  },
+  "executionTarget": {
+    "caseId": "case-20260731-demo",
+    "inputFingerprint": "sha256:62193ee012771e989f8654ff261ca8e98716a1889e9b4604ef4987c58b2b9836",
+    "approvalPolicy": {
+      "mode": "authenticated_admin_explicit_second_step",
+      "requiredStatementPrefix": "APPROVE_STANDARD_PRODUCT_LINK",
+      "statementTemplateVersion": "link-approval-ko-v1",
+      "oneTimeTargetFingerprint": true
+    },
+    "sameChannelNameRule": {
+      "sameChannel": true,
+      "normalization": "remove_unicode_whitespace_only",
+      "normalizedReceiptName": "DemoProduct500ml",
+      "normalizedOfficialName": "DemoProduct500ml",
+      "exactNameMatch": true,
+      "outcome": "apply_official_identity",
+      "importedOfficialFields": [
+        "brand",
+        "contentAmount",
+        "contentUnit"
+      ]
+    },
+    "officialSpecificationCheck": {
+      "specificationTextRaw": "500 ml",
+      "parsedContentAmount": 500,
+      "parsedContentUnit": "ml",
+      "parsedPackageCount": 1,
+      "packageCountBasis": "default_one_absent_count",
+      "matchesTarget": true
+    },
+    "normalizedIdentity": {
+      "brand": "Demo Brand",
+      "productFamilyName": "Demo Product",
+      "variantName": "Demo Product 500 ml",
+      "specificationStatus": "verified",
+      "contentAmount": 500,
+      "contentUnit": "ml",
+      "packageCount": 1,
+      "referenceUnit": 100,
+      "gtin": null
+    },
+    "brandEvidence": {
+      "canonicalName": "Demo Brand",
+      "receiptObservedName": null,
+      "officialObservedName": "Demo Brand",
+      "officialSourceLabel": "example.com",
+      "productReferenceUrl": "https://example.com/official-code-001"
+    },
+    "decision": {
+      "action": "create_family_and_variant",
+      "standardProductId": null,
+      "catalogProductId": null,
+      "proposedStandardName": "Demo Product",
+      "proposedVariantName": "Demo Product 500 ml",
+      "confidence": "high",
+      "matchedFields": [
+        "brand",
+        "productFamilyName",
+        "contentAmount",
+        "contentUnit",
+        "packageCount"
+      ],
+      "conflictingFields": [],
+      "missingFields": []
+    },
+    "coupangOffer": {
+      "productUrl": "https://www.coupang.com/vp/products/123?itemId=456&vendorItemId=789",
+      "listedPriceKrw": 1200,
+      "quantity": 1,
+      "contentAmount": 500,
+      "contentUnit": "ml",
+      "maxBundleQuantity": null,
+      "maxBundleListedPriceKrw": null
+    },
+    "representativeImage": {
+      "scope": "standard_product_family",
+      "action": "create",
+      "sourceType": "external_url",
+      "imageUrl": "https://example.com/images/official-code-001.webp",
+      "contentHash": "sha256:2222222222222222222222222222222222222222222222222222222222222222",
+      "mediaType": "image/webp",
+      "byteLength": 12345,
+      "expectedCurrent": null
+    },
+    "evidence": [
+      {
+        "sourceType": "receipt",
+        "sourceId": "receipt-demo:item-demo",
+        "authority": "transactional",
+        "url": null,
+        "capturedAt": "2026-07-31T10:00:00+09:00",
+        "claims": [
+          "Observed receipt name, price, quantity, and source product code."
+        ],
+        "sourceRefs": [
+          "private-data/receipts/demo.json#item-demo"
+        ]
+      },
+      {
+        "sourceType": "official_channel",
+        "sourceId": "official-channel:official-listing-code:official-code-001",
+        "authority": "primary",
+        "url": "https://example.com/official-code-001",
+        "capturedAt": "2026-07-31T10:05:00+09:00",
+        "claims": [
+          "Official listing confirms brand, family, and 500 ml content."
+        ],
+        "sourceRefs": [
+          "private-data/official/demo.json#official-code-001"
+        ]
+      },
+      {
+        "sourceType": "coupang",
+        "sourceId": "coupang:product:123:item:456:vendorItem:789",
+        "authority": "transactional",
+        "url": "https://www.coupang.com/vp/products/123?itemId=456&vendorItemId=789",
+        "capturedAt": "2026-07-31T10:10:00+09:00",
+        "claims": [
+          "The exact 500 ml one-unit option was observed at 1200 KRW."
+        ],
+        "sourceRefs": [
+          "private-data/coupang/demo-123-456.json"
+        ]
+      }
+    ],
+    "review": {
+      "verdict": "approve",
+      "reviewerAgent": "pricetrace_independent_reviewer",
+      "counterCandidates": [
+        "No compatible counter-candidate found in the supplied catalog snapshot."
+      ],
+      "conflicts": [],
+      "evidenceQuality": "sufficient",
+      "notes": [
+        "GTIN is unavailable but non-blocking for this demonstrated write path.",
+        "Demo values only; replace every field before requesting approval."
+      ]
+    },
+    "plannedEffects": [
+      "create_standard_family",
+      "create_catalog_variant",
+      "link_official_listing",
+      "verify_receipt_mapping",
+      "register_coupang_offer",
+      "update_representative_image"
+    ]
   },
   "evidence": [
     {
@@ -105,10 +260,23 @@
       "url": "https://example.com/official-code-001",
       "capturedAt": "2026-07-31T10:05:00+09:00",
       "claims": [
-        "Official listing confirms brand, family, 500 ml content, and one-bottle package."
+        "Official listing confirms brand, family, and 500 ml content."
       ],
       "sourceRefs": [
         "private-data/official/demo.json#official-code-001"
+      ]
+    },
+    {
+      "sourceType": "coupang",
+      "sourceId": "coupang:product:123:item:456:vendorItem:789",
+      "authority": "transactional",
+      "url": "https://www.coupang.com/vp/products/123?itemId=456&vendorItemId=789",
+      "capturedAt": "2026-07-31T10:10:00+09:00",
+      "claims": [
+        "The exact 500 ml one-unit option was observed at 1200 KRW."
+      ],
+      "sourceRefs": [
+        "private-data/coupang/demo-123-456.json"
       ]
     }
   ],
@@ -126,10 +294,11 @@
     ]
   },
   "plannedEffects": [
-    "reuse_standard_family",
-    "reuse_catalog_variant",
+    "create_standard_family",
+    "create_catalog_variant",
     "link_official_listing",
     "verify_receipt_mapping",
+    "register_coupang_offer",
     "update_representative_image"
   ],
   "approval": {
@@ -137,11 +306,11 @@
     "approvalRef": null,
     "userApprovalText": null,
     "approvedAt": null,
-    "targetFingerprint": "sha256:11b8ec429fa0d4bdbe6ec5eee730a752f011424ade881c80eebf0f02c19e1baf"
+    "targetFingerprint": "sha256:36d05f406d6060447181b2e47d93cbc395862f972bc07056ded6ebf306a91d83"
   },
   "execution": {
     "status": "not_started",
-    "idempotencyKey": "link:case-20260731-demo:pending-approval",
+    "idempotencyKey": "standard-product-link:36d05f406d6060447181b2e47d93cbc395862f972bc07056ded6ebf306a91d83",
     "appliedAt": null,
     "result": null
   }

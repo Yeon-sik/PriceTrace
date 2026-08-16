@@ -1,5 +1,5 @@
 import { z } from "zod";
-import type { Receipt } from "./types";
+import type { PurchaseType, Receipt } from "./types";
 
 const minorAmount = z.number().int();
 const nonNegativeMinorAmount = minorAmount.nonnegative();
@@ -77,6 +77,14 @@ export const ReceiptJsonSchema = z.object({
 export type ReceiptJson = z.infer<typeof ReceiptJsonSchema>;
 
 export const receiptItemId = (receiptId: string, lineId: string) => `${receiptId}:${lineId}`;
+
+export function purchaseTypeForReceipt(receipt: Pick<Receipt, "storeBusinessKind">): PurchaseType {
+  return receipt.storeBusinessKind === "food_service" ? "menu_item" : "retail_product";
+}
+
+export function nullableSourceProductCode(sourceProductCode: string) {
+  return sourceProductCode.trim().length > 0 ? sourceProductCode : null;
+}
 
 function sourceProductCode(line: ReceiptJson["line_items"][number]) {
   return line.identifiers.find((identifier) => identifier.scheme === "merchant_sku")?.value ?? "";

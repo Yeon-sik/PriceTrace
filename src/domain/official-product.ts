@@ -1,3 +1,6 @@
+import type { Confidence } from "./types";
+import type { OfficialListingDiscoveryMethod } from "./official-listing-candidate";
+
 export type OfficialProductCandidate = {
   sourceProductCode: string;
   productName: string;
@@ -14,6 +17,11 @@ export type OfficialProductCandidate = {
   receiptUnitPriceKrw?: number;
   receiptQuantity?: number;
   receiptTotalPriceKrw?: number;
+  receiptConfidence?: Confidence;
+  /** Reviewed UI alias only. The immutable receipt source remains productName. */
+  reviewedProductName?: string;
+  reviewedProductNameSourceRefs?: string[];
+  officialDiscoveryMethod?: OfficialListingDiscoveryMethod;
   officialChannelId?: string;
   officialSourceProductCodeNamespace?: string;
   officialSourceProductCode?: string;
@@ -22,6 +30,9 @@ export type OfficialProductCandidate = {
   officialSourceNameRaw?: string;
   officialVendorNameRaw?: string;
   officialSpecificationTextRaw?: string;
+  officialPriceAmountKrw?: number;
+  officialPriceSourceText?: string;
+  officialPriceObservedAt?: string;
   officialSourceRefs?: string[];
   officialImageUrl?: string;
   officialImageContentHash?: string;
@@ -36,6 +47,43 @@ export type StandardProductMapping<T> = {
   productName?: string;
   product: T;
 };
+
+type FrozenReceiptCandidateIdentity = {
+  receiptId: string;
+  receiptItemId: string;
+  sourceCatalogNamespace: string | null;
+  sourceLabel: string;
+  sourceProductCode: string;
+  sourceNameRaw: string;
+};
+
+/**
+ * Resolves the exact public receipt row frozen into an approval proposal.
+ * Approval candidates intentionally keep every observation instead of only a
+ * grouped product's latest row, so an older reviewed receipt remains openable.
+ */
+export function findFrozenReceiptCandidate<T extends OfficialProductCandidate>(
+  candidates: T[],
+  receipt: FrozenReceiptCandidateIdentity,
+) {
+  return candidates.find((candidate) => (
+    candidate.receiptId === receipt.receiptId
+    && candidate.receiptItemId === receipt.receiptItemId
+    && (
+      candidate.catalogNamespace === receipt.sourceCatalogNamespace
+      || (
+        // A reviewed proposal may carry a catalog namespace that the public
+        // receipt projection still cannot express. A known, different current
+        // namespace remains a hard mismatch.
+        candidate.catalogNamespace === null
+        && receipt.sourceCatalogNamespace !== null
+      )
+    )
+    && candidate.storeLabel === receipt.sourceLabel
+    && candidate.sourceProductCode === receipt.sourceProductCode
+    && candidate.productName === receipt.sourceNameRaw
+  ));
+}
 
 function sourceMappingKey(sourceLabel: string, sourceProductCode: string) {
   return `${sourceLabel.trim().toLocaleLowerCase("ko-KR")}:${sourceProductCode.trim()}`;
@@ -133,6 +181,33 @@ export function mergeOfficialProductCandidates(candidates: OfficialProductCandid
     grouped.set(key, existing ? { ...existing, storeLabels } : { ...candidate, storeLabels });
   }
   return [...grouped.values()];
+}
+
+/**
+ * Builds one UI identity per shared catalog item before resolving verified
+ * mappings. This keeps seller observations available through `storeLabels`
+ * without rendering duplicate React keys for the same shared item.
+ */
+export function resolveOfficialProductCandidates<T>(
+  candidates: OfficialProductCandidate[],
+  mappings: StandardProductMapping<T>[],
+) {
+  const mergedCandidates = mergeOfficialProductCandidates(candidates);
+  const identityAwareMappings = mappings.map((mapping) => {
+    const peer = mergedCandidates.find((candidate) => (
+      candidate.sourceProductCode.trim() === mapping.sourceProductCode.trim()
+      && (candidate.storeLabels?.length ? candidate.storeLabels : [candidate.storeLabel])
+        .some((seller) => seller.trim().toLocaleLowerCase("ko-KR") === mapping.sourceLabel.trim().toLocaleLowerCase("ko-KR"))
+    ));
+    return peer
+      ? { ...mapping, martTag: peer.martTag, productName: peer.productName }
+      : mapping;
+  });
+
+  return mergedCandidates.map((candidate) => ({
+    candidate,
+    product: resolveMartTaggedStandardProductMapping(candidate, identityAwareMappings),
+  }));
 }
 
 export type OfficialProductRecord = {

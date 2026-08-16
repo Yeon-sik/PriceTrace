@@ -13,6 +13,7 @@ export const PublicStandardCatalogRowSchema = z.object({
   catalog_product_id: z.string().uuid(),
   standard_product_id: z.string().uuid(),
   standard_name: z.string().trim().min(1).max(300),
+  brand_name: z.string().trim().min(1).max(200).nullable().optional().default(null),
   content_amount: z.number().positive(),
   content_unit: z.enum(["g", "ml", "each"]),
   package_count: z.number().int().positive(),
@@ -109,6 +110,7 @@ export function buildPublicStandardCatalogIndex(rows: PublicStandardCatalogRow[]
   const exactStandardMappings = new Map<string, string>();
   const catalogSpecs = new Map<string, ProductSpecification & { standardProductId: string }>();
   const standardNames = new Map<string, string>();
+  const standardBrands = new Map<string, string>();
   const coupangByStandard = new Map<string, PublicCoupangPrice>();
 
   for (const row of rows) {
@@ -128,6 +130,7 @@ export function buildPublicStandardCatalogIndex(rows: PublicStandardCatalogRow[]
       standardProductId: row.standard_product_id,
     });
     standardNames.set(row.standard_product_id, row.standard_name);
+    if (row.brand_name) standardBrands.set(row.standard_product_id, row.brand_name);
 
     if (
       row.coupang_listed_price_krw === null
@@ -152,5 +155,5 @@ export function buildPublicStandardCatalogIndex(rows: PublicStandardCatalogRow[]
     }
   }
 
-  return { standardMappings, exactStandardMappings, catalogSpecs, standardNames, coupangByStandard };
+  return { standardMappings, exactStandardMappings, catalogSpecs, standardNames, standardBrands, coupangByStandard };
 }

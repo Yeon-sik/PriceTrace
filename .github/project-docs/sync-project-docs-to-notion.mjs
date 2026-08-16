@@ -130,20 +130,29 @@ export function buildDocumentConfiguration(
   environment = process.env,
   rootDirectory = process.cwd(),
   configPath = DEFAULT_CONFIG_PATH,
+  {
+    projectConfig: projectConfigOverride,
+    sourceMarkdownByPath,
+  } = {},
 ) {
   const apiKey = (environment.NOTION_TOKEN || environment.NOTION_API_KEY)?.trim();
   if (!apiKey) throw new Error("NOTION_TOKEN GitHub Secret is required.");
 
-  const projectConfig = loadProjectDocsConfig({ rootDirectory, configPath });
+  const projectConfig =
+    projectConfigOverride ?? loadProjectDocsConfig({ rootDirectory, configPath });
   const pageIds = pageIdsFromEnvironment(environment, projectConfig.documents);
   const documents = projectConfig.documents.map((document) => ({
     ...document,
     file: path.resolve(projectConfig.rootDirectory, document.repositoryPath),
     pageId: pageIds.get(document.key),
+    sourceMarkdown: sourceMarkdownByPath?.get(document.repositoryPath),
   }));
 
   for (const document of documents) {
-    readFileSync(document.file, "utf8");
+    if (sourceMarkdownByPath && typeof document.sourceMarkdown !== "string") {
+      throw new Error(`Immutable source Markdown is missing for ${document.label}.`);
+    }
+    if (!sourceMarkdownByPath) readFileSync(document.file, "utf8");
   }
 
   return {
@@ -204,7 +213,10 @@ export function rewriteRelativeLinks(markdown, sourceDocument, documents, contex
 }
 
 export function renderNotionMarkdown(sourceDocument, documents, context) {
-  const source = readFileSync(sourceDocument.file, "utf8");
+  const source =
+    typeof sourceDocument.sourceMarkdown === "string"
+      ? sourceDocument.sourceMarkdown
+      : readFileSync(sourceDocument.file, "utf8");
   const rewritten = rewriteRelativeLinks(source, sourceDocument, documents, context);
   if (!context.repository || !context.sourceSha) return rewritten;
 
@@ -218,12 +230,12 @@ export function renderNotionMarkdown(sourceDocument, documents, context) {
   return `${banner}${rewritten}`;
 }
 
-async function notionRequest(url, init, label) {
+async function notionRequest(url, init, label, fetchImpl = fetch) {
   let lastError;
 
   for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt += 1) {
     try {
-      const response = await fetch(url, {
+      const response = await fetchImpl(url, {
         ...init,
         signal: AbortSignal.timeout(30_000),
       });
@@ -261,7 +273,7 @@ function normalizedPageId(pageId) {
   return pageId.replaceAll("-", "").toLocaleLowerCase();
 }
 
-async function preflightDocument(document, configuration) {
+async function preflightDocument(document, configuration, fetchImpl) {
   const response = await notionRequest(
     `${configuration.apiBaseUrl}/v1/pages/${encodeURIComponent(document.pageId)}/markdown`,
     {
@@ -272,6 +284,7 @@ async function preflightDocument(document, configuration) {
       },
     },
     `${document.label} preflight`,
+    fetchImpl,
   );
   const result = await response.json();
   if (result.object !== "page_markdown") {
@@ -292,7 +305,7 @@ async function preflightDocument(document, configuration) {
   return result;
 }
 
-async function updateDocument(document, configuration, markdown) {
+async function updateDocument(document, configuration, markdown, fetchImpl) {
   const startedAt = Date.now();
   const response = await notionRequest(
     `${configuration.apiBaseUrl}/v1/pages/${encodeURIComponent(document.pageId)}/markdown`,
@@ -309,6 +322,7 @@ async function updateDocument(document, configuration, markdown) {
       }),
     },
     `${document.label} sync`,
+    fetchImpl,
   );
 
   const result = await response.json();
@@ -386,8 +400,19 @@ export async function syncProjectDocuments({
   rootDirectory = process.cwd(),
   configPath = DEFAULT_CONFIG_PATH,
   dryRun = false,
+  fetchImpl = fetch,
+  projectConfig,
+  sourceMarkdownByPath,
 } = {}) {
-  const configuration = buildDocumentConfiguration(environment, rootDirectory, configPath);
+  const configuration = buildDocumentConfiguration(
+    environment,
+    rootDirectory,
+    configPath,
+    {
+      projectConfig,
+      sourceMarkdownByPath,
+    },
+  );
   const renderedDocuments = configuration.documents.map((document) => ({
     document,
     markdown: renderNotionMarkdown(document, configuration.documents, configuration),
@@ -405,7 +430,9 @@ export async function syncProjectDocuments({
   }
 
   const preflight = await Promise.allSettled(
-    renderedDocuments.map(({ document }) => preflightDocument(document, configuration)),
+    renderedDocuments.map(({ document }) =>
+      preflightDocument(document, configuration, fetchImpl),
+    ),
   );
   const preflightFailures = [];
   preflight.forEach((result, index) => {
@@ -438,7 +465,7 @@ export async function syncProjectDocuments({
   const settled = await Promise.allSettled(
     renderedDocuments.map(({ document, markdown }) => {
       if (!alreadyCurrent.has(document.key)) {
-        return updateDocument(document, configuration, markdown);
+        return updateDocument(document, configuration, markdown, fetchImpl);
       }
       return Promise.resolve({
         label: document.label,

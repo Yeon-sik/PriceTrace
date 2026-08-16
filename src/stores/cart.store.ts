@@ -1,6 +1,7 @@
 "use client";
 
 import { create } from "zustand";
+import { normalizeCartQuantity } from "@/domain/cart";
 import { LocalStorageCartRepository, type CartLines } from "@/repositories/cart.repository";
 
 const repository = new LocalStorageCartRepository();
@@ -25,11 +26,18 @@ export const useCartStore = create<CartStore>((set) => ({
   lines: {},
   hydrated: false,
   hydrate: () => set({ lines: repository.load(), hydrated: true }),
-  add: (productId, quantity) => set((state) => ({ lines: persist({ ...state.lines, [productId]: (state.lines[productId] ?? 0) + quantity }) })),
+  add: (productId, quantity) => set((state) => {
+    const addedQuantity = normalizeCartQuantity(quantity);
+    if (addedQuantity === null) return { lines: state.lines };
+    const currentQuantity = normalizeCartQuantity(state.lines[productId]) ?? 0;
+    return { lines: persist({ ...state.lines, [productId]: currentQuantity + addedQuantity }) };
+  }),
   setQuantity: (productId, quantity) => set((state) => {
+    if (!Number.isFinite(quantity)) return { lines: state.lines };
     const lines = { ...state.lines };
-    if (quantity < 1) delete lines[productId];
-    else lines[productId] = quantity;
+    const normalizedQuantity = normalizeCartQuantity(quantity);
+    if (normalizedQuantity === null) delete lines[productId];
+    else lines[productId] = normalizedQuantity;
     return { lines: persist(lines) };
   }),
   remove: (productId) => set((state) => {

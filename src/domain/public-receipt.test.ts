@@ -10,6 +10,7 @@ import {
   publicDataHash,
   publicReceiptFilesToReceipts,
 } from "./public-receipt";
+import { applyReceiptMerchantCatalogProfiles } from "./receipt-merchant-catalog-profile";
 
 function createPrivateSource() {
   const source = createUniversalReceipt("Transparent Mart", "2026-07-22", "PRIVATE-TRANSACTION", 12_000, "SKU-1");
@@ -33,6 +34,76 @@ function createPrivateSource() {
 }
 
 describe("public receipt files", () => {
+  it("applies a reviewed merchant catalog profile without mutating the raw receipt", () => {
+    const source = createPrivateSource();
+    expect(source.merchant.retail_channel).toBe("unknown");
+    expect(source.merchant.catalog_namespace).toBeNull();
+
+    const result = applyReceiptMerchantCatalogProfiles([{
+      receiptId: "2026-07-22_001",
+      source,
+    }], {
+      schemaVersion: "pricetrace-receipt-merchant-catalog-profiles.v1",
+      profiles: [{
+        id: "reviewed-store",
+        match: {
+          merchantId: "PUBLIC-MERCHANT-ID",
+          businessRegistrationNumber: "123-45-67890",
+          address: "1 Transparent-ro",
+          phone: "02-1234-5678",
+        },
+        classification: {
+          retailChannel: "px",
+          catalogNamespace: "reviewed-px-catalog",
+        },
+        reviewedAt: "2026-08-09T00:00:00+09:00",
+        reason: "테스트 검토 근거",
+        sourceRefs: ["fixture:reviewed-store"],
+      }],
+    });
+
+    expect(result.applied).toEqual([{
+      receiptId: "2026-07-22_001",
+      profileId: "reviewed-store",
+    }]);
+    expect(result.sources[0].source.merchant).toMatchObject({
+      retail_channel: "px",
+      catalog_namespace: "reviewed-px-catalog",
+    });
+    expect(source.merchant).toMatchObject({
+      retail_channel: "unknown",
+      catalog_namespace: null,
+    });
+  });
+
+  it("rejects a reviewed merchant profile that conflicts with source classification", () => {
+    const source = createPrivateSource();
+    source.merchant.retail_channel = "regular";
+
+    expect(() => applyReceiptMerchantCatalogProfiles([{
+      receiptId: "2026-07-22_001",
+      source,
+    }], {
+      schemaVersion: "pricetrace-receipt-merchant-catalog-profiles.v1",
+      profiles: [{
+        id: "reviewed-store",
+        match: {
+          merchantId: "PUBLIC-MERCHANT-ID",
+          businessRegistrationNumber: "123-45-67890",
+          address: "1 Transparent-ro",
+          phone: "02-1234-5678",
+        },
+        classification: {
+          retailChannel: "px",
+          catalogNamespace: "reviewed-px-catalog",
+        },
+        reviewedAt: "2026-08-09T00:00:00+09:00",
+        reason: "테스트 검토 근거",
+        sourceRefs: ["fixture:reviewed-store"],
+      }],
+    })).toThrow(/충돌/);
+  });
+
   it("creates one transparent JSON file per receipt with a traceable date and sequence key", () => {
     const source = createPrivateSource();
     const files = buildPublicReceiptFiles([{ receiptId: "2026-07-22_001", source }]);
