@@ -20,6 +20,11 @@ const nutritionFoodRowSchema = z.object({
   catalog_product_id: z.string().uuid().nullable().optional(),
 }).passthrough();
 
+const nutritionFoodLinkRowSchema = z.object({
+  nutrition_food_id: z.string().trim().min(1),
+  catalog_product_id: z.string().uuid(),
+}).passthrough();
+
 const cashOsLedgerRowSchema = z.object({
   id: z.string().trim().min(1),
   title: z.string().trim().min(1),
@@ -60,7 +65,7 @@ function nutritionEndpointLabel() {
 
 function isNutritionReadSchemaCacheMiss(error: { code?: string; message?: string } | null) {
   const message = error?.message?.toLocaleLowerCase("en-US") ?? "";
-  return error?.code === "PGRST202"
+  return error?.code === "PGRST202" || error?.code === "42501"
     || (message.includes("get_nutrition_read_v2") && message.includes("schema cache"));
 }
 
@@ -117,20 +122,38 @@ async function searchFitnessMenusFromTable(
   query: string,
 ) {
   const pattern = `%${query}%`;
-  const select = "id,brand,name,kind,source_reference,catalog_product_id";
   const [brandResult, nameResult] = await Promise.all([
-    client.from("nutrition_foods").select(select).is("deleted_at", null).ilike("brand", pattern).limit(200),
-    client.from("nutrition_foods").select(select).is("deleted_at", null).ilike("name", pattern).limit(200),
+    client.from("nutrition_foods").select("id,brand,name,kind,source_reference").is("deleted_at", null).ilike("brand", pattern).limit(200),
+    client.from("nutrition_foods").select("id,brand,name,kind,source_reference").is("deleted_at", null).ilike("name", pattern).limit(200),
   ]);
   const error = brandResult.error ?? nameResult.error;
   if (error) {
     throw new Error(`${errorMessage(error, "FitnessApp 메뉴 정보를 불러오지 못했습니다.")} · 연결 대상 ${nutritionEndpointLabel()}`);
   }
 
+  // catalog_product_id belongs to product_nutrition_links, not nutrition_foods.
+  // A partially deployed Nutrition project may not expose that table yet; the
+  // menu itself is still safe to import, but no exact PriceTrace ID is inferred.
+  const linkResult = await client
+    .from("product_nutrition_links")
+    .select("nutrition_food_id,catalog_product_id")
+    .eq("status", "approved")
+    .is("deleted_at", null);
+  const approvedCatalogProductIds = new Map<string, string>();
+  if (!linkResult.error) {
+    for (const row of linkResult.data ?? []) {
+      const parsed = nutritionFoodLinkRowSchema.safeParse(row);
+      if (parsed.success) approvedCatalogProductIds.set(parsed.data.nutrition_food_id, parsed.data.catalog_product_id);
+    }
+  }
+
   const uniqueRows = new Map<string, z.infer<typeof nutritionFoodRowSchema>>();
   for (const row of [...(brandResult.data ?? []), ...(nameResult.data ?? [])]) {
     const parsed = nutritionFoodRowSchema.parse(row);
-    uniqueRows.set(parsed.id, parsed);
+    uniqueRows.set(parsed.id, {
+      ...parsed,
+      catalog_product_id: approvedCatalogProductIds.get(parsed.id) ?? null,
+    });
   }
   return [...uniqueRows.values()]
     .map((row) => mapFitnessMenuRow({
