@@ -2,9 +2,11 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 const getNutritionClient = vi.hoisted(() => vi.fn());
+const getPublicNutritionClient = vi.hoisted(() => vi.fn());
 
 vi.mock("../lib/supabase/nutrition-client", () => ({
   getNutritionSupabaseBrowserClient: getNutritionClient,
+  getNutritionSupabasePublicBrowserClient: getPublicNutritionClient,
 }));
 
 import { RestaurantMenuSourceRepository } from "./restaurant-menu-source.repository";
@@ -31,6 +33,7 @@ function queryResult(data: unknown[], error: { code?: string; message?: string }
 describe("RestaurantMenuSourceRepository FitnessApp fallback", () => {
   beforeEach(() => {
     getNutritionClient.mockReset();
+    getPublicNutritionClient.mockReset();
   });
 
   it("reads the real food columns and merges exact IDs from approved links", async () => {
@@ -98,5 +101,42 @@ describe("RestaurantMenuSourceRepository FitnessApp fallback", () => {
     const rows = await new RestaurantMenuSourceRepository().searchFitnessMenus("비빔밥");
 
     expect(rows[0]?.catalogProductId).toBeNull();
+  });
+
+  it("falls back to the anonymous public projection when the authenticated schema cache is stale", async () => {
+    const sessionTableError = { code: "PGRST205", message: "Could not find the table 'public.nutrition_foods' in the schema cache" };
+    const publicRows = [{
+      id: "fitness-food-public",
+      brand: "공개 식당",
+      name: "비빔밥",
+      kind: "external_menu",
+      source_reference: null,
+    }];
+    const sessionClient = {
+      rpc: vi.fn().mockResolvedValue({
+        data: null,
+        error: { code: "PGRST202", message: "Could not find the function public.get_nutrition_read_v2(p_query) in the schema cache" },
+      }),
+      from: vi.fn()
+        .mockReturnValueOnce(queryResult([], sessionTableError))
+        .mockReturnValueOnce(queryResult([], sessionTableError)),
+    } as unknown as SupabaseClient;
+    const publicClient = {
+      from: vi.fn()
+        .mockReturnValueOnce(queryResult(publicRows))
+        .mockReturnValueOnce(queryResult(publicRows))
+        .mockReturnValueOnce(queryResult([])),
+    } as unknown as SupabaseClient;
+    getNutritionClient.mockReturnValue(sessionClient);
+    getPublicNutritionClient.mockReturnValue(publicClient);
+
+    const rows = await new RestaurantMenuSourceRepository().searchFitnessMenus("비빔밥");
+
+    expect(rows).toMatchObject([{
+      id: "fitnessapp:fitness-food-public",
+      restaurantName: "공개 식당",
+      menuName: "비빔밥",
+    }]);
+    expect(publicClient.from).toHaveBeenCalledTimes(3);
   });
 });

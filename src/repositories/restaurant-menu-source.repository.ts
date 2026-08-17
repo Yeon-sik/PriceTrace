@@ -1,6 +1,9 @@
 import { z } from "zod";
 import { getCashOsSupabaseBrowserClient } from "../lib/supabase/cashos-client";
-import { getNutritionSupabaseBrowserClient } from "../lib/supabase/nutrition-client";
+import {
+  getNutritionSupabaseBrowserClient,
+  getNutritionSupabasePublicBrowserClient,
+} from "../lib/supabase/nutrition-client";
 
 const fitnessMenuRowSchema = z.object({
   nutrition_food_id: z.string().trim().min(1),
@@ -69,6 +72,13 @@ function isNutritionReadSchemaCacheMiss(error: { code?: string; message?: string
     || (message.includes("get_nutrition_read_v2") && message.includes("schema cache"));
 }
 
+function isNutritionTableSchemaCacheMiss(error: unknown) {
+  const candidate = error && typeof error === "object" ? error as { code?: string; message?: string } : null;
+  const message = (error instanceof Error ? error.message : candidate?.message)?.toLocaleLowerCase("en-US") ?? "";
+  return candidate?.code === "PGRST205"
+    || (message.includes("public.nutrition_foods") && message.includes("schema cache"));
+}
+
 function sourceComponent(value: string) {
   return value
     .trim()
@@ -115,6 +125,23 @@ function mapFitnessMenuRow(row: {
     observedOn: null,
     suggestedPriceKrw: null,
   };
+}
+
+function mapNutritionRpcRows(data: unknown) {
+  return z.array(fitnessMenuRowSchema).parse(data ?? [])
+    .map(mapFitnessMenuRow)
+    .filter((row): row is ImportedRestaurantMenu => row !== null);
+}
+
+async function refreshNutritionSession(
+  client: NonNullable<ReturnType<typeof getNutritionSupabaseBrowserClient>>,
+) {
+  try {
+    const { data, error } = await client.auth.refreshSession();
+    return !error && Boolean(data.session);
+  } catch {
+    return false;
+  }
 }
 
 async function searchFitnessMenusFromTable(
@@ -183,15 +210,26 @@ export class RestaurantMenuSourceRepository {
     });
     if (error) {
       if (isNutritionReadSchemaCacheMiss(error)) {
-        return searchFitnessMenusFromTable(client, normalizedQuery);
+        if (await refreshNutritionSession(client)) {
+          const retry = await client.rpc("get_nutrition_read_v2", {
+            p_query: normalizedQuery,
+          });
+          if (!retry.error) return mapNutritionRpcRows(retry.data);
+        }
+        try {
+          return await searchFitnessMenusFromTable(client, normalizedQuery);
+        } catch (fallbackError) {
+          const publicClient = getNutritionSupabasePublicBrowserClient();
+          if (publicClient && isNutritionTableSchemaCacheMiss(fallbackError)) {
+            return searchFitnessMenusFromTable(publicClient, normalizedQuery);
+          }
+          throw fallbackError;
+        }
       }
       throw new Error(errorMessage(error, "FitnessApp 메뉴 정보를 불러오지 못했습니다."));
     }
 
-    const rows = z.array(fitnessMenuRowSchema).parse(data ?? []);
-    return rows
-      .map(mapFitnessMenuRow)
-      .filter((row): row is ImportedRestaurantMenu => row !== null);
+    return mapNutritionRpcRows(data);
   }
 
   async searchCashOsMenus(query: string): Promise<ImportedRestaurantMenu[]> {
