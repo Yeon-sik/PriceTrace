@@ -14,6 +14,9 @@ export const PublicStandardCatalogRowSchema = z.object({
   standard_product_id: z.string().uuid(),
   standard_name: z.string().trim().min(1).max(300),
   brand_name: z.string().trim().min(1).max(200).nullable().optional().default(null),
+  standard_category_id: z.string().uuid().nullable().optional().default(null),
+  standard_category_slug: z.string().trim().min(1).max(100).nullable().optional().default(null),
+  standard_category_name: z.string().trim().min(1).max(100).nullable().optional().default(null),
   content_amount: z.number().positive(),
   content_unit: z.enum(["g", "ml", "each"]),
   package_count: z.number().int().positive(),
@@ -27,6 +30,19 @@ export const PublicStandardCatalogRowSchema = z.object({
   coupang_product_url: httpUrlSchema.nullable(),
   coupang_observed_at: z.string().datetime({ offset: true }).nullable(),
 }).strict().superRefine((row, context) => {
+  const categoryValues = [
+    row.standard_category_id,
+    row.standard_category_slug,
+    row.standard_category_name,
+  ];
+  const categoryCount = categoryValues.filter((value) => value !== null).length;
+  if (categoryCount !== 0 && categoryCount !== categoryValues.length) {
+    context.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: "표준 상품 카테고리 identity는 모두 존재하거나 모두 null이어야 합니다.",
+      path: ["standard_category_id"],
+    });
+  }
   const requiredCoupangValues = [
     row.coupang_listed_price_krw,
     row.coupang_quantity,
@@ -98,6 +114,12 @@ export const PublicStandardCatalogRowsSchema = z.array(PublicStandardCatalogRowS
 
 export type PublicStandardCatalogRow = z.infer<typeof PublicStandardCatalogRowSchema>;
 
+export type PublicStandardCategory = {
+  id: string;
+  slug: string;
+  name: string;
+};
+
 export type PublicCoupangPrice = CoupangPriceObservation;
 
 export function publicStandardMappingKey(sourceLabel: string, sourceProductCode: string) {
@@ -111,6 +133,7 @@ export function buildPublicStandardCatalogIndex(rows: PublicStandardCatalogRow[]
   const catalogSpecs = new Map<string, ProductSpecification & { standardProductId: string }>();
   const standardNames = new Map<string, string>();
   const standardBrands = new Map<string, string>();
+  const standardCategories = new Map<string, PublicStandardCategory>();
   const coupangByStandard = new Map<string, PublicCoupangPrice>();
 
   for (const row of rows) {
@@ -131,6 +154,13 @@ export function buildPublicStandardCatalogIndex(rows: PublicStandardCatalogRow[]
     });
     standardNames.set(row.standard_product_id, row.standard_name);
     if (row.brand_name) standardBrands.set(row.standard_product_id, row.brand_name);
+    if (row.standard_category_id && row.standard_category_slug && row.standard_category_name) {
+      standardCategories.set(row.standard_product_id, {
+        id: row.standard_category_id,
+        slug: row.standard_category_slug,
+        name: row.standard_category_name,
+      });
+    }
 
     if (
       row.coupang_listed_price_krw === null
@@ -155,5 +185,13 @@ export function buildPublicStandardCatalogIndex(rows: PublicStandardCatalogRow[]
     }
   }
 
-  return { standardMappings, exactStandardMappings, catalogSpecs, standardNames, standardBrands, coupangByStandard };
+  return {
+    standardMappings,
+    exactStandardMappings,
+    catalogSpecs,
+    standardNames,
+    standardBrands,
+    standardCategories,
+    coupangByStandard,
+  };
 }

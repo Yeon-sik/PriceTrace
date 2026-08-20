@@ -1,8 +1,10 @@
 import { z } from "zod";
 
 export const RESTAURANT_MENU_READ_SCHEMA_VERSION = "restaurant-menu-read.v1" as const;
-export const RESTAURANT_DIRECTORY_SCHEMA_VERSION = "restaurant-directory.v1" as const;
-export const RESTAURANT_DETAIL_SCHEMA_VERSION = "restaurant-detail.v1" as const;
+export const RESTAURANT_DIRECTORY_SCHEMA_VERSION = "restaurant-directory.v2" as const;
+export const RESTAURANT_DIRECTORY_LEGACY_SCHEMA_VERSION = "restaurant-directory.v1" as const;
+export const RESTAURANT_DETAIL_SCHEMA_VERSION = "restaurant-detail.v2" as const;
+export const RESTAURANT_DETAIL_LEGACY_SCHEMA_VERSION = "restaurant-detail.v1" as const;
 export const RESTAURANT_MENU_READ_NAMESPACE = "pricetrace" as const;
 
 const sha256RevisionSchema = z.string().regex(/^sha256:[a-f0-9]{64}$/);
@@ -82,12 +84,42 @@ export const RestaurantLocationSchema = z.object({
   sourceUrl: nullableUrlSchema,
 }).strict();
 
+export const RestaurantCategoryPathNodeSchema = z.object({
+  id: z.string().uuid(),
+  slug: z.string().trim().min(1),
+  name: z.string().trim().min(1),
+}).strict();
+
+export const RestaurantCategorySchema = z.object({
+  id: z.string().uuid(),
+  slug: z.string().trim().min(1),
+  name: z.string().trim().min(1),
+  path: z.array(RestaurantCategoryPathNodeSchema).min(1).max(3),
+}).strict().superRefine((category, context) => {
+  const leaf = category.path.at(-1);
+  if (!leaf || leaf.id !== category.id || leaf.slug !== category.slug || leaf.name !== category.name) {
+    context.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ["path"],
+      message: "음식점 카테고리 경로의 마지막 노드는 선택된 카테고리여야 합니다.",
+    });
+  }
+  if (new Set(category.path.map((node) => node.id)).size !== category.path.length) {
+    context.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ["path"],
+      message: "음식점 카테고리 경로에 순환 또는 중복 노드가 있습니다.",
+    });
+  }
+});
+
 export const RestaurantProfileSchema = z.object({
   id: z.string().uuid(),
   brandId: z.string().uuid().nullable(),
   brand: z.string().trim().min(1),
   legalName: nullableTrimmedStringSchema,
   cuisineType: nullableTrimmedStringSchema,
+  category: RestaurantCategorySchema.nullable().optional().default(null),
   officialSiteUrl: nullableUrlSchema,
   updatedAt: offsetDateTimeSchema,
 }).strict();
@@ -217,7 +249,10 @@ export const RestaurantDirectoryEntrySchema = z.object({
 }).strict();
 
 export const RestaurantDirectoryV1Schema = z.object({
-  schemaVersion: z.literal(RESTAURANT_DIRECTORY_SCHEMA_VERSION),
+  schemaVersion: z.union([
+    z.literal(RESTAURANT_DIRECTORY_LEGACY_SCHEMA_VERSION),
+    z.literal(RESTAURANT_DIRECTORY_SCHEMA_VERSION),
+  ]),
   namespace: z.literal(RESTAURANT_MENU_READ_NAMESPACE),
   revision: sha256RevisionSchema,
   restaurants: z.array(RestaurantDirectoryEntrySchema),
@@ -236,7 +271,10 @@ export const RestaurantDirectoryV1Schema = z.object({
 });
 
 export const RestaurantDetailV1Schema = z.object({
-  schemaVersion: z.literal(RESTAURANT_DETAIL_SCHEMA_VERSION),
+  schemaVersion: z.union([
+    z.literal(RESTAURANT_DETAIL_LEGACY_SCHEMA_VERSION),
+    z.literal(RESTAURANT_DETAIL_SCHEMA_VERSION),
+  ]),
   namespace: z.literal(RESTAURANT_MENU_READ_NAMESPACE),
   revision: sha256RevisionSchema,
   restaurant: RestaurantProfileSchema,
@@ -299,11 +337,42 @@ export const RestaurantDetailV1Schema = z.object({
 export type RestaurantMenuPriceObservation = z.infer<typeof RestaurantMenuPriceObservationSchema>;
 export type RestaurantMenu = z.infer<typeof RestaurantMenuSchema>;
 export type RestaurantLocation = z.infer<typeof RestaurantLocationSchema>;
+export type RestaurantCategory = z.infer<typeof RestaurantCategorySchema>;
 export type RestaurantMenuReadEntry = z.infer<typeof RestaurantMenuReadEntrySchema>;
 export type RestaurantMenuReadV1 = z.infer<typeof RestaurantMenuReadV1Schema>;
 export type RestaurantDirectoryEntry = z.infer<typeof RestaurantDirectoryEntrySchema>;
 export type RestaurantDirectoryV1 = z.infer<typeof RestaurantDirectoryV1Schema>;
 export type RestaurantDetailV1 = z.infer<typeof RestaurantDetailV1Schema>;
+
+export const RestaurantCategoryNodeRowSchema = z.object({
+  id: z.string().uuid(),
+  parent_id: z.string().uuid().nullable(),
+  slug: z.string().trim().min(1),
+  display_name: z.string().trim().min(1),
+  depth: z.number().int().min(0).max(2),
+  sort_order: z.number().int(),
+}).strict();
+
+export type RestaurantCategoryNodeRow = z.infer<typeof RestaurantCategoryNodeRowSchema>;
+
+export const RestaurantCategoryAssignmentRpcRowSchema = z.object({
+  restaurant_id: z.string().uuid(),
+  category_id: z.string().uuid().nullable(),
+  category_slug: z.string().trim().min(1).nullable(),
+  category_display_name: z.string().trim().min(1).nullable(),
+}).strict().superRefine((row, context) => {
+  const categoryValues = [row.category_id, row.category_slug, row.category_display_name];
+  const populatedCount = categoryValues.filter((value) => value !== null).length;
+  if (populatedCount !== 0 && populatedCount !== categoryValues.length) {
+    context.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ["category_id"],
+      message: "음식점 카테고리 연결 결과는 모두 존재하거나 모두 null이어야 합니다.",
+    });
+  }
+});
+
+export type RestaurantCategoryAssignmentResult = z.infer<typeof RestaurantCategoryAssignmentRpcRowSchema>;
 
 const optionalTextInputSchema = z.string().trim().max(500).nullable();
 const optionalUrlInputSchema = httpUrlSchema.nullable();
@@ -417,6 +486,7 @@ export function filterRestaurantMenuEntries(
       entry.restaurant.brand,
       entry.restaurant.legalName,
       entry.restaurant.cuisineType,
+      ...(entry.restaurant.category?.path.map((node) => node.name) ?? []),
       ...entry.locations.map((location) => location.locationLabel),
     ].filter(Boolean).join(" ").toLocaleLowerCase("ko-KR");
 
@@ -433,16 +503,71 @@ export function filterRestaurantMenuEntries(
 export function filterRestaurantDirectoryEntries(
   entries: readonly RestaurantDirectoryEntry[],
   query: string,
+  category = "전체",
 ): RestaurantDirectoryEntry[] {
   const normalized = query.trim().toLocaleLowerCase("ko-KR");
-  if (!normalized) return [...entries];
+  return entries
+    .filter((entry) => {
+      if (category === "전체") return true;
+      if (entry.restaurant.category) {
+        return entry.restaurant.category.path.some((node) => node.id === category);
+      }
+      return entry.restaurant.cuisineType !== null
+        && `legacy:${entry.restaurant.cuisineType}` === category;
+    })
+    .filter((entry) => !normalized || [
+      entry.restaurant.brand,
+      entry.restaurant.legalName,
+      entry.restaurant.cuisineType,
+      ...(entry.restaurant.category?.path.map((node) => node.name) ?? []),
+      ...entry.locations.flatMap((location) => [location.locationLabel, location.sourceLabel]),
+    ].filter(Boolean).join(" ").toLocaleLowerCase("ko-KR").includes(normalized));
+}
 
-  return entries.filter((entry) => [
-    entry.restaurant.brand,
-    entry.restaurant.legalName,
-    entry.restaurant.cuisineType,
-    ...entry.locations.flatMap((location) => [location.locationLabel, location.sourceLabel]),
-  ].filter(Boolean).join(" ").toLocaleLowerCase("ko-KR").includes(normalized));
+export type RestaurantDirectoryCategoryOption = {
+  id: string;
+  label: string;
+  pathLabel: string;
+  depth: number;
+};
+
+export function restaurantDirectoryCategories(
+  entries: readonly RestaurantDirectoryEntry[],
+): RestaurantDirectoryCategoryOption[] {
+  const options = new Map<string, RestaurantDirectoryCategoryOption>();
+  for (const entry of entries) {
+    const category = entry.restaurant.category;
+    if (category) {
+      for (const [depth, node] of category.path.entries()) {
+        options.set(node.id, {
+          id: node.id,
+          label: node.name,
+          pathLabel: category.path.slice(0, depth + 1).map((pathNode) => pathNode.name).join(" › "),
+          depth,
+        });
+      }
+      continue;
+    }
+    if (entry.restaurant.cuisineType) {
+      const id = `legacy:${entry.restaurant.cuisineType}`;
+      options.set(id, {
+        id,
+        label: entry.restaurant.cuisineType,
+        pathLabel: entry.restaurant.cuisineType,
+        depth: 0,
+      });
+    }
+  }
+  return [...options.values()].sort((left, right) => (
+    left.pathLabel.localeCompare(right.pathLabel, "ko-KR")
+    || left.depth - right.depth
+  ));
+}
+
+export function restaurantCategoryPathLabel(restaurant: RestaurantDirectoryEntry["restaurant"]) {
+  return restaurant.category?.path.map((node) => node.name).join(" › ")
+    ?? restaurant.cuisineType
+    ?? null;
 }
 
 export function restaurantMenuCategories(menus: readonly RestaurantMenu[]): string[] {

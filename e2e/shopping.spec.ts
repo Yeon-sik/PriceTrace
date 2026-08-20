@@ -3,6 +3,7 @@ import { expect, test, type Page } from "@playwright/test";
 const nutritionCatalogProductId = "22222222-2222-4222-8222-222222222222";
 const secondNutritionCatalogProductId = "33333333-3333-4333-8333-333333333333";
 const nutritionStandardProductId = "11111111-1111-4111-8111-111111111111";
+const nutritionCategoryId = "44444444-4444-4444-8444-444444444444";
 const nutritionFoodId = "fitness-haagendazs-strawberry";
 const kaguriCatalogProductId = "96eed0f6-1cfa-401a-850f-670d71c44d6f";
 
@@ -78,13 +79,17 @@ async function mockProductNutritionContracts(page: Page, {
     catalog_product_id: catalogId,
   };
 
-  await page.route("**/rest/v1/rpc/get_public_exact_standard_product_catalog_v2", async (route) => {
+  await page.route("**/rest/v1/rpc/get_public_exact_standard_product_catalog_v4", async (route) => {
     const catalogRows = [{
       source_label: "와마트 일산점",
       source_product_code: "210059",
       catalog_product_id: catalogId,
       standard_product_id: standardId,
       standard_name: productName,
+      brand_name: null,
+      standard_category_id: nutritionCategoryId,
+      standard_category_slug: "ice-cream",
+      standard_category_name: "아이스크림",
       content_amount: 100,
       content_unit: "ml",
       package_count: 1,

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { categoryForProduct, compareCoupangPrice, distinctSellerCount, filterAndSortProductGroups, groupProductObservations, latestSellerRows, martTagFor, martTypeFor, mergeOfficialProductGroups, normalizeSellerLabel, type ProductObservationListing } from "./product-browser";
+import { categoryForProduct, compareCoupangPrice, distinctSellerCount, filterAndSortProductGroups, groupProductObservations, latestSellerRows, martTagFor, martTypeFor, mergeOfficialProductGroups, normalizeSellerLabel, productCategoryMatches, type ProductObservationListing } from "./product-browser";
 import type { ReceiptItem } from "./types";
 import { createUniversalReceipt } from "./receipt.fixture";
 import { mapReceipt } from "./receipt";
@@ -11,25 +11,37 @@ function listing(date: string, price: number, code = "A1", name = "product", cat
 
 describe("product browser domain", () => {
   it.each([
-    ["월드콘 쿠키앤크림", "간식"],
-    ["더위사냥 커피", "간식"],
-    ["라라스윗 저당 생우유 모나카", "간식"],
-    ["상쾌한아침우유식빵", "식품"],
-    ["크림우동", "식품"],
-    ["순살바3종 1세트", "간식"],
-    ["닭가슴살단백질바너츠", "간식"],
-    ["즉석 해물 칼국수", "식품"],
-    ["황금밥알새우&갈릭", "식품"],
-    ["대전도시락김", "식품"],
-    ["급냉삼겹살", "신선식품"],
-    ["손질바지락", "신선식품"],
-    ["닥터지 모이스처 인 바디 5.0 바", "생활용품"],
-    ["삼각 로스트비프 40g", "식품"],
-    ["요맘때 딸기 콘", "간식"],
-    ["테이크핏 맥스 초코맛", "음료"],
-    ["네파 페넥스남드로우", "생활용품"],
+    ["월드콘 쿠키앤크림", "아이스크림"],
+    ["더위사냥 커피", "아이스크림"],
+    ["라라스윗 저당 생우유 모나카", "아이스크림"],
+    ["상쾌한아침우유식빵", "빵·베이커리"],
+    ["크림우동", "간편식·냉동식품"],
+    ["순살바3종 1세트", "육포·단백질간식"],
+    ["닭가슴살단백질바너츠", "육포·단백질간식"],
+    ["즉석 해물 칼국수", "간편식·냉동식품"],
+    ["황금밥알새우&갈릭", "간편식·냉동식품"],
+    ["대전도시락김", "반찬·김·통조림"],
+    ["급냉삼겹살", "육류"],
+    ["손질바지락", "수산물"],
+    ["닥터지 모이스처 인 바디 5.0 바", "바디케어"],
+    ["삼각 로스트비프 40g", "육가공·어묵"],
+    ["요맘때 딸기 콘", "아이스크림"],
+    ["테이크핏 맥스 초코맛", "단백질음료"],
+    ["네파 페넥스남드로우", "속옷"],
+    ["수분 진정 마스크팩", "피부관리"],
+    ["KF94 보건용 마스크", "건강·위생용품"],
   ] as const)("classifies %s as %s without generic-word collisions", (name, category) => {
     expect(categoryForProduct(name)).toBe(category);
+  });
+
+  it("lets a parent category include its detailed descendants", () => {
+    expect(productCategoryMatches("식품", "즉석면·떡국")).toBe(true);
+    expect(productCategoryMatches("신선식품", "육류")).toBe(true);
+    expect(productCategoryMatches("신선식품", "과일")).toBe(true);
+    expect(productCategoryMatches("신선식품", "간편식·냉동식품")).toBe(false);
+    expect(productCategoryMatches("간식", "아이스크림")).toBe(true);
+    expect(productCategoryMatches("음료", "아이스크림")).toBe(false);
+    expect(productCategoryMatches("아이스크림", "아이스크림")).toBe(true);
   });
 
   it("uses the explicit receipt retail channel", () => {

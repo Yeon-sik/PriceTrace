@@ -73,7 +73,8 @@ export interface Database {
       standard_product_coupang_prices: { Row: { id:string; standard_product_id:string; catalog_product_id:string|null; link_execution_id:string|null; product_url:string; listed_price_krw:number; quantity:number; content_amount:number|null; content_unit:string|null; max_bundle_quantity:number|null; max_bundle_listed_price_krw:number|null; observed_at:string; created_by:string|null; created_at:string }; Insert: { id?:string; standard_product_id:string; catalog_product_id?:string|null; link_execution_id?:string|null; product_url:string; listed_price_krw:number; quantity?:number; content_amount?:number|null; content_unit?:string|null; max_bundle_quantity?:number|null; max_bundle_listed_price_krw?:number|null; observed_at?:string; created_by?:string|null }; Update: { catalog_product_id?:string|null; link_execution_id?:string|null; product_url?:string; listed_price_krw?:number; quantity?:number; content_amount?:number|null; content_unit?:string|null; max_bundle_quantity?:number|null; max_bundle_listed_price_krw?:number|null; observed_at?:string; created_by?:string|null } };
       market_price_observations: { Row: { id:string; catalog_product_id:string; seller_name:string; source_product_code:string|null; product_url:string; listed_price_krw:number; shipping_fee_krw:number; minimum_order_quantity:number; observed_at:string; verification_status:"pending"|"verified"|"unverified"|"rejected"; verified_by:string|null; verified_at:string|null; created_at:string }; Insert: { id?:string; catalog_product_id:string; seller_name:string; source_product_code?:string|null; product_url:string; listed_price_krw:number; shipping_fee_krw?:number; minimum_order_quantity?:number; observed_at:string; verification_status?:"pending"|"verified"|"unverified"|"rejected"; verified_by?:string|null; verified_at?:string|null }; Update: { seller_name?:string; source_product_code?:string|null; product_url?:string; listed_price_krw?:number; shipping_fee_krw?:number; minimum_order_quantity?:number; observed_at?:string; verification_status?:"pending"|"verified"|"unverified"|"rejected"; verified_by?:string|null; verified_at?:string|null } };
       source_product_mappings: { Row: { id:string; source_label:string; source_product_code:string; catalog_product_id:string; matching_method:string; confidence:number; review_status:string; verification_status:"verified"|"unverified"; created_by:string|null; reviewed_by:string|null; reviewed_at:string|null; created_at:string; updated_at:string }; Insert: { id?:string; source_label:string; source_product_code:string; catalog_product_id:string; matching_method?:string; confidence?:number; review_status?:string; verification_status?:"verified"|"unverified"; created_by?:string|null; reviewed_by?:string|null; reviewed_at?:string|null }; Update: { source_label?:string; source_product_code?:string; catalog_product_id?:string; matching_method?:string; confidence?:number; review_status?:string; verification_status?:"verified"|"unverified"; reviewed_by?:string|null; reviewed_at?:string|null } };
-      restaurants: { Row: { id:string; canonical_name:string; brand_id:string|null; legal_name:string|null; cuisine_type:string|null; official_site_url:string|null; review_status:"pending"|"verified"|"rejected"; status:"active"|"archived"; verification_status:"verified"|"unverified"; created_by:string|null; reviewed_by:string|null; reviewed_at:string|null; created_at:string; updated_at:string }; Insert: { id?:string; canonical_name:string; brand_id?:string|null; legal_name?:string|null; cuisine_type?:string|null; official_site_url?:string|null; review_status?:"pending"|"verified"|"rejected"; status?:"active"|"archived"; verification_status?:"verified"|"unverified"; created_by?:string|null; reviewed_by?:string|null; reviewed_at?:string|null }; Update: { canonical_name?:string; brand_id?:string|null; legal_name?:string|null; cuisine_type?:string|null; official_site_url?:string|null; review_status?:"pending"|"verified"|"rejected"; status?:"active"|"archived"; verification_status?:"verified"|"unverified"; reviewed_by?:string|null; reviewed_at?:string|null; updated_at?:string } };
+      restaurant_categories: { Row: { id:string; parent_id:string|null; slug:string; display_name:string; depth:number; sort_order:number; created_at:string }; Insert: { id?:string; parent_id?:string|null; slug:string; display_name:string; depth?:number; sort_order?:number; created_at?:string }; Update: { parent_id?:string|null; display_name?:string; depth?:number; sort_order?:number } };
+      restaurants: { Row: { id:string; canonical_name:string; brand_id:string|null; category_id:string|null; legal_name:string|null; cuisine_type:string|null; official_site_url:string|null; review_status:"pending"|"verified"|"rejected"; status:"active"|"archived"; verification_status:"verified"|"unverified"; created_by:string|null; reviewed_by:string|null; reviewed_at:string|null; created_at:string; updated_at:string }; Insert: { id?:string; canonical_name:string; brand_id?:string|null; category_id?:string|null; legal_name?:string|null; cuisine_type?:string|null; official_site_url?:string|null; review_status?:"pending"|"verified"|"rejected"; status?:"active"|"archived"; verification_status?:"verified"|"unverified"; created_by?:string|null; reviewed_by?:string|null; reviewed_at?:string|null }; Update: { canonical_name?:string; brand_id?:string|null; category_id?:string|null; legal_name?:string|null; cuisine_type?:string|null; official_site_url?:string|null; review_status?:"pending"|"verified"|"rejected"; status?:"active"|"archived"; verification_status?:"verified"|"unverified"; reviewed_by?:string|null; reviewed_at?:string|null; updated_at?:string } };
       restaurant_locations: { Row: { id:string; restaurant_id:string; source_namespace:string; source_location_code:string; location_label:string|null; official_url:string|null; review_status:"pending"|"verified"|"rejected"; verification_status:"verified"|"unverified"; created_by:string|null; reviewed_by:string|null; reviewed_at:string|null; created_at:string }; Insert: { id?:string; restaurant_id:string; source_namespace:string; source_location_code:string; location_label?:string|null; official_url?:string|null; review_status?:"pending"|"verified"|"rejected"; verification_status?:"verified"|"unverified"; created_by?:string|null; reviewed_by?:string|null; reviewed_at?:string|null }; Update: { location_label?:string|null; official_url?:string|null; review_status?:"pending"|"verified"|"rejected"; verification_status?:"verified"|"unverified"; reviewed_by?:string|null; reviewed_at?:string|null } };
       restaurant_menus: { Row: { id:string; restaurant_id:string; catalog_product_id:string; canonical_name:string; category_label:string|null; serving_label:string; official_url:string|null; review_status:"pending"|"verified"|"rejected"; status:"active"|"archived"; verification_status:"verified"|"unverified"; created_by:string|null; reviewed_by:string|null; reviewed_at:string|null; created_at:string; updated_at:string }; Insert: { id?:string; restaurant_id:string; catalog_product_id:string; canonical_name:string; category_label?:string|null; serving_label?:string; official_url?:string|null; review_status?:"pending"|"verified"|"rejected"; status?:"active"|"archived"; verification_status?:"verified"|"unverified"; created_by?:string|null; reviewed_by?:string|null; reviewed_at?:string|null }; Update: { canonical_name?:string; category_label?:string|null; serving_label?:string; official_url?:string|null; review_status?:"pending"|"verified"|"rejected"; status?:"active"|"archived"; verification_status?:"verified"|"unverified"; reviewed_by?:string|null; reviewed_at?:string|null; updated_at?:string } };
       restaurant_menu_source_mappings: { Row: { id:string; restaurant_id:string; restaurant_location_id:string; restaurant_menu_id:string; source_product_code_namespace:string; source_product_code:string; evidence_fingerprint:string; review_status:"pending"|"verified"|"rejected"; verification_status:"verified"|"unverified"; created_by:string|null; reviewed_by:string|null; reviewed_at:string|null; created_at:string }; Insert: { id?:string; restaurant_id:string; restaurant_location_id:string; restaurant_menu_id:string; source_product_code_namespace:string; source_product_code:string; evidence_fingerprint:string; review_status?:"pending"|"verified"|"rejected"; verification_status?:"verified"|"unverified"; created_by?:string|null; reviewed_by?:string|null; reviewed_at?:string|null }; Update: { review_status?:"pending"|"verified"|"rejected"; verification_status?:"verified"|"unverified"; reviewed_by?:string|null; reviewed_at?:string|null } };
@@ -515,7 +516,20 @@ export interface Database {
         };
         Returns: Json;
       };
+      get_restaurant_directory_v2: {
+        Args: {
+          p_query?:string|null;
+          p_limit?:number;
+        };
+        Returns: Json;
+      };
       get_restaurant_detail_v1: {
+        Args: {
+          p_restaurant_id:string;
+        };
+        Returns: Json;
+      };
+      get_restaurant_detail_v2: {
         Args: {
           p_restaurant_id:string;
         };
@@ -590,6 +604,18 @@ export interface Database {
           catalog_product_id:string;
           receipt_observation_id:string;
           replayed:boolean;
+        }[];
+      };
+      admin_set_restaurant_category_v1: {
+        Args: {
+          p_restaurant_id:string;
+          p_category_id:string|null;
+        };
+        Returns: {
+          restaurant_id:string;
+          category_id:string|null;
+          category_slug:string|null;
+          category_display_name:string|null;
         }[];
       };
       admin_register_unverified_product_sale_v1: {
@@ -685,6 +711,32 @@ export interface Database {
           standard_product_id:string;
           standard_name:string;
           brand_name:string|null;
+          content_amount:number;
+          content_unit:string;
+          package_count:number;
+          reference_unit:number;
+          coupang_listed_price_krw:number|null;
+          coupang_quantity:number|null;
+          coupang_content_amount:number|null;
+          coupang_content_unit:string|null;
+          coupang_max_bundle_quantity:number|null;
+          coupang_max_bundle_listed_price_krw:number|null;
+          coupang_product_url:string|null;
+          coupang_observed_at:string|null;
+        }[];
+      };
+      get_public_exact_standard_product_catalog_v4: {
+        Args: Record<string, never>;
+        Returns: {
+          source_label:string;
+          source_product_code:string;
+          catalog_product_id:string;
+          standard_product_id:string;
+          standard_name:string;
+          brand_name:string|null;
+          standard_category_id:string;
+          standard_category_slug:string;
+          standard_category_name:string;
           content_amount:number;
           content_unit:string;
           package_count:number;

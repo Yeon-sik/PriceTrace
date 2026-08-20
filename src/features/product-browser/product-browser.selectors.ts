@@ -13,6 +13,8 @@ import {
   filterAndSortProductGroups,
   martTagFor,
   mergeOfficialProductGroups,
+  productCategoryFromCatalogDisplayName,
+  productCategoryMatches,
   type CoupangPriceComparison,
   type MartType,
   type ProductCategory,
@@ -23,7 +25,11 @@ import {
   officialChannelRepresentativeImageUrl,
   type PublicOfficialChannelListing,
 } from "../../domain/public-official-channel-catalog";
-import { publicStandardMappingKey, type PublicCoupangPrice } from "../../domain/public-standard-catalog";
+import {
+  publicStandardMappingKey,
+  type PublicCoupangPrice,
+  type PublicStandardCategory,
+} from "../../domain/public-standard-catalog";
 import { sellerPricePointsFromGroup, summarizeSellerPrices } from "../../domain/seller-price-insights";
 
 export type CatalogView = "all" | "standard" | "official";
@@ -111,6 +117,7 @@ export function selectProductCatalogGroups({
   exactStandardMappings,
   catalogSpecs,
   standardNames,
+  standardCategories,
   standardImages,
   standardBrands,
   coupangByStandard,
@@ -122,6 +129,7 @@ export function selectProductCatalogGroups({
   exactStandardMappings: ReadonlyMap<string, string>;
   catalogSpecs: ReadonlyMap<string, CatalogSpecification>;
   standardNames: ReadonlyMap<string, string>;
+  standardCategories: ReadonlyMap<string, PublicStandardCategory>;
   standardImages: ReadonlyMap<string, string>;
   standardBrands: ReadonlyMap<string, string>;
   coupangByStandard: ReadonlyMap<string, PublicCoupangPrice>;
@@ -233,6 +241,7 @@ export function selectProductCatalogGroups({
       .sort((left, right) => right.date.localeCompare(left.date))
       .slice(0, 7);
     const officialListings = linkedByStandardProduct.get(standardProductId) ?? [];
+    const persistedCategory = standardCategories.get(standardProductId);
 
     return {
       id: `standard:${standardProductId}`,
@@ -240,7 +249,9 @@ export function selectProductCatalogGroups({
       brand,
       imageUrl: officialChannelRepresentativeImageUrl(officialListings)
         ?? standardImages.get(standardProductId),
-      category: categoryForProduct(name),
+      category: persistedCategory
+        ? productCategoryFromCatalogDisplayName(persistedCategory.name)
+        : categoryForProduct(name),
       items: ordered,
       lowestUnitPriceKrw: lowest.unitPriceKrw,
       highestUnitPriceKrw: Math.max(...comparableItems.map((item) => item.unitPriceKrw)),
@@ -305,17 +316,20 @@ export function officialListingsAreEligible(martType: MartType, selectedStore: s
 export function selectLinkedStandardSummaries({
   linkedByStandardProduct,
   standardNames,
+  standardCategories,
   standardImages,
   standardBrands,
 }: {
   linkedByStandardProduct: ReadonlyMap<string, PublicOfficialChannelListing[]>;
   standardNames: ReadonlyMap<string, string>;
+  standardCategories: ReadonlyMap<string, PublicStandardCategory>;
   standardImages: ReadonlyMap<string, string>;
   standardBrands: ReadonlyMap<string, string>;
 }): OfficialLinkedStandardSummary[] {
   return [...linkedByStandardProduct.entries()].map(([standardProductId, listings]) => {
     const name = standardNames.get(standardProductId) ?? listings[0].sourceNameRaw;
     const brand = standardBrands.get(standardProductId) ?? null;
+    const persistedCategory = standardCategories.get(standardProductId);
     const inferredCategory = categoryForProduct(name);
     return {
       id: `official-standard:${standardProductId}`,
@@ -324,7 +338,9 @@ export function selectLinkedStandardSummaries({
       brand,
       imageUrl: officialChannelRepresentativeImageUrl(listings)
         ?? standardImages.get(standardProductId),
-      category: inferredCategory === "미분류" ? listings[0].category : inferredCategory,
+      category: persistedCategory
+        ? productCategoryFromCatalogDisplayName(persistedCategory.name)
+        : inferredCategory === "미분류" ? listings[0].category : inferredCategory,
       listings,
     };
   });
@@ -344,7 +360,7 @@ export function selectVisibleLinkedStandardSummaries({
   if (!eligible) return [];
   const normalizedQuery = query.trim().toLocaleLowerCase("ko-KR");
   return summaries
-    .filter((standard) => category === "전체" || standard.category === category)
+    .filter((standard) => productCategoryMatches(category, standard.category))
     .filter((standard) => !normalizedQuery || [
       standard.name,
       ...standard.listings.map(officialListingSearchText),
@@ -409,7 +425,7 @@ export function selectVisibleStandardGroups({
       };
     })
     .filter((standard) => standard.items.length > 0)
-    .filter((standard) => category === "전체" || standard.category === category)
+    .filter((standard) => productCategoryMatches(category, standard.category))
     .filter((standard) => !normalizedQuery || [
       standard.name,
       ...standard.items.map(

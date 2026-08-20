@@ -5,6 +5,8 @@ import {
   filterRestaurantDirectoryEntries,
   filterRestaurantMenus,
   latestRestaurantMenuObservation,
+  restaurantCategoryPathLabel,
+  restaurantDirectoryCategories,
   restaurantMenuCategories,
   summarizeRestaurantMenuPrices,
   type RestaurantMenu,
@@ -61,15 +63,20 @@ export function RestaurantBrowser({ selectedRestaurant, onSelectRestaurant }: Re
     refresh,
   } = useRestaurantMenuCatalog(selectedRestaurant);
   const [query, setQuery] = useState("");
+  const [restaurantCategory, setRestaurantCategory] = useState("전체");
   const [detailTab, setDetailTab] = useState<RestaurantDetailTab>("menus");
   const [menuQuery, setMenuQuery] = useState("");
   const [menuCategory, setMenuCategory] = useState("전체");
   const [nutritionMenu, setNutritionMenu] = useState<{ brand: string; menu: RestaurantMenu } | null>(null);
   const nutritionTriggerRef = useRef<HTMLElement | null>(null);
   const entries = useMemo(() => directory?.restaurants ?? [], [directory]);
+  const restaurantCategories = useMemo(
+    () => restaurantDirectoryCategories(entries),
+    [entries],
+  );
   const visibleEntries = useMemo(
-    () => filterRestaurantDirectoryEntries(entries, query),
-    [entries, query],
+    () => filterRestaurantDirectoryEntries(entries, query, restaurantCategory),
+    [entries, query, restaurantCategory],
   );
   const menuCategories = useMemo(
     () => detail ? restaurantMenuCategories(detail.menus) : [],
@@ -119,6 +126,17 @@ export function RestaurantBrowser({ selectedRestaurant, onSelectRestaurant }: Re
         <span>검증된 공개 기록</span>
       </div>}
 
+      {restaurantCategories.length > 0 && <div className={styles.restaurantCategoryFilters} role="group" aria-label="음식점 카테고리">
+        {([{ id: "전체", label: "전체", pathLabel: "전체", depth: 0 }, ...restaurantCategories]).map((category) => <button
+          type="button"
+          key={category.id}
+          title={category.pathLabel}
+          aria-pressed={restaurantCategory === category.id}
+          className={restaurantCategory === category.id ? styles.restaurantCategoryActive : undefined}
+          onClick={() => setRestaurantCategory(category.id)}
+        >{category.depth > 0 ? `↳ ${category.label}` : category.label}</button>)}
+      </div>}
+
       {!configured && <div className={styles.restaurantEmpty} role="status">
         <strong>공개 음식점 DB 연결이 필요합니다.</strong>
         <span>PriceTrace Supabase 공개 설정이 연결되면 검증된 음식점과 메뉴 가격 기록을 표시합니다.</span>
@@ -130,7 +148,7 @@ export function RestaurantBrowser({ selectedRestaurant, onSelectRestaurant }: Re
       </div>}
       {configured && !loading && !error && visibleEntries.length === 0 && <div className={styles.restaurantEmpty} role="status">
         <strong>{entries.length === 0 ? "등록된 음식점이 없습니다." : "검색 결과가 없습니다."}</strong>
-        <span>{entries.length === 0 ? "검토를 통과한 음식점이 등록되면 이곳에서 식당별 상세 화면으로 들어갈 수 있습니다." : "다른 Brand, 업종 또는 지역으로 검색해 보세요."}</span>
+        <span>{entries.length === 0 ? "검토를 통과한 음식점이 등록되면 이곳에서 식당별 상세 화면으로 들어갈 수 있습니다." : "다른 Brand, 업종, 지역 또는 카테고리로 검색해 보세요."}</span>
       </div>}
       {visibleEntries.length > 0 && <div className={styles.restaurantGrid} aria-live="polite">
         {visibleEntries.map((entry) => <button
@@ -141,7 +159,7 @@ export function RestaurantBrowser({ selectedRestaurant, onSelectRestaurant }: Re
         >
           <span className={styles.restaurantCardIcon} aria-hidden="true">🍽</span>
           <span className={styles.restaurantCardBody}>
-            <small>{entry.restaurant.cuisineType ?? "음식점"}</small>
+            <small>{restaurantCategoryPathLabel(entry.restaurant) ?? "음식점"}</small>
             <strong>{entry.restaurant.brand}</strong>
             {entry.restaurant.legalName && <span>{entry.restaurant.legalName}</span>}
             <span>메뉴 {entry.menuCount}개 · 확인 지점 {entry.locations.length}곳</span>
@@ -310,7 +328,7 @@ export function RestaurantBrowser({ selectedRestaurant, onSelectRestaurant }: Re
       <dl className={styles.restaurantInfoGrid}>
         <div><dt>Brand</dt><dd>{detail.restaurant.brand}</dd></div>
         <div><dt>법적 상호</dt><dd>{detail.restaurant.legalName ?? "정보 없음"}</dd></div>
-        <div><dt>업종</dt><dd>{detail.restaurant.cuisineType ?? "정보 없음"}</dd></div>
+        <div><dt>업종</dt><dd>{restaurantCategoryPathLabel(detail.restaurant) ?? "정보 없음"}</dd></div>
         <div><dt>메뉴 수</dt><dd>{detail.menus.length}개</dd></div>
         <div><dt>확인 지점</dt><dd>{detail.locations.length}곳</dd></div>
         <div><dt>정보 업데이트</dt><dd>{formatUpdatedAt(detail.restaurant.updatedAt)}</dd></div>

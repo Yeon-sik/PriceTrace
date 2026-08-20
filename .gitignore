@@ -62,6 +62,9 @@ src/**/*.test.ts
 !src/domain/official-product.test.ts
 !src/domain/official-product-category.test.ts
 !src/domain/public-official-channel-catalog.test.ts
+!src/domain/catalog-category.test.ts
+!src/domain/catalog-taxonomy-migration.test.ts
+!src/domain/current-standard-product-categories.test.ts
 !src/domain/standard-product-image.test.ts
 !src/domain/app-navigation.test.ts
 !src/domain/strict-standard-product-lint-migration.test.ts

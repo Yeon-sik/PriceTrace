@@ -8,6 +8,7 @@ import {
   publicStandardMappingKey,
   PublicStandardCatalogRowsSchema,
   type PublicCoupangPrice,
+  type PublicStandardCategory,
 } from "../../domain/public-standard-catalog";
 import { getSupabaseBrowserClient } from "../../lib/supabase/client";
 import { OfficialProductRepository } from "../../repositories/official-product.repository";
@@ -30,6 +31,7 @@ export function useProductCatalog(authRevision: number) {
   const [catalogSpecs, setCatalogSpecs] = useState<Map<string, CatalogSpecification>>(new Map());
   const [standardNames, setStandardNames] = useState<Map<string, string>>(new Map());
   const [standardBrands, setStandardBrands] = useState<Map<string, string>>(new Map());
+  const [standardCategories, setStandardCategories] = useState<Map<string, PublicStandardCategory>>(new Map());
   const [standardImages, setStandardImages] = useState<Map<string, string>>(new Map());
   const [coupangByStandard, setCoupangByStandard] = useState<Map<string, PublicCoupangPrice>>(new Map());
   const [catalogNotice, setCatalogNotice] = useState("");
@@ -54,10 +56,14 @@ export function useProductCatalog(authRevision: number) {
       let specs = new Map<string, CatalogSpecification>();
       let names = new Map<string, string>();
       let brands = new Map<string, string>();
+      let categories = new Map<string, PublicStandardCategory>();
       let images = new Map<string, string>();
       let coupangPrices = new Map<string, PublicCoupangPrice>();
 
-      const v3PublicResult = await client.rpc("get_public_exact_standard_product_catalog_v3");
+      const v4PublicResult = await client.rpc("get_public_exact_standard_product_catalog_v4");
+      const v3PublicResult = v4PublicResult.error && isMissingCatalogRpc(v4PublicResult.error)
+        ? await client.rpc("get_public_exact_standard_product_catalog_v3")
+        : v4PublicResult;
       const v2PublicResult = v3PublicResult.error && isMissingCatalogRpc(v3PublicResult.error)
         ? await client.rpc("get_public_exact_standard_product_catalog_v2")
         : v3PublicResult;
@@ -78,6 +84,7 @@ export function useProductCatalog(authRevision: number) {
           specs = publicIndex.catalogSpecs;
           names = publicIndex.standardNames;
           brands = publicIndex.standardBrands;
+          categories = publicIndex.standardCategories;
           coupangPrices = publicIndex.coupangByStandard;
           publicCatalogReady = true;
           coupangReady = true;
@@ -98,7 +105,7 @@ export function useProductCatalog(authRevision: number) {
 
       const { data: authData } = await client.auth.getUser();
       if (authData.user) {
-        const [mappingResult, catalogResult, standardResult, coupangResult] = await Promise.all([
+        const [mappingResult, catalogResult, standardResult, categoryResult, coupangResult] = await Promise.all([
           client
             .from("source_product_mappings")
             .select("source_label,source_product_code,catalog_product_id")
@@ -110,8 +117,12 @@ export function useProductCatalog(authRevision: number) {
             .eq("specification_status", "verified"),
           client
             .from("standard_products")
-            .select("id,canonical_name,brand")
+            .select("id,canonical_name,brand,category_id")
             .eq("status", "active"),
+          client
+            .from("catalog_categories")
+            .select("id,slug,display_name")
+            .eq("purchase_type", "retail_product"),
           client
             .from("standard_product_coupang_prices")
             .select("standard_product_id,listed_price_krw,quantity,content_amount,content_unit,max_bundle_quantity,max_bundle_listed_price_krw,product_url,observed_at")
@@ -156,6 +167,24 @@ export function useProductCatalog(authRevision: number) {
               .filter((row) => typeof row.brand === "string" && row.brand.trim().length > 0)
               .map((row) => [row.id as string, row.brand as string] as const),
           ]);
+          if (!categoryResult.error) {
+            const categoryById = new Map((categoryResult.data ?? []).map((row) => [
+              row.id as string,
+              {
+                id: row.id as string,
+                slug: row.slug as string,
+                name: row.display_name as string,
+              } satisfies PublicStandardCategory,
+            ] as const));
+            categories = new Map([
+              ...categories,
+              ...(standardResult.data ?? []).flatMap((row) => {
+                const categoryId = row.category_id as string | null;
+                const category = categoryId ? categoryById.get(categoryId) : undefined;
+                return category ? [[row.id as string, category] as const] : [];
+              }),
+            ]);
+          }
         }
         if (!coupangResult.error) {
           const mergedCoupang = new Map(coupangPrices);
@@ -181,7 +210,8 @@ export function useProductCatalog(authRevision: number) {
         }
         signedInCatalogReady = !mappingResult.error
           && !catalogResult.error
-          && !standardResult.error;
+          && !standardResult.error
+          && !categoryResult.error;
       }
 
       if (!active) return;
@@ -190,6 +220,7 @@ export function useProductCatalog(authRevision: number) {
       setCatalogSpecs(specs);
       setStandardNames(names);
       setStandardBrands(brands);
+      setStandardCategories(categories);
       setStandardImages(images);
       setCoupangByStandard(coupangPrices);
       setCatalogNotice(
@@ -212,6 +243,7 @@ export function useProductCatalog(authRevision: number) {
     catalogSpecs,
     standardNames,
     standardBrands,
+    standardCategories,
     standardImages,
     coupangByStandard,
     catalogNotice,

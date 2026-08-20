@@ -3,7 +3,17 @@
 import { useMemo, useState } from "react";
 import { cartProductFromGroup, cartProductFromOfficialListing, type CartProduct } from "@/domain/cart";
 import { productNameWithoutBrand } from "@/domain/brand";
-import { distinctSellerCount, latestSellerRows, PRODUCT_CATEGORIES, type MartType, type ProductCategory, type ProductGroup, type ProductSort } from "@/domain/product-browser";
+import {
+  distinctSellerCount,
+  latestSellerRows,
+  PRODUCT_CATEGORY_ROOTS,
+  productCategoryRoot,
+  productSubcategories,
+  type MartType,
+  type ProductCategory,
+  type ProductGroup,
+  type ProductSort,
+} from "@/domain/product-browser";
 import { formatKrw } from "@/domain/settlement";
 import {
   filterAndSortOfficialChannelListings,
@@ -111,6 +121,7 @@ export function ProductBrowser({ groups, query, setQuery, category, setCategory,
     catalogSpecs,
     standardNames,
     standardBrands,
+    standardCategories,
     standardImages,
     coupangByStandard,
     catalogNotice,
@@ -118,6 +129,10 @@ export function ProductBrowser({ groups, query, setQuery, category, setCategory,
   const [catalogView, setCatalogView] = useState<CatalogView>("all");
   const [openStandardId, setOpenStandardId] = useState<string | null>(null);
   const [storeListTarget, setStoreListTarget] = useState<{ title: string; rows: { storeLabel: string; observedAt: string }[] } | null>(null);
+  const selectedCategoryRoot = productCategoryRoot(category);
+  const selectedCategoryChildren = selectedCategoryRoot
+    ? productSubcategories(selectedCategoryRoot)
+    : [];
 
   const { productGroups, standardGroups } = useMemo(() => selectProductCatalogGroups({
     groups,
@@ -126,11 +141,12 @@ export function ProductBrowser({ groups, query, setQuery, category, setCategory,
     exactStandardMappings,
     catalogSpecs,
     standardNames,
+    standardCategories,
     standardBrands,
     standardImages,
     coupangByStandard,
     linkedByStandardProduct,
-  }), [groups, officialProducts, standardMappings, exactStandardMappings, catalogSpecs, standardNames, standardBrands, standardImages, coupangByStandard, linkedByStandardProduct]);
+  }), [groups, officialProducts, standardMappings, exactStandardMappings, catalogSpecs, standardNames, standardCategories, standardBrands, standardImages, coupangByStandard, linkedByStandardProduct]);
 
   const stores = useMemo(
     () => selectStoreOptions({ productGroups, standardGroups, martType }),
@@ -147,8 +163,8 @@ export function ProductBrowser({ groups, query, setQuery, category, setCategory,
   const officialListingsEligible = officialListingsAreEligible(martType, selectedStore);
 
   const linkedStandardSummaries = useMemo<OfficialLinkedStandardSummary[]>(
-    () => selectLinkedStandardSummaries({ linkedByStandardProduct, standardNames, standardBrands, standardImages }),
-    [linkedByStandardProduct, standardBrands, standardImages, standardNames],
+    () => selectLinkedStandardSummaries({ linkedByStandardProduct, standardNames, standardCategories, standardBrands, standardImages }),
+    [linkedByStandardProduct, standardBrands, standardCategories, standardImages, standardNames],
   );
 
   const visibleLinkedStandardSummaries = useMemo(() => selectVisibleLinkedStandardSummaries({
@@ -243,7 +259,14 @@ export function ProductBrowser({ groups, query, setQuery, category, setCategory,
           <label className={styles.storeSelect}>판매 마트<select value={selectedStore} onChange={(event) => setSelectedStore(event.target.value)}><option value="all">전체 마트</option>{stores.map((store) => <option key={store} value={store}>{store}</option>)}</select></label>
           <label className={styles.sortSelect}>정렬<select value={sort} onChange={(event) => setSort(event.target.value as ProductSort)}><option value="expensive">비싼 물품 순</option><option value="cheap">저렴한 물품 순</option><option value="sellers">판매처 많은 물품 순</option></select></label>
         </div>}
-    <div className={styles.filters} aria-label="상품 카테고리">{PRODUCT_CATEGORIES.map((item) => <button aria-pressed={category === item} className={category === item ? styles.filterActive : ""} key={item} onClick={() => setCategory(item)}>{item}</button>)}</div>
+    <div className={styles.filters} aria-label="상품 대분류">{PRODUCT_CATEGORY_ROOTS.map((item) => {
+      const active = item === "전체" ? category === "전체" : selectedCategoryRoot === item;
+      return <button aria-pressed={active} className={active ? styles.filterActive : ""} key={item} onClick={() => setCategory(item)}>{item}</button>;
+    })}</div>
+    {selectedCategoryRoot && selectedCategoryChildren.length > 0 && <div className={`${styles.filters} ${styles.subcategoryFilters}`} aria-label={`${selectedCategoryRoot} 세부 카테고리`}>
+      <button aria-pressed={category === selectedCategoryRoot} className={category === selectedCategoryRoot ? styles.filterActive : ""} onClick={() => setCategory(selectedCategoryRoot)}>{selectedCategoryRoot} 전체</button>
+      {selectedCategoryChildren.map((item) => <button aria-pressed={category === item} className={category === item ? styles.filterActive : ""} key={item} onClick={() => setCategory(item)}>{item}</button>)}
+    </div>}
     <div className={styles.resultBar}><p>상품 {resultCount.toLocaleString("ko-KR")}개</p>{(query || category !== "전체" || martType !== "all" || selectedStore !== "all" || showStandardOnly || showOfficialOnly) && <button onClick={() => { setQuery(""); setCategory("전체"); setMartType("all"); setSelectedStore("all"); setCatalogView("all"); }}>필터 초기화</button>}</div>
 
     <div className={styles.productGrid} aria-live="polite">{gridEntries.map((entry) => entry.kind === "official-standard"
@@ -253,7 +276,10 @@ export function ProductBrowser({ groups, query, setQuery, category, setCategory,
           onOpen={standardGroups.some((standard) => standard.id === `standard:${entry.standard.standardProductId}`)
             ? () => setOpenStandardId(`standard:${entry.standard.standardProductId}`)
             : undefined}
-          onAdd={(listing) => onAdd(cartProductFromOfficialListing(listing))}
+          onAdd={(listing) => onAdd({
+            ...cartProductFromOfficialListing(listing),
+            category: entry.standard.category,
+          })}
         />
       : entry.kind === "standard"
         ? <article className={styles.productCard} key={entry.standard.id}>
@@ -271,7 +297,10 @@ export function ProductBrowser({ groups, query, setQuery, category, setCategory,
               </div>}
               <div className={styles.productActions}>
                 <button aria-label={`${entry.standard.name} 정보 보기`} onClick={() => setOpenStandardId(entry.standard.id)}>정보 보기</button>
-                <button type="button" aria-label={`${entry.standard.name} 장바구니에 담기`} onClick={() => onAdd(cartProductFromGroup(entry.standard.items[0]))}>최저 관측가 담기</button>
+                <button type="button" aria-label={`${entry.standard.name} 장바구니에 담기`} onClick={() => onAdd({
+                  ...cartProductFromGroup(entry.standard.items[0]),
+                  category: entry.standard.category,
+                })}>최저 관측가 담기</button>
               </div>
             </div>
           </article>

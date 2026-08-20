@@ -118,6 +118,7 @@ function officialListing({
 function selectCatalog(groups: ProductGroup[], options: {
   officialProducts?: Record<string, OfficialProductRecord>;
   officialListings?: PublicOfficialChannelListing[];
+  standardCategories?: Map<string, { id: string; slug: string; name: string }>;
 } = {}) {
   const exactStandardMappings = new Map(
     groups
@@ -149,6 +150,14 @@ function selectCatalog(groups: ProductGroup[], options: {
     exactStandardMappings,
     catalogSpecs,
     standardNames: new Map([[STANDARD_PRODUCT_ID, "표준 쌀"]]),
+    standardCategories: options.standardCategories ?? new Map([[
+      STANDARD_PRODUCT_ID,
+      {
+        id: "22222222-2222-4222-8222-222222222222",
+        slug: "flour-grains",
+        name: "쌀·가루류",
+      },
+    ]]),
     standardBrands: new Map([[STANDARD_PRODUCT_ID, "테스트 브랜드"]]),
     standardImages: new Map([[STANDARD_PRODUCT_ID, "https://example.com/fallback.jpg"]]),
     coupangByStandard: new Map<string, PublicCoupangPrice>(),
@@ -198,7 +207,7 @@ describe("product browser selectors", () => {
       id: `standard:${STANDARD_PRODUCT_ID}`,
       name: "표준 쌀",
       imageUrl: "https://example.com/official.jpg",
-      category: "식품",
+      category: "쌀·가루류",
       lowestUnitPriceKrw: 1_000,
       highestUnitPriceKrw: 1_000,
       unitPriceLabel: "100g당",
@@ -280,6 +289,7 @@ describe("product browser selectors", () => {
     const summaries = selectLinkedStandardSummaries({
       linkedByStandardProduct: new Map([[STANDARD_PRODUCT_ID, [listing]]]),
       standardNames: new Map(),
+      standardCategories: new Map(),
       standardBrands: new Map(),
       standardImages: new Map(),
     });
@@ -352,6 +362,14 @@ describe("product browser selectors", () => {
     const summaries = selectLinkedStandardSummaries({
       linkedByStandardProduct: new Map([[STANDARD_PRODUCT_ID, [listing]]]),
       standardNames: new Map([[STANDARD_PRODUCT_ID, "표준 쌀"]]),
+      standardCategories: new Map([[
+        STANDARD_PRODUCT_ID,
+        {
+          id: "22222222-2222-4222-8222-222222222222",
+          slug: "protein-drinks",
+          name: "단백질음료",
+        },
+      ]]),
       standardBrands: new Map([[STANDARD_PRODUCT_ID, "테스트 브랜드"]]),
       standardImages: new Map(),
     });
@@ -382,5 +400,6 @@ describe("product browser selectors", () => {
       sort: "cheap",
     });
     expect(officialEntries.map((entry) => entry.kind)).toEqual(["official-standard"]);
+    expect(summaries[0].category).toBe("단백질음료");
   });
 });
