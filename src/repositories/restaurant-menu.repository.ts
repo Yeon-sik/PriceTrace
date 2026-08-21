@@ -2,6 +2,8 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import {
   RestaurantDetailV1Schema,
   RestaurantDirectoryV1Schema,
+  RestaurantCategoryAssignmentRpcRowSchema,
+  RestaurantCategoryNodeRowSchema,
   RestaurantMenuReadV1Schema,
   RestaurantMenuReceiptCandidateSchema,
   RestaurantMenuRegistrationRequestSchema,
@@ -12,6 +14,8 @@ import {
   type RestaurantMenuRegistrationResult,
   type RestaurantDetailV1,
   type RestaurantDirectoryV1,
+  type RestaurantCategoryAssignmentResult,
+  type RestaurantCategoryNodeRow,
 } from "../domain/restaurant-menu";
 
 function remoteErrorMessage(error: { message?: string } | null, fallback: string) {
@@ -21,6 +25,14 @@ function remoteErrorMessage(error: { message?: string } | null, fallback: string
 function isMissingFunctionError(error: { code?: string; message?: string } | null) {
   const message = error?.message?.toLowerCase() ?? "";
   return error?.code === "PGRST202" || message.includes("could not find the function");
+}
+
+function isMissingRelationError(error: { code?: string; message?: string } | null) {
+  const message = error?.message?.toLowerCase() ?? "";
+  return error?.code === "PGRST205"
+    || error?.code === "42P01"
+    || message.includes("could not find the table")
+    || (message.includes("relation") && message.includes("does not exist"));
 }
 
 function unwrapSingleRow(data: unknown) {
@@ -37,15 +49,22 @@ export class RestaurantMenuRepository {
     query?: string | null;
     limit?: number;
   } = {}): Promise<RestaurantDirectoryV1> {
-    const { data, error } = await this.client.rpc("get_restaurant_directory_v1", {
+    const v2Result = await this.client.rpc("get_restaurant_directory_v2", {
       p_query: query?.trim() || null,
       p_limit: Math.max(1, Math.min(Math.trunc(limit), 200)),
     });
+    const result = v2Result.error && isMissingFunctionError(v2Result.error)
+      ? await this.client.rpc("get_restaurant_directory_v1", {
+          p_query: query?.trim() || null,
+          p_limit: Math.max(1, Math.min(Math.trunc(limit), 200)),
+        })
+      : v2Result;
+    const { data, error } = result;
     if (error) {
       if (isMissingFunctionError(error)) {
         const legacyPayload = await this.read({ query, limit });
         return RestaurantDirectoryV1Schema.parse({
-          schemaVersion: "restaurant-directory.v1",
+          schemaVersion: "restaurant-directory.v2",
           namespace: "pricetrace",
           revision: legacyPayload.revision,
           restaurants: legacyPayload.restaurants.map((entry) => ({
@@ -62,13 +81,22 @@ export class RestaurantMenuRepository {
       }
       throw new Error(remoteErrorMessage(error, "음식점 목록을 불러오지 못했습니다."));
     }
-    return RestaurantDirectoryV1Schema.parse(data);
+    const parsed = RestaurantDirectoryV1Schema.parse(data);
+    return parsed.schemaVersion === "restaurant-directory.v2"
+      ? parsed
+      : RestaurantDirectoryV1Schema.parse({ ...parsed, schemaVersion: "restaurant-directory.v2" });
   }
 
   async readDetail(restaurantId: string): Promise<RestaurantDetailV1> {
-    const { data, error } = await this.client.rpc("get_restaurant_detail_v1", {
+    const v2Result = await this.client.rpc("get_restaurant_detail_v2", {
       p_restaurant_id: restaurantId,
     });
+    const result = v2Result.error && isMissingFunctionError(v2Result.error)
+      ? await this.client.rpc("get_restaurant_detail_v1", {
+          p_restaurant_id: restaurantId,
+        })
+      : v2Result;
+    const { data, error } = result;
     if (error) {
       if (isMissingFunctionError(error)) {
         const legacyPayload = await this.read({ restaurantId, limit: 200 });
@@ -77,7 +105,7 @@ export class RestaurantMenuRepository {
           throw new Error("공개된 음식점 identity를 찾을 수 없습니다.");
         }
         return RestaurantDetailV1Schema.parse({
-          schemaVersion: "restaurant-detail.v1",
+          schemaVersion: "restaurant-detail.v2",
           namespace: "pricetrace",
           revision: legacyPayload.revision,
           restaurant: entry.restaurant,
@@ -87,11 +115,42 @@ export class RestaurantMenuRepository {
       }
       throw new Error(remoteErrorMessage(error, "음식점 상세 정보를 불러오지 못했습니다."));
     }
-    const detail = RestaurantDetailV1Schema.parse(data);
+    const parsed = RestaurantDetailV1Schema.parse(data);
+    const detail = parsed.schemaVersion === "restaurant-detail.v2"
+      ? parsed
+      : RestaurantDetailV1Schema.parse({ ...parsed, schemaVersion: "restaurant-detail.v2" });
     if (detail.restaurant.id !== restaurantId) {
       throw new Error("음식점 상세 RPC가 요청하지 않은 음식점 identity를 반환했습니다.");
     }
     return detail;
+  }
+
+  async readCategories(): Promise<RestaurantCategoryNodeRow[]> {
+    const { data, error } = await this.client
+      .from("restaurant_categories")
+      .select("id,parent_id,slug,display_name,depth,sort_order")
+      .order("depth")
+      .order("sort_order")
+      .order("display_name");
+    if (error) {
+      if (isMissingRelationError(error)) return [];
+      throw new Error(remoteErrorMessage(error, "음식점 카테고리를 불러오지 못했습니다."));
+    }
+    return (data ?? []).map((row) => RestaurantCategoryNodeRowSchema.parse(row));
+  }
+
+  async setRestaurantCategory(
+    restaurantId: string,
+    categoryId: string | null,
+  ): Promise<RestaurantCategoryAssignmentResult> {
+    const { data, error } = await this.client.rpc("admin_set_restaurant_category_v1", {
+      p_restaurant_id: restaurantId,
+      p_category_id: categoryId,
+    });
+    if (error) {
+      throw new Error(remoteErrorMessage(error, "음식점 카테고리를 연결하지 못했습니다."));
+    }
+    return RestaurantCategoryAssignmentRpcRowSchema.parse(unwrapSingleRow(data));
   }
 
   async read({

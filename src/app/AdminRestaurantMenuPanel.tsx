@@ -5,6 +5,8 @@ import type {
   RestaurantMenuReadEntry,
   RestaurantMenuReceiptCandidate,
   RestaurantMenuRegistrationResult,
+  RestaurantCategoryNodeRow,
+  RestaurantDirectoryEntry,
 } from "@/domain/restaurant-menu";
 import { formatKrw } from "@/domain/settlement";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
@@ -69,6 +71,32 @@ function candidateLabel(candidate: RestaurantMenuReceiptCandidate) {
   return `${candidate.observed_on} · ${candidate.store_name} · ${candidate.product_name} · ${formatKrw(candidate.total_price_krw)}`;
 }
 
+function categoryRestaurantLabel(entry: RestaurantDirectoryEntry) {
+  const location = entry.locations.find((candidate) => candidate.locationLabel)?.locationLabel
+    ?? "지점 미지정";
+  const legalName = entry.restaurant.legalName
+    && entry.restaurant.legalName !== entry.restaurant.brand
+    ? ` · ${entry.restaurant.legalName}`
+    : "";
+  return `${entry.restaurant.brand}${legalName} · ${location} · ${entry.restaurant.id.slice(0, 8)}`;
+}
+
+function restaurantCategoryRowPathLabel(
+  category: RestaurantCategoryNodeRow,
+  categories: readonly RestaurantCategoryNodeRow[],
+) {
+  const byId = new Map(categories.map((node) => [node.id, node]));
+  const path: string[] = [];
+  const visited = new Set<string>();
+  let current: RestaurantCategoryNodeRow | undefined = category;
+  while (current && !visited.has(current.id)) {
+    visited.add(current.id);
+    path.push(current.display_name);
+    current = current.parent_id ? byId.get(current.parent_id) : undefined;
+  }
+  return path.reverse().join(" › ");
+}
+
 export function AdminRestaurantMenuPanel() {
   const client = getSupabaseBrowserClient();
   const repository = useMemo(
@@ -76,6 +104,8 @@ export function AdminRestaurantMenuPanel() {
     [client],
   );
   const [entries, setEntries] = useState<RestaurantMenuReadEntry[]>([]);
+  const [categoryRestaurants, setCategoryRestaurants] = useState<RestaurantDirectoryEntry[]>([]);
+  const [restaurantCategories, setRestaurantCategories] = useState<RestaurantCategoryNodeRow[]>([]);
   const [candidates, setCandidates] = useState<RestaurantMenuReceiptCandidate[]>([]);
   const [form, setForm] = useState<FormState>(initialForm);
   const [loading, setLoading] = useState(Boolean(repository));
@@ -84,17 +114,34 @@ export function AdminRestaurantMenuPanel() {
   const [error, setError] = useState("");
   const [result, setResult] = useState<RestaurantMenuRegistrationResult | null>(null);
   const [registrationTab, setRegistrationTab] = useState<RegistrationTab>("receipt");
+  const [categoryRestaurantId, setCategoryRestaurantId] = useState("");
+  const [categoryId, setCategoryId] = useState("");
+  const [categorySaving, setCategorySaving] = useState(false);
 
   const load = useCallback(async () => {
     if (!repository) return;
     setLoading(true);
     setError("");
     try {
-      const [catalog, receiptCandidates] = await Promise.all([
+      const [catalog, directory, categories, receiptCandidates] = await Promise.all([
         repository.read({ limit: 200 }),
+        repository.readDirectory({ limit: 200 }),
+        repository.readCategories(),
         repository.readAdminReceiptCandidates(),
       ]);
-      setEntries(catalog.restaurants);
+      const directoryById = new Map(directory.restaurants.map((entry) => [
+        entry.restaurant.id,
+        entry.restaurant,
+      ]));
+      setEntries(catalog.restaurants.map((entry) => ({
+        ...entry,
+        restaurant: {
+          ...entry.restaurant,
+          category: directoryById.get(entry.restaurant.id)?.category ?? null,
+        },
+      })));
+      setCategoryRestaurants(directory.restaurants);
+      setRestaurantCategories(categories);
       setCandidates(receiptCandidates);
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : "음식점 메뉴 등록 자료를 불러오지 못했습니다.");
@@ -116,6 +163,39 @@ export function AdminRestaurantMenuPanel() {
       && location.sourceRestaurantCode === selectedCandidate.store_id
     )) ?? null
     : null;
+  const leafRestaurantCategories = useMemo(() => {
+    const parentIds = new Set(restaurantCategories.flatMap((category) => (
+      category.parent_id ? [category.parent_id] : []
+    )));
+    return restaurantCategories.filter((category) => !parentIds.has(category.id));
+  }, [restaurantCategories]);
+
+  function chooseCategoryRestaurant(restaurantId: string) {
+    const restaurant = categoryRestaurants.find((entry) => entry.restaurant.id === restaurantId);
+    setCategoryRestaurantId(restaurantId);
+    setCategoryId(restaurant?.restaurant.category?.id ?? "");
+    setError("");
+    setMessage("");
+  }
+
+  async function saveRestaurantCategory() {
+    if (!repository || !categoryRestaurantId) {
+      setError("카테고리를 연결할 음식점을 선택하세요.");
+      return;
+    }
+    setCategorySaving(true);
+    setError("");
+    setMessage("");
+    try {
+      await repository.setRestaurantCategory(categoryRestaurantId, categoryId || null);
+      setMessage(categoryId ? "음식점 카테고리를 연결했습니다." : "음식점 카테고리 연결을 해제했습니다.");
+      await load();
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : "음식점 카테고리를 연결하지 못했습니다.");
+    } finally {
+      setCategorySaving(false);
+    }
+  }
 
   function chooseCandidate(priceObservationId: string) {
     const candidate = candidates.find((entry) => entry.price_observation_id === priceObservationId) ?? null;
@@ -259,6 +339,22 @@ export function AdminRestaurantMenuPanel() {
       <div><dt>Fitness 연결 키</dt><dd><code>{result.catalogProductId}</code></dd></div>
       <div><dt>영수증 관측 ID</dt><dd><code>{result.receiptObservationId}</code></dd></div>
     </dl>}
+
+    {restaurantCategories.length > 0 && <section className={styles.restaurantCategoryLinker} aria-labelledby="restaurant-category-link-title">
+      <div>
+        <h3 id="restaurant-category-link-title">음식점 카테고리 연결</h3>
+        <p>음식점은 자동 분류하지 않습니다. 확인한 음식점에 세부 카테고리를 직접 연결합니다.</p>
+      </div>
+      <label>음식점<select value={categoryRestaurantId} onChange={(event) => chooseCategoryRestaurant(event.target.value)}>
+        <option value="">음식점을 선택하세요</option>
+        {categoryRestaurants.map((entry) => <option key={entry.restaurant.id} value={entry.restaurant.id}>{categoryRestaurantLabel(entry)}</option>)}
+      </select></label>
+      <label>세부 카테고리<select disabled={!categoryRestaurantId} value={categoryId} onChange={(event) => setCategoryId(event.target.value)}>
+        <option value="">연결 안 함</option>
+        {leafRestaurantCategories.map((category) => <option key={category.id} value={category.id}>{restaurantCategoryRowPathLabel(category, restaurantCategories)}</option>)}
+      </select></label>
+      <button type="button" disabled={!categoryRestaurantId || categorySaving} onClick={() => void saveRestaurantCategory()}>{categorySaving ? "저장 중…" : "카테고리 저장"}</button>
+    </section>}
 
     <div className={styles.unverifiedModeTabs} role="tablist" aria-label="음식점 메뉴 등록 방식">
       <button type="button" role="tab" aria-selected={registrationTab === "receipt"} onClick={() => setRegistrationTab("receipt")}>영수증 연결</button>

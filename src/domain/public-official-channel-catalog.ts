@@ -3,7 +3,11 @@ import {
   OFFICIAL_PRODUCT_CATEGORIES,
   type OfficialProductCategory,
 } from "./official-product-category";
-import type { ProductCategory } from "./product-browser";
+import {
+  categoryForProduct,
+  productCategoryMatches,
+  type ProductCategory,
+} from "./product-browser";
 
 const httpUrlSchema = z.string().url().refine(
   (value) => value.startsWith("https://") || value.startsWith("http://"),
@@ -244,9 +248,13 @@ export function filterAndSortOfficialChannelListings(
   category: ProductCategory = "전체",
 ) {
   const normalizedQuery = query.trim().toLocaleLowerCase("ko-KR");
-  const categoryFiltered = category === "전체"
-    ? [...listings]
-    : listings.filter((listing) => listing.category === category);
+  const categoryFiltered = listings.filter((listing) => {
+    const inferredCategory = categoryForProduct(listing.sourceNameRaw);
+    return productCategoryMatches(
+      category,
+      inferredCategory === "미분류" ? listing.category : inferredCategory,
+    );
+  });
   const filtered = normalizedQuery
     ? categoryFiltered.filter((listing) => [
       listing.sourceNameRaw,

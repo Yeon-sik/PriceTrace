@@ -1,5 +1,6 @@
 import {
   categoryForProduct,
+  productCategoryRoot,
   type ProductCategory,
 } from "./product-browser";
 
@@ -48,6 +49,24 @@ type OfficialProductCategoryInput = {
   sourceProductCode: string;
   sourceNameRaw: string;
 };
+
+const FRESH_PRODUCT_CATEGORIES = new Set<ProductCategory>([
+  "신선식품", "육류", "수산물", "과일", "채소", "두부·달걀",
+]);
+
+function officialCategoryForProduct(category: ProductCategory): OfficialProductCategory | null {
+  if (FRESH_PRODUCT_CATEGORIES.has(category)) return "신선식품";
+  const root = productCategoryRoot(category);
+  if (root === "식품") return "식품";
+  if (root === "음료") return "음료";
+  if (root === "간식") return "간식";
+  if (root === "주방용품") return "주방용품";
+  if (root === "뷰티" || root === "생활용품" || root === "의류·패션"
+    || root === "스포츠·레저" || root === "자동차용품" || root === "전자제품") {
+    return "생활용품";
+  }
+  return null;
+}
 
 const PX_CATEGORY_OVERRIDES = new Map<string, OfficialProductCategoryResult>([
   ["3118", {
@@ -192,8 +211,8 @@ export function normalizeOfficialProductMatchName(value: string) {
 export function buildExistingProductCategoryIndex(products: ExistingCategoryProduct[]) {
   const candidates = new Map<string, ExistingCategoryMatch[]>();
   for (const product of products) {
-    const category = categoryForProduct(product.productName);
-    if (category === "전체" || category === "미분류") continue;
+    const category = officialCategoryForProduct(categoryForProduct(product.productName));
+    if (!category) continue;
     const key = normalizeOfficialProductMatchName(product.productName);
     const existing = candidates.get(key) ?? [];
     if (!existing.some((candidate) => candidate.category === category && candidate.productName === product.productName)) {

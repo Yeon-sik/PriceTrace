@@ -3,6 +3,7 @@ import { buildPublicStandardCatalogIndex, PublicStandardCatalogRowsSchema } from
 
 const catalogProductId = "11111111-1111-4111-8111-111111111111";
 const standardProductId = "22222222-2222-4222-8222-222222222222";
+const standardCategoryId = "33333333-3333-4333-8333-333333333333";
 
 function row(overrides: Record<string, unknown> = {}) {
   return {
@@ -12,6 +13,9 @@ function row(overrides: Record<string, unknown> = {}) {
     standard_product_id: standardProductId,
     standard_name: "CJ 햇반",
     brand_name: "CJ",
+    standard_category_id: standardCategoryId,
+    standard_category_slug: "ready-meals",
+    standard_category_name: "간편식·냉동식품",
     content_amount: 210,
     content_unit: "g",
     package_count: 1,
@@ -36,6 +40,11 @@ describe("public standard catalog", () => {
     expect(index.exactStandardMappings.get("와마트 일산점:210157")).toBe(catalogProductId);
     expect(index.standardNames.get(standardProductId)).toBe("CJ 햇반");
     expect(index.standardBrands.get(standardProductId)).toBe("CJ");
+    expect(index.standardCategories.get(standardProductId)).toEqual({
+      id: standardCategoryId,
+      slug: "ready-meals",
+      name: "간편식·냉동식품",
+    });
     expect(index.catalogSpecs.get(catalogProductId)).toMatchObject({ contentAmount: 210, contentUnit: "g", referenceUnit: 100 });
   });
 
@@ -67,9 +76,18 @@ describe("public standard catalog", () => {
   it("accepts the previous public RPC shape during rollout", () => {
     const legacyRow: Record<string, unknown> = row();
     Reflect.deleteProperty(legacyRow, "source_label");
+    Reflect.deleteProperty(legacyRow, "standard_category_id");
+    Reflect.deleteProperty(legacyRow, "standard_category_slug");
+    Reflect.deleteProperty(legacyRow, "standard_category_name");
     const parsed = PublicStandardCatalogRowsSchema.parse([legacyRow]);
 
     expect(buildPublicStandardCatalogIndex(parsed).standardMappings.get("210157")).toBe(catalogProductId);
+    expect(buildPublicStandardCatalogIndex(parsed).standardCategories).toEqual(new Map());
+  });
+
+  it("rejects a partially populated standard-product category identity", () => {
+    const parsed = PublicStandardCatalogRowsSchema.safeParse([row({ standard_category_name: null })]);
+    expect(parsed.success).toBe(false);
   });
 
   it("rejects a partially populated Coupang observation", () => {

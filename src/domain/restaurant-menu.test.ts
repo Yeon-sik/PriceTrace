@@ -6,11 +6,14 @@ import {
   filterRestaurantDirectoryEntries,
   filterRestaurantMenuEntries,
   filterRestaurantMenus,
+  restaurantDirectoryCategories,
   restaurantMenuCategories,
   summarizeRestaurantMenuPrices,
 } from "./restaurant-menu";
 
 const revision = `sha256:${"b".repeat(64)}`;
+const rootCategoryId = "99999999-9999-4999-8999-999999999999";
+const leafCategoryId = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
 
 function entry() {
   return RestaurantMenuReadV1Schema.parse({
@@ -25,6 +28,15 @@ function entry() {
         brand: "한결식당",
         legalName: "한결푸드",
         cuisineType: "한식",
+        category: {
+          id: leafCategoryId,
+          slug: "bibimbap-rice-bowls",
+          name: "비빔밥·덮밥",
+          path: [
+            { id: rootCategoryId, slug: "korean", name: "한식" },
+            { id: leafCategoryId, slug: "bibimbap-rice-bowls", name: "비빔밥·덮밥" },
+          ],
+        },
         officialSiteUrl: null,
         updatedAt: "2026-08-12T11:00:00+00:00",
       },
@@ -82,7 +94,7 @@ describe("restaurant menu domain", () => {
   it("validates the directory and detail contracts separately", () => {
     const restaurant = entry();
     const directory = RestaurantDirectoryV1Schema.parse({
-      schemaVersion: "restaurant-directory.v1",
+      schemaVersion: "restaurant-directory.v2",
       namespace: "pricetrace",
       revision,
       restaurants: [{
@@ -94,7 +106,7 @@ describe("restaurant menu domain", () => {
       }],
     });
     const detail = RestaurantDetailV1Schema.parse({
-      schemaVersion: "restaurant-detail.v1",
+      schemaVersion: "restaurant-detail.v2",
       namespace: "pricetrace",
       revision,
       restaurant: restaurant.restaurant,
@@ -103,7 +115,27 @@ describe("restaurant menu domain", () => {
     });
 
     expect(directory.restaurants[0].menuCount).toBe(1);
+    expect(directory.restaurants[0].restaurant.category?.path).toHaveLength(2);
     expect(detail.menus[0].catalogProductId).toBe(restaurant.menus[0].catalogProductId);
+  });
+
+  it("continues accepting the v1 restaurant shape while v2 rolls out", () => {
+    const restaurant = entry();
+    const { category: _category, ...legacyRestaurant } = restaurant.restaurant;
+    const parsed = RestaurantDirectoryV1Schema.parse({
+      schemaVersion: "restaurant-directory.v1",
+      namespace: "pricetrace",
+      revision,
+      restaurants: [{
+        revision,
+        restaurant: legacyRestaurant,
+        locations: restaurant.locations,
+        menuCount: 1,
+        latestObservedAt: null,
+      }],
+    });
+
+    expect(parsed.restaurants[0].restaurant.category).toBeNull();
   });
 
   it("keeps restaurant brand and exact catalog product identity separate", () => {
@@ -132,7 +164,7 @@ describe("restaurant menu domain", () => {
   it("filters the directory and menu categories as separate navigation concerns", () => {
     const restaurant = entry();
     const directory = RestaurantDirectoryV1Schema.parse({
-      schemaVersion: "restaurant-directory.v1",
+      schemaVersion: "restaurant-directory.v2",
       namespace: "pricetrace",
       revision,
       restaurants: [{
@@ -145,6 +177,19 @@ describe("restaurant menu domain", () => {
     }).restaurants;
 
     expect(filterRestaurantDirectoryEntries(directory, "서울점")).toHaveLength(1);
+    expect(filterRestaurantDirectoryEntries(directory, "덮밥")).toHaveLength(1);
+    expect(restaurantDirectoryCategories(directory)).toEqual([
+      { id: rootCategoryId, label: "한식", pathLabel: "한식", depth: 0 },
+      {
+        id: leafCategoryId,
+        label: "비빔밥·덮밥",
+        pathLabel: "한식 › 비빔밥·덮밥",
+        depth: 1,
+      },
+    ]);
+    expect(filterRestaurantDirectoryEntries(directory, "", rootCategoryId)).toHaveLength(1);
+    expect(filterRestaurantDirectoryEntries(directory, "", leafCategoryId)).toHaveLength(1);
+    expect(filterRestaurantDirectoryEntries(directory, "", "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb")).toEqual([]);
     expect(restaurantMenuCategories(restaurant.menus)).toEqual(["식사"]);
     expect(filterRestaurantMenus(restaurant.menus, "비빔밥", "식사")).toHaveLength(1);
     expect(filterRestaurantMenus(restaurant.menus, "비빔밥", "기타")).toEqual([]);

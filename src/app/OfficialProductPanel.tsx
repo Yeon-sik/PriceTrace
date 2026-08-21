@@ -55,13 +55,18 @@ import {
   apparelSizes,
   type ApparelSizeLabel,
 } from "@/domain/apparel-size";
-import { availableProductCategories, categoryForProduct, type ProductCategory } from "@/domain/product-browser";
+import {
+  catalogCategoryDescendantIds,
+  catalogCategoryOptionsForProducts,
+  catalogCategoryPathLabel,
+  type CatalogCategoryNode,
+} from "@/domain/catalog-category";
 import type { PurchaseType } from "@/domain/types";
 import { CatalogExplorerPanel, type CatalogExplorerSelectionRequest } from "./CatalogExplorerPanel";
 import styles from "./page.module.css";
 
 type Brand = { id: string; canonical_name: string };
-type StandardProduct = { id: string; canonical_name: string; brand_id: string | null; brand: string | null; product_reference_url: string | null; purchase_type: PurchaseType };
+type StandardProduct = { id: string; canonical_name: string; brand_id: string | null; brand: string | null; product_reference_url: string | null; purchase_type: PurchaseType; category_id: string | null };
 type Variant = { id: string; standard_product_id: string; canonical_name: string; specification: string | null; attributes: Record<string, unknown>; specification_status: CatalogSpecificationStatus; content_amount: number | null; content_unit: CatalogContentUnit | null; package_count: number; reference_unit: number; listing_reference_url: string | null };
 type PendingLinkProposal = {
   targetFingerprint: string;
@@ -75,6 +80,7 @@ type PendingLinkProposal = {
 };
 const legacyRepository = new OfficialProductRepository();
 const proposalQueueRepository = new StandardProductLinkProposalQueueRepository();
+const ALL_STANDARD_CATEGORIES = "__all_standard_categories__";
 const sellers = (candidate: OfficialProductCandidate) => candidate.storeLabels?.length ? candidate.storeLabels : [candidate.storeLabel];
 
 const queueReasonLabels: Partial<Record<StandardProductQueueReason, string>> = {
@@ -103,6 +109,7 @@ export function StandardProductWorkspace({ candidates, approvalRequest, onOpenAp
   const [userId, setUserId] = useState<string | null>(null);
   const [brands, setBrands] = useState<Brand[]>([]);
   const [standards, setStandards] = useState<StandardProduct[]>([]);
+  const [catalogCategories, setCatalogCategories] = useState<CatalogCategoryNode[]>([]);
   const [standardImages, setStandardImages] = useState<Map<string, StandardProductImageRecord>>(new Map());
   const [variants, setVariants] = useState<Variant[]>([]);
   const [variantMappings, setVariantMappings] = useState<StandardProductMapping<Variant>[]>([]);
@@ -111,7 +118,7 @@ export function StandardProductWorkspace({ candidates, approvalRequest, onOpenAp
   const [imageTarget, setImageTarget] = useState<StandardProduct | null>(null);
   const [message, setMessage] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
-  const [selectedStandardCategory, setSelectedStandardCategory] = useState<ProductCategory | null>(null);
+  const [selectedStandardCategory, setSelectedStandardCategory] = useState<string | null>(null);
   const [lowerTab, setLowerTab] = useState<"direct" | "ai" | "specification">("direct");
   const [connectionMode, setConnectionMode] = useState<"direct" | "ai">("direct");
   const [catalogSelection, setCatalogSelection] = useState<CatalogExplorerSelectionRequest>();
@@ -124,21 +131,23 @@ export function StandardProductWorkspace({ candidates, approvalRequest, onOpenAp
     const requestGeneration = ++loadGeneration.current;
     setRefreshing(true);
     try {
-      const [{ data: brandData, error: brandError }, { data: standardData, error: standardError }, { data: imageData, error: imageError }, { data: variantData, error: variantError }, { data: mappingData, error: mappingError }] = await Promise.all([
+      const [{ data: brandData, error: brandError }, { data: standardData, error: standardError }, { data: imageData, error: imageError }, { data: variantData, error: variantError }, { data: mappingData, error: mappingError }, { data: categoryData, error: categoryError }] = await Promise.all([
         client.from("brands").select("id,canonical_name").eq("status", "active").order("canonical_name"),
-        client.from("standard_products").select("id,canonical_name,brand_id,brand,product_reference_url,purchase_type").eq("status", "active").order("canonical_name"),
+        client.from("standard_products").select("id,canonical_name,brand_id,brand,product_reference_url,purchase_type,category_id").eq("purchase_type", "retail_product").eq("status", "active").order("canonical_name"),
         client.from("standard_product_images").select("standard_product_id,source_type,image_url,storage_path,mime_type,file_size_bytes,width,height"),
-        client.from("catalog_products").select("id,standard_product_id,canonical_name,specification,attributes,specification_status,content_amount,content_unit,package_count,reference_unit,listing_reference_url").eq("status", "active"),
+        client.from("catalog_products").select("id,standard_product_id,canonical_name,specification,attributes,specification_status,content_amount,content_unit,package_count,reference_unit,listing_reference_url").eq("purchase_type", "retail_product").eq("status", "active"),
         client.from("source_product_mappings").select("source_label,source_product_code,catalog_product_id").eq("review_status", "verified"),
+        client.from("catalog_categories").select("id,purchase_type,parent_id,slug,display_name,depth").eq("purchase_type", "retail_product").order("depth").order("display_name"),
       ]);
       if (requestGeneration !== loadGeneration.current) return;
-      if (brandError || standardError || imageError || variantError || mappingError) {
-        setMessage(brandError?.message ?? standardError?.message ?? imageError?.message ?? variantError?.message ?? mappingError?.message ?? "표준 상품을 불러오지 못했습니다.");
+      if (brandError || standardError || imageError || variantError || mappingError || categoryError) {
+        setMessage(brandError?.message ?? standardError?.message ?? imageError?.message ?? variantError?.message ?? mappingError?.message ?? categoryError?.message ?? "표준 상품을 불러오지 못했습니다.");
         return;
       }
       const byId = new Map((variantData ?? []).map((variant) => [variant.id, variant as Variant]));
       setBrands((brandData ?? []) as Brand[]);
       setStandards((standardData ?? []) as StandardProduct[]);
+      setCatalogCategories((categoryData ?? []) as CatalogCategoryNode[]);
       setStandardImages(new Map((imageData ?? []).map((image) => [image.standard_product_id, image as StandardProductImageRecord])));
       setVariants((variantData ?? []) as Variant[]);
       setVariantMappings((mappingData ?? []).flatMap((mapping) => {
@@ -266,8 +275,21 @@ export function StandardProductWorkspace({ candidates, approvalRequest, onOpenAp
       const variantText = (variantsByStandard.get(standard.id) ?? []).map((variant) => `${variant.canonical_name} ${variant.content_amount ?? ""}${variant.content_unit ?? ""}`).join(" ");
       return !query || `${standard.brand ?? ""} ${standard.canonical_name} ${variantText}`.toLocaleLowerCase("ko-KR").includes(query);
     }), [standards, variantsByStandard, searchQuery]);
-  const standardCategories = useMemo(() => availableProductCategories(visibleStandards.map((standard) => standard.canonical_name)), [visibleStandards]);
-  const standardsForSelectedCategory = useMemo(() => selectedStandardCategory === "전체" ? visibleStandards : selectedStandardCategory ? visibleStandards.filter((standard) => categoryForProduct(standard.canonical_name) === selectedStandardCategory) : [], [selectedStandardCategory, visibleStandards]);
+  const standardCategories = useMemo(
+    () => catalogCategoryOptionsForProducts(
+      catalogCategories,
+      standards.map((standard) => standard.category_id),
+    ),
+    [catalogCategories, standards],
+  );
+  const standardsForSelectedCategory = useMemo(() => {
+    if (selectedStandardCategory === ALL_STANDARD_CATEGORIES) return visibleStandards;
+    if (!selectedStandardCategory) return [];
+    const categoryIds = catalogCategoryDescendantIds(selectedStandardCategory, catalogCategories);
+    return visibleStandards.filter((standard) => (
+      standard.category_id !== null && categoryIds.has(standard.category_id)
+    ));
+  }, [catalogCategories, selectedStandardCategory, visibleStandards]);
   const selectedState = selected ? states.find((state) => officialProductCandidateKey(state.candidate) === officialProductCandidateKey(selected)) : undefined;
   const openStandardInCatalog = (standard: StandardProduct) => {
     setCatalogSelection((current) => ({
@@ -410,11 +432,14 @@ export function StandardProductWorkspace({ candidates, approvalRequest, onOpenAp
     {message && <p className={styles.error} role="alert">{message}</p>}
     <div className={styles.mappingToolbar}><label className={styles.mappingSearch}><span className={styles.srOnly}>표준 상품 연결 검색</span><input type="search" value={searchQuery} onChange={(event) => setSearchQuery(event.target.value)} placeholder="상품명, 브랜드, 판매처, 상품 코드로 검색" /></label><button type="button" className={styles.secondaryButton} disabled={refreshing} onClick={() => void load()}>{refreshing ? "새로고침 중" : "새로고침"}</button></div>
     <div className={styles.officialSummary}><span><b>{variants.length}</b>개 판매 규격 등록</span><span><b>{variants.filter((variant) => variant.specification_status === "placeholder").length}</b>개 규격 확인 필요</span><span><b>{linked.length}</b>개 PX 기록 연결됨</span><span><b>{excluded.length}</b>개 검증 중복 제외</span><span><b>{queueEntries.filter((entry) => entry.pendingApproval).length}</b>개 승인 대기</span><span><b>{actionableGroupCount}</b>개 PX 연결 작업</span></div>
-    <section className={styles.officialSection}><h2>등록된 표준 상품</h2><p className={styles.manualHint}>대표 이미지는 파일 업로드 또는 HTTPS 이미지 링크로 등록할 수 있습니다. 파일은 최적화 후 Supabase Storage에 저장됩니다.</p>{visibleStandards.length ? <><div className={styles.standardCategoryButtons} aria-label="표준 상품 카테고리"><button type="button" aria-pressed={selectedStandardCategory === "전체"} className={selectedStandardCategory === "전체" ? styles.selectedCatalogProduct : ""} onClick={() => setSelectedStandardCategory("전체")}>전체</button>{standardCategories.map((category) => <button type="button" key={category} aria-pressed={selectedStandardCategory === category} className={selectedStandardCategory === category ? styles.selectedCatalogProduct : ""} onClick={() => setSelectedStandardCategory(category)}>{category}</button>)}<button type="button" onClick={() => setSelectedStandardCategory(null)}>선택 해제</button></div>{selectedStandardCategory ? <div className={styles.officialGrid}>{standardsForSelectedCategory.map((standard) => {
+    <section className={styles.officialSection}><h2>등록된 표준 상품</h2><p className={styles.manualHint}>대표 이미지는 파일 업로드 또는 HTTPS 이미지 링크로 등록할 수 있습니다. 파일은 최적화 후 Supabase Storage에 저장됩니다.</p>{visibleStandards.length ? <><label className={styles.standardCategorySelect}>표준 상품 카테고리<select value={selectedStandardCategory ?? ""} onChange={(event) => setSelectedStandardCategory(event.target.value || null)}><option value="">카테고리를 선택하세요</option><option value={ALL_STANDARD_CATEGORIES}>전체 ({visibleStandards.length})</option>{standardCategories.map((category) => <option value={category.id} key={category.id}>{category.label} ({category.productCount})</option>)}</select></label>{selectedStandardCategory ? <div className={styles.officialGrid}>{standardsForSelectedCategory.map((standard) => {
       const image = standardImages.get(standard.id);
       const registeredVariants = variantsByStandard.get(standard.id) ?? [];
       const pendingCount = registeredVariants.filter((variant) => variant.specification_status === "placeholder").length;
-      return <article className={styles.registeredStandardCard} key={standard.id}><button type="button" className={styles.registeredStandardProduct} aria-label={`${standard.canonical_name} 규격·판매처 코드 관리`} onClick={() => openStandardInCatalog(standard)}><span className={styles.officialThumb}><ProductImagePreview imageUrl={image?.image_url} productName={standard.canonical_name} /></span><span className={styles.registeredStandardInfo}><span>표준 상품</span><strong>{standard.canonical_name}</strong><small>브랜드 {standard.brand ?? "미지정"}</small><small>판매 규격 {registeredVariants.length}개 · {image ? image.source_type === "upload" ? "Supabase 저장 이미지" : "외부 이미지 링크" : "대표 이미지 없음"}</small>{pendingCount > 0 && <span className={styles.specificationBadge}>규격 확인 필요 {pendingCount}개</span>}<span className={styles.registeredStandardHint}>규격·판매처 코드 관리 →</span></span></button><button type="button" className={styles.registeredStandardImageButton} onClick={() => setImageTarget(standard)}>{image ? "대표 이미지 변경" : "대표 이미지 추가"}</button></article>;
+      const categoryLabel = standard.category_id
+        ? catalogCategoryPathLabel(standard.category_id, catalogCategories)
+        : "미분류";
+      return <article className={styles.registeredStandardCard} key={standard.id}><button type="button" className={styles.registeredStandardProduct} aria-label={`${standard.canonical_name} 규격·판매처 코드 관리`} onClick={() => openStandardInCatalog(standard)}><span className={styles.officialThumb}><ProductImagePreview imageUrl={image?.image_url} productName={standard.canonical_name} /></span><span className={styles.registeredStandardInfo}><span>표준 상품</span><strong>{standard.canonical_name}</strong><small>카테고리 {categoryLabel}</small><small>브랜드 {standard.brand ?? "미지정"}</small><small>판매 규격 {registeredVariants.length}개 · {image ? image.source_type === "upload" ? "Supabase 저장 이미지" : "외부 이미지 링크" : "대표 이미지 없음"}</small>{pendingCount > 0 && <span className={styles.specificationBadge}>규격 확인 필요 {pendingCount}개</span>}<span className={styles.registeredStandardHint}>규격·판매처 코드 관리 →</span></span></button><button type="button" className={styles.registeredStandardImageButton} onClick={() => setImageTarget(standard)}>{image ? "대표 이미지 변경" : "대표 이미지 추가"}</button></article>;
     })}</div> : <p className={styles.muted}>카테고리를 선택하면 해당 표준 상품만 표시됩니다.</p>}</> : <p>검색 조건에 맞는 표준 상품이 없습니다.</p>}</section>
     <div className={styles.standardWorkspaceTabs} role="tablist" aria-label="표준 상품 연결 방식"><button type="button" role="tab" aria-selected={lowerTab === "direct"} className={lowerTab === "direct" ? styles.standardWorkspaceTabActive : ""} onClick={() => { setLowerTab("direct"); setConnectionMode("direct"); setSelected(null); void load(); }}>직접 연결</button><button type="button" role="tab" aria-selected={lowerTab === "ai"} className={lowerTab === "ai" ? styles.standardWorkspaceTabActive : ""} onClick={() => { setLowerTab("ai"); setConnectionMode("ai"); setSelected(null); void load(); }}>AI 제안 연결</button><button type="button" role="tab" aria-selected={lowerTab === "specification"} className={lowerTab === "specification" ? styles.standardWorkspaceTabActive : ""} onClick={() => { setLowerTab("specification"); setSelected(null); }}>규격·판매처 코드 관리</button></div>
     {lowerTab === "specification" ? <CatalogExplorerPanel selectionRequest={catalogSelection} brands={brands} /> : <section className={styles.officialSection}><h2>{connectionMode === "direct" ? "표준 상품 직접 등록" : "AI 제안 연결 대기열"}</h2><p className={styles.manualHint}>{connectionMode === "direct" ? "AI 연결서와 같은 상품·브랜드·규격·공식 URL·대표 이미지·가격 정보를 입력하지만 LinkProposal 등록 없이 바로 관리자 등록합니다." : "AI가 만든 LinkProposal을 입력하거나 검토된 제안을 불러와 상품·규격·공식 listing·가격 등록을 승인합니다."}</p>{visibleQueueEntries.length === 0 ? <p className={styles.emptyState}>검색 조건에 맞는 PX 연결 작업이 없습니다.</p> : <div className={styles.pxQueueBuckets}>{renderQueueGroups("승인 대기", "검토된 AI 제안은 관리자 승인 대기열에서 확인합니다.", pendingQueueGroups)}{renderQueueGroups("기존 연결 재사용 검토", "같은 PX 영수증 코드에 기존 판매 규격 후보가 있습니다.", mappingReviewGroups)}{renderQueueGroups("공식 PX 후보 확인", "공식 카탈로그 후보의 규격과 브랜드 근거를 확인합니다.", officialReviewGroups)}{renderQueueGroups("추가 조사 필요", "공식 후보가 하나로 좁혀지지 않아 상품별 조사가 필요합니다.", researchGroups)}</div>}</section>}

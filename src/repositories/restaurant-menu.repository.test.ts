@@ -9,6 +9,8 @@ const catalogProductId = "44444444-4444-4444-8444-444444444444";
 const standardProductId = "55555555-5555-4555-8555-555555555555";
 const locationId = "66666666-6666-4666-8666-666666666666";
 const observationId = "77777777-7777-4777-8777-777777777777";
+const rootCategoryId = "88888888-8888-4888-8888-888888888888";
+const categoryId = "99999999-9999-4999-8999-999999999999";
 const revision = `sha256:${"a".repeat(64)}`;
 
 function readPayload(id = restaurantId) {
@@ -24,6 +26,15 @@ function readPayload(id = restaurantId) {
         brand: "테스트 식당",
         legalName: null,
         cuisineType: "한식",
+        category: {
+          id: categoryId,
+          slug: "bibimbap-rice-bowls",
+          name: "비빔밥·덮밥",
+          path: [
+            { id: rootCategoryId, slug: "korean", name: "한식" },
+            { id: categoryId, slug: "bibimbap-rice-bowls", name: "비빔밥·덮밥" },
+          ],
+        },
         officialSiteUrl: null,
         updatedAt: "2026-08-12T11:00:00+00:00",
       },
@@ -66,7 +77,7 @@ describe("RestaurantMenuRepository", () => {
   it("reads a lightweight restaurant directory before loading a detail", async () => {
     const rpc = vi.fn().mockResolvedValue({
       data: {
-        schemaVersion: "restaurant-directory.v1",
+        schemaVersion: "restaurant-directory.v2",
         namespace: "pricetrace",
         revision,
         restaurants: [{
@@ -83,18 +94,19 @@ describe("RestaurantMenuRepository", () => {
 
     const result = await repository.readDirectory({ query: "한식", limit: 500 });
 
-    expect(rpc).toHaveBeenCalledWith("get_restaurant_directory_v1", {
+    expect(rpc).toHaveBeenCalledWith("get_restaurant_directory_v2", {
       p_query: "한식",
       p_limit: 200,
     });
     expect(result.restaurants[0].menuCount).toBe(1);
+    expect(result.restaurants[0].restaurant.category?.id).toBe(categoryId);
   });
 
   it("loads one restaurant detail by exact restaurant identity", async () => {
     const restaurant = readPayload().restaurants[0];
     const rpc = vi.fn().mockResolvedValue({
       data: {
-        schemaVersion: "restaurant-detail.v1",
+        schemaVersion: "restaurant-detail.v2",
         namespace: "pricetrace",
         ...restaurant,
       },
@@ -104,7 +116,7 @@ describe("RestaurantMenuRepository", () => {
 
     const result = await repository.readDetail(restaurantId);
 
-    expect(rpc).toHaveBeenCalledWith("get_restaurant_detail_v1", {
+    expect(rpc).toHaveBeenCalledWith("get_restaurant_detail_v2", {
       p_restaurant_id: restaurantId,
     });
     expect(result.restaurant.id).toBe(restaurantId);
@@ -113,10 +125,10 @@ describe("RestaurantMenuRepository", () => {
 
   it("falls back to the existing menu read RPC until the new directory RPC is deployed", async () => {
     const rpc = vi.fn((name: string) => {
-      if (name === "get_restaurant_directory_v1") {
+      if (name === "get_restaurant_directory_v2" || name === "get_restaurant_directory_v1") {
         return Promise.resolve({
           data: null,
-          error: { code: "PGRST202", message: "Could not find the function public.get_restaurant_directory_v1(p_limit, p_query) in the schema cache" },
+          error: { code: "PGRST202", message: `Could not find the function public.${name} in the schema cache` },
         });
       }
       return Promise.resolve({ data: readPayload(), error: null });
@@ -125,7 +137,7 @@ describe("RestaurantMenuRepository", () => {
 
     const result = await repository.readDirectory();
 
-    expect(result.schemaVersion).toBe("restaurant-directory.v1");
+    expect(result.schemaVersion).toBe("restaurant-directory.v2");
     expect(result.restaurants[0].restaurant.id).toBe(restaurantId);
     expect(rpc).toHaveBeenCalledWith("get_restaurant_menu_read_v1", {
       p_restaurant_id: null,
@@ -133,6 +145,109 @@ describe("RestaurantMenuRepository", () => {
       p_query: null,
       p_limit: 100,
     });
+  });
+
+  it("upgrades a deployed v1 directory response to the v2 client contract", async () => {
+    const rpc = vi.fn((name: string) => {
+      if (name === "get_restaurant_directory_v2") {
+        return Promise.resolve({
+          data: null,
+          error: { code: "PGRST202", message: "Could not find the function" },
+        });
+      }
+      return Promise.resolve({
+        data: {
+          schemaVersion: "restaurant-directory.v1",
+          namespace: "pricetrace",
+          revision,
+          restaurants: [{
+            revision,
+            restaurant: readPayload().restaurants[0].restaurant,
+            locations: readPayload().restaurants[0].locations,
+            menuCount: 1,
+            latestObservedAt: null,
+          }],
+        },
+        error: null,
+      });
+    });
+    const repository = new RestaurantMenuRepository({ rpc } as unknown as SupabaseClient);
+
+    const result = await repository.readDirectory();
+
+    expect(result.schemaVersion).toBe("restaurant-directory.v2");
+    expect(rpc).toHaveBeenNthCalledWith(2, "get_restaurant_directory_v1", {
+      p_query: null,
+      p_limit: 100,
+    });
+  });
+
+  it("reads the category tree in stable hierarchy order", async () => {
+    const rows = [{
+      id: categoryId,
+      parent_id: rootCategoryId,
+      slug: "bibimbap-rice-bowls",
+      display_name: "비빔밥·덮밥",
+      depth: 1,
+      sort_order: 10,
+    }];
+    const query = {
+      select: vi.fn(),
+      order: vi.fn(),
+    };
+    query.select.mockReturnValue(query);
+    query.order
+      .mockReturnValueOnce(query)
+      .mockReturnValueOnce(query)
+      .mockResolvedValueOnce({ data: rows, error: null });
+    const from = vi.fn().mockReturnValue(query);
+    const repository = new RestaurantMenuRepository({ from } as unknown as SupabaseClient);
+
+    const result = await repository.readCategories();
+
+    expect(from).toHaveBeenCalledWith("restaurant_categories");
+    expect(query.order.mock.calls).toEqual([["depth"], ["sort_order"], ["display_name"]]);
+    expect(result).toEqual(rows);
+  });
+
+  it("keeps the existing admin menu usable while the category table rolls out", async () => {
+    const query = {
+      select: vi.fn(),
+      order: vi.fn(),
+    };
+    query.select.mockReturnValue(query);
+    query.order
+      .mockReturnValueOnce(query)
+      .mockReturnValueOnce(query)
+      .mockResolvedValueOnce({
+        data: null,
+        error: { code: "PGRST205", message: "Could not find the table public.restaurant_categories" },
+      });
+    const from = vi.fn().mockReturnValue(query);
+    const repository = new RestaurantMenuRepository({ from } as unknown as SupabaseClient);
+
+    await expect(repository.readCategories()).resolves.toEqual([]);
+  });
+
+  it("links and unlinks one user-selected restaurant category through the admin RPC", async () => {
+    const rpc = vi.fn().mockResolvedValue({
+      data: [{
+        restaurant_id: restaurantId,
+        category_id: categoryId,
+        category_slug: "bibimbap-rice-bowls",
+        category_display_name: "비빔밥·덮밥",
+      }],
+      error: null,
+    });
+    const repository = new RestaurantMenuRepository({ rpc } as unknown as SupabaseClient);
+
+    const result = await repository.setRestaurantCategory(restaurantId, categoryId);
+
+    expect(rpc).toHaveBeenCalledWith("admin_set_restaurant_category_v1", {
+      p_restaurant_id: restaurantId,
+      p_category_id: categoryId,
+    });
+    expect(result.category_id).toBe(categoryId);
   });
 
   it("reads the versioned restaurant and exact menu contract", async () => {
