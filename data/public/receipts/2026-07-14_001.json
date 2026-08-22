@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "privacyPolicyVersion": 2,
-  "revision": "8cc63bfd7bc5641b",
+  "revision": "4e04dffeb700637a",
   "id": "2026-07-14_001",
   "fileName": "2026-07-14_001.json",
   "merchant": {
@@ -2167,7 +2167,7 @@
     {
       "id": "line_96d92db2e180e47c",
       "type": "product",
-      "description": "컵누들 매콤한맛 용기 큰컵",
+      "description": "컵누들 매콤한맛 용기",
       "sourceLineReferences": [
         "112"
       ],

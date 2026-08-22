@@ -1,8 +1,8 @@
 {
   "schemaVersion": 3,
   "privacyPolicyVersion": 2,
-  "receiptIndexRevision": "a5bc4737af70d0ef",
-  "revision": "f6faf5344e33cdc0",
+  "receiptIndexRevision": "8dba30ba5e8c9962",
+  "revision": "e6e6315772fcfc71",
   "observations": [
     {
       "id": "9f3022229e6111ae",
@@ -3133,7 +3133,7 @@
       "retailChannel": "px",
       "catalogNamespace": "korean-military-px",
       "observedAt": "2026-07-14",
-      "productName": "컵누들 매콤한맛 용기 큰컵",
+      "productName": "컵누들 매콤한맛 용기",
       "sourceProductCode": "260235",
       "quantity": 2,
       "unitPriceKrw": 1160,
