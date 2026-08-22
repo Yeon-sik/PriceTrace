@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { discoverOfficialProduct, findFrozenReceiptCandidate, mergeOfficialProductCandidates, officialProductCandidateKey, resolveExactStandardProductMapping, resolveMartTaggedStandardProductMapping, resolveOfficialProductCandidates, resolveStandardProductMapping } from "./official-product";
+import { discoverOfficialProduct, findFrozenReceiptCandidate, findOfficialChannelListing, mergeOfficialProductCandidates, officialProductCandidateKey, resolveExactStandardProductMapping, resolveMartTaggedStandardProductMapping, resolveOfficialProductCandidates, resolveStandardProductMapping } from "./official-product";
 import {
   isExcludedFromStandardProductConnectionQueue,
   standardProductConnectionQueueExclusions,
@@ -23,6 +23,18 @@ describe("official product discovery", () => {
 
   it("does not reuse a PX code for a seller with no shared catalog", () => {
     expect(discoverOfficialProduct({ sourceProductCode: "210059", productName: "동일 코드", storeLabel: "일반 마트", catalogNamespace: null }).status).toBe("unmatched");
+  });
+
+  it("finds an official listing by its namespace and source code", () => {
+    const listings = [
+      { sourceProductCodeNamespace: "px", sourceProductCode: "34044", sourceNameRaw: "컵누들 매콤한맛" },
+      { sourceProductCodeNamespace: "px", sourceProductCode: "37030", sourceNameRaw: "빅컵누들 매콤한맛" },
+    ];
+
+    expect(findOfficialChannelListing(listings, "px", "37030")?.sourceNameRaw)
+      .toBe("빅컵누들 매콤한맛");
+    expect(findOfficialChannelListing(listings, "other", "37030")).toBeUndefined();
+    expect(findOfficialChannelListing(listings, undefined, "37030")).toBeUndefined();
   });
 });
 

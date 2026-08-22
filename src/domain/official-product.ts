@@ -102,6 +102,20 @@ export function resolveExactStandardProductMapping<T>(
   return exact.get(sourceMappingKey(candidate.storeLabel, candidate.sourceProductCode));
 }
 
+export function findOfficialChannelListing<
+  T extends { sourceProductCodeNamespace: string; sourceProductCode: string },
+>(
+  listings: T[],
+  sourceProductCodeNamespace: string | undefined,
+  sourceProductCode: string | undefined,
+) {
+  if (!sourceProductCodeNamespace || !sourceProductCode) return undefined;
+  return listings.find((listing) => (
+    listing.sourceProductCodeNamespace === sourceProductCodeNamespace
+    && listing.sourceProductCode === sourceProductCode
+  ));
+}
+
 export function normalizeExactProductName(value: string) {
   return value.replace(/\p{White_Space}+/gu, "");
 }

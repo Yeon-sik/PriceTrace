@@ -2,7 +2,7 @@
 /* eslint-disable @next/next/no-img-element */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { discoverOfficialProduct, officialProductCandidateKey, officialSearchUrl, resolveExactStandardProductMapping, resolveOfficialProductCandidates, type OfficialProductCandidate, type StandardProductMapping } from "@/domain/official-product";
+import { discoverOfficialProduct, findOfficialChannelListing, officialProductCandidateKey, officialSearchUrl, resolveExactStandardProductMapping, resolveOfficialProductCandidates, type OfficialProductCandidate, type StandardProductMapping } from "@/domain/official-product";
 import { isExcludedFromStandardProductConnectionQueue } from "@/domain/standard-product-connection-queue-exclusions";
 import {
   buildPxStandardProductQueueEntries,
@@ -47,6 +47,8 @@ import {
   findWhitespaceEquivalentStandardProduct,
   parseReviewedLinkProposalForLiveCandidate,
   parseReviewedLinkProposalEnvelope,
+  parseOfficialSpecification,
+  parseStructuredOfficialSpecification,
   rebuildReviewedLinkProposalForAdminTarget,
   receiptAndOfficialNamesMatch,
   type ReviewedLinkProposal,
@@ -62,6 +64,7 @@ import {
   type CatalogCategoryNode,
 } from "@/domain/catalog-category";
 import type { PurchaseType } from "@/domain/types";
+import { PublicOfficialChannelCatalogRepository } from "@/repositories/public-official-channel-catalog.repository";
 import { CatalogExplorerPanel, type CatalogExplorerSelectionRequest } from "./CatalogExplorerPanel";
 import styles from "./page.module.css";
 
@@ -80,6 +83,7 @@ type PendingLinkProposal = {
 };
 const legacyRepository = new OfficialProductRepository();
 const proposalQueueRepository = new StandardProductLinkProposalQueueRepository();
+const publicOfficialCatalog = new PublicOfficialChannelCatalogRepository().loadPxCatalog();
 const ALL_STANDARD_CATEGORIES = "__all_standard_categories__";
 const sellers = (candidate: OfficialProductCandidate) => candidate.storeLabels?.length ? candidate.storeLabels : [candidate.storeLabel];
 
@@ -457,6 +461,13 @@ function StandardProductConnectionModal({ directMode = false, candidate, legacy,
     : approvalTarget?.executionMode === "link_only_v1";
   const approvalApparelSize = approvalTarget?.normalizedIdentity.apparelSize ?? null;
   const initialListingName = candidate.officialSourceNameRaw ?? legacy?.officialName ?? candidate.productName;
+  const initialOfficialCatalogListing = findOfficialChannelListing(
+    publicOfficialCatalog.listings,
+    candidate.officialSourceProductCodeNamespace,
+    candidate.officialSourceProductCode,
+  );
+  const [officialCatalogSearch, setOfficialCatalogSearch] = useState("");
+  const [officialCatalogListingId, setOfficialCatalogListingId] = useState(initialOfficialCatalogListing?.id ?? "");
   const [standardProductId, setStandardProductId] = useState(approvalTarget?.decision.standardProductId ?? "");
   const [standardName, setStandardName] = useState(approvalTarget?.normalizedIdentity.productFamilyName ?? initialListingName);
   const [brandName, setBrandName] = useState(approvalTarget?.brandEvidence.canonicalName ?? "");
@@ -482,6 +493,63 @@ function StandardProductConnectionModal({ directMode = false, candidate, legacy,
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState("");
   const selectedStandard = standards.find((standard) => standard.id === standardProductId);
+  const selectedOfficialCatalogListing = publicOfficialCatalog.listings.find(
+    (listing) => listing.id === officialCatalogListingId,
+  );
+  const directOfficialCatalogOptions = useMemo(() => {
+    if (!directMode) return [];
+    const query = officialCatalogSearch.trim().toLocaleLowerCase("ko-KR");
+    const matching = query
+      ? publicOfficialCatalog.listings.filter((listing) => (
+        [
+          listing.sourceNameRaw,
+          listing.vendorNameRaw ?? "",
+          listing.specificationTextRaw ?? "",
+          listing.sourceProductCode,
+        ].join(" ").toLocaleLowerCase("ko-KR").includes(query)
+      ))
+      : [];
+    if (selectedOfficialCatalogListing && !matching.some((listing) => listing.id === selectedOfficialCatalogListing.id)) {
+      matching.unshift(selectedOfficialCatalogListing);
+    }
+    return matching.slice(0, 80);
+  }, [directMode, officialCatalogSearch, selectedOfficialCatalogListing]);
+  const effectiveOfficialCatalogListing = directMode
+    ? selectedOfficialCatalogListing
+    : undefined;
+  const effectiveOfficialChannelId = effectiveOfficialCatalogListing
+    ? publicOfficialCatalog.channel.id
+    : candidate.officialChannelId;
+  const effectiveOfficialSourceProductCodeNamespace = effectiveOfficialCatalogListing?.sourceProductCodeNamespace
+    ?? candidate.officialSourceProductCodeNamespace;
+  const effectiveOfficialSourceProductCode = effectiveOfficialCatalogListing?.sourceProductCode
+    ?? candidate.officialSourceProductCode;
+  const effectiveOfficialSnapshotId = effectiveOfficialCatalogListing
+    ? publicOfficialCatalog.sourceSnapshot.id
+    : candidate.officialSnapshotId;
+  const effectiveOfficialSnapshotHash = effectiveOfficialCatalogListing
+    ? publicOfficialCatalog.sourceSnapshot.contentHash
+    : candidate.officialSnapshotHash;
+  const effectiveOfficialSourceNameRaw = effectiveOfficialCatalogListing?.sourceNameRaw
+    ?? candidate.officialSourceNameRaw;
+  const effectiveOfficialSpecificationTextRaw = effectiveOfficialCatalogListing?.specificationTextRaw
+    ?? candidate.officialSpecificationTextRaw;
+  const effectiveOfficialPriceAmountKrw = effectiveOfficialCatalogListing?.officialPrice.amountKrw
+    ?? candidate.officialPriceAmountKrw;
+  const effectiveOfficialPriceSourceText = effectiveOfficialCatalogListing?.officialPrice.sourceText
+    ?? candidate.officialPriceSourceText;
+  const effectiveOfficialPriceObservedAt = effectiveOfficialCatalogListing?.officialPrice.observedAt
+    ?? candidate.officialPriceObservedAt;
+  const effectiveOfficialSourceRefs = effectiveOfficialCatalogListing?.sourceRefs
+    ?? candidate.officialSourceRefs;
+  const effectiveOfficialImageUrl = effectiveOfficialCatalogListing?.image?.url
+    ?? candidate.officialImageUrl;
+  const effectiveOfficialImageContentHash = effectiveOfficialCatalogListing?.image?.contentHash
+    ?? candidate.officialImageContentHash;
+  const effectiveOfficialImageMediaType = effectiveOfficialCatalogListing?.image?.mediaType
+    ?? candidate.officialImageMediaType;
+  const effectiveOfficialImageByteLength = effectiveOfficialCatalogListing?.image?.byteLength
+    ?? candidate.officialImageByteLength;
   const whitespaceEquivalentStandard = standardProductId
     ? undefined
     : findWhitespaceEquivalentStandardProduct(standards, standardName);
@@ -510,6 +578,25 @@ function StandardProductConnectionModal({ directMode = false, candidate, legacy,
     ))
   ));
 
+  function selectOfficialCatalogListing(listingId: string) {
+    setOfficialCatalogListingId(listingId);
+    const listing = publicOfficialCatalog.listings.find((item) => item.id === listingId);
+    if (!listing) return;
+    setListingName(listing.sourceNameRaw);
+    const specification = listing.specificationTextRaw
+      ? parseStructuredOfficialSpecification(listing.specificationTextRaw, listing.sourceNameRaw)
+        ?? parseOfficialSpecification(listing.specificationTextRaw)
+      : null;
+    setContentAmount(specification?.contentAmount.toString() ?? "");
+    setContentUnit(specification?.contentUnit ?? "g");
+    setPackageCount(
+      specification && "packageCount" in specification && typeof specification.packageCount === "number"
+        ? specification.packageCount.toString()
+        : inferOfficialPackageCount(listing.sourceNameRaw).toString(),
+    );
+    setMessage("");
+  }
+
   async function saveMapping(event: React.FormEvent) {
     event.preventDefault();
     if (mappingSaved) return;
@@ -522,20 +609,39 @@ function StandardProductConnectionModal({ directMode = false, candidate, legacy,
       || candidate.receiptQuantity === undefined
       || candidate.receiptTotalPriceKrw === undefined
       || !candidate.catalogNamespace
-      || !candidate.officialChannelId
-      || !candidate.officialSourceProductCodeNamespace
-      || !candidate.officialSourceProductCode
-      || !candidate.officialSnapshotId
-      || !candidate.officialSnapshotHash
-      || !candidate.officialSourceNameRaw
-      || !candidate.officialSpecificationTextRaw
-      || !candidate.officialSourceRefs?.length
-      || !candidate.officialImageUrl
-      || !candidate.officialImageContentHash
-      || !candidate.officialImageMediaType
-      || !candidate.officialImageByteLength
     ) {
-      setMessage("영수증 revision 또는 공식 카탈로그 스냅샷이 없어 연결할 수 없습니다.");
+      setMessage("영수증 revision 또는 카탈로그 채널이 없어 연결할 수 없습니다.");
+      return;
+    }
+    if (
+      directMode
+      && !selectedOfficialCatalogListing
+      && (
+        !candidate.officialChannelId
+        || !candidate.officialSourceProductCodeNamespace
+        || !candidate.officialSourceProductCode
+      )
+    ) {
+      setMessage("직접 연결할 공식 PX 상품을 검색해서 선택하세요.");
+      return;
+    }
+    if (
+      !effectiveOfficialChannelId
+      || !effectiveOfficialSourceProductCodeNamespace
+      || !effectiveOfficialSourceProductCode
+      || !effectiveOfficialSnapshotId
+      || !effectiveOfficialSnapshotHash
+      || !effectiveOfficialSourceNameRaw
+      || !effectiveOfficialSpecificationTextRaw
+      || !effectiveOfficialSourceRefs?.length
+      || !effectiveOfficialImageUrl
+      || !effectiveOfficialImageContentHash
+      || !effectiveOfficialImageMediaType
+      || !effectiveOfficialImageByteLength
+    ) {
+      setMessage(directMode
+        ? "선택한 공식 PX 상품에 snapshot·규격·대표 이미지 근거가 모두 필요합니다."
+        : "영수증 revision 또는 공식 카탈로그 스냅샷이 없어 연결할 수 없습니다.");
       return;
     }
     let reviewedProposalEnvelope: ReviewedLinkProposal | null = null;
@@ -566,9 +672,9 @@ function StandardProductConnectionModal({ directMode = false, candidate, legacy,
     if (
       requiresOfficialPrice
       && (
-        candidate.officialPriceAmountKrw === undefined
-        || !candidate.officialPriceSourceText
-        || !candidate.officialPriceObservedAt
+        effectiveOfficialPriceAmountKrw === undefined
+        || !effectiveOfficialPriceSourceText
+        || !effectiveOfficialPriceObservedAt
       )
     ) {
       setMessage("검토된 포함 관계를 다시 확인할 공식 판매가가 없습니다.");
@@ -587,7 +693,7 @@ function StandardProductConnectionModal({ directMode = false, candidate, legacy,
       : productUrl.trim();
     if (!client || !resolvedListingName || !/^https?:\/\//.test(resolvedProductUrl)) { setMessage("상품명과 확인 URL을 확인하세요."); return; }
     if (!directMode && (
-      !receiptAndOfficialNamesMatch(candidate.productName, candidate.officialSourceNameRaw)
+      !receiptAndOfficialNamesMatch(candidate.productName, effectiveOfficialSourceNameRaw)
       && reviewedProposalEnvelope!.sameChannelNameRule.outcome
         !== "apply_verified_name_equivalence"
     )) {
@@ -634,7 +740,7 @@ function StandardProductConnectionModal({ directMode = false, candidate, legacy,
             : {};
       const expectedSpecification = selectedApparelSize
         ? `${selectedApparelSize.kr}호`
-        : candidate.officialSpecificationTextRaw;
+        : effectiveOfficialSpecificationTextRaw;
       setSaving(true); setMessage("");
     try {
       if (!standardProductId && !standardName.trim()) throw new Error("새 표준 상품명을 입력하세요.");
@@ -647,7 +753,7 @@ function StandardProductConnectionModal({ directMode = false, candidate, legacy,
         existingRepresentativeImage
         && (
           existingRepresentativeImage.source_type !== "external_url"
-          || existingRepresentativeImage.image_url !== candidate.officialImageUrl
+          || existingRepresentativeImage.image_url !== effectiveOfficialImageUrl
         )
       ) {
         throw new Error("기존 대표 이미지가 공식 이미지와 달라 자동으로 덮어쓸 수 없습니다.");
@@ -696,26 +802,26 @@ function StandardProductConnectionModal({ directMode = false, candidate, legacy,
         quantity: candidate.receiptQuantity,
       };
       const currentOfficialListingInput = {
-        channelId: candidate.officialChannelId,
-        sourceProductCodeNamespace: candidate.officialSourceProductCodeNamespace,
-        sourceProductCode: candidate.officialSourceProductCode,
-        snapshotId: candidate.officialSnapshotId,
-        snapshotHash: candidate.officialSnapshotHash,
-        sourceNameRaw: candidate.officialSourceNameRaw,
-        specificationTextRaw: candidate.officialSpecificationTextRaw,
+        channelId: effectiveOfficialChannelId,
+        sourceProductCodeNamespace: effectiveOfficialSourceProductCodeNamespace,
+        sourceProductCode: effectiveOfficialSourceProductCode,
+        snapshotId: effectiveOfficialSnapshotId,
+        snapshotHash: effectiveOfficialSnapshotHash,
+        sourceNameRaw: effectiveOfficialSourceNameRaw,
+        specificationTextRaw: effectiveOfficialSpecificationTextRaw,
         ...(requiresOfficialPrice ? {
           officialPrice: {
-            amountKrw: candidate.officialPriceAmountKrw!,
-            sourceText: candidate.officialPriceSourceText!,
-            observedAt: candidate.officialPriceObservedAt!,
+            amountKrw: effectiveOfficialPriceAmountKrw!,
+            sourceText: effectiveOfficialPriceSourceText!,
+            observedAt: effectiveOfficialPriceObservedAt!,
           },
         } : {}),
-        sourceRefs: candidate.officialSourceRefs,
+        sourceRefs: effectiveOfficialSourceRefs,
         image: {
-          url: candidate.officialImageUrl,
-          contentHash: candidate.officialImageContentHash,
-          mediaType: candidate.officialImageMediaType,
-          byteLength: candidate.officialImageByteLength,
+          url: effectiveOfficialImageUrl,
+          contentHash: effectiveOfficialImageContentHash,
+          mediaType: effectiveOfficialImageMediaType,
+          byteLength: effectiveOfficialImageByteLength,
         },
       };
       const directAssessment = {
@@ -737,12 +843,12 @@ function StandardProductConnectionModal({ directMode = false, candidate, legacy,
           },
           {
             sourceType: "official_channel" as const,
-            sourceId: `${candidate.officialChannelId}:${candidate.officialSourceProductCodeNamespace}:${candidate.officialSourceProductCode}`,
+            sourceId: `${effectiveOfficialChannelId}:${effectiveOfficialSourceProductCodeNamespace}:${effectiveOfficialSourceProductCode}`,
             authority: "primary" as const,
             url: resolvedProductUrl,
-            capturedAt: candidate.officialSnapshotId,
+            capturedAt: effectiveOfficialSnapshotId,
             claims: ["관리자가 공식 판매채널 상품과 규격을 직접 확인함"],
-            sourceRefs: candidate.officialSourceRefs,
+            sourceRefs: effectiveOfficialSourceRefs,
           },
           ...(!isLinkOnly ? [{
             sourceType: "coupang" as const,
@@ -961,11 +1067,18 @@ function StandardProductConnectionModal({ directMode = false, candidate, legacy,
       <div className={styles.standardConnectionModalGrid}>
         <div className={styles.standardConnectionPane}>
           <h3>표준 상품·판매 규격 연결</h3>
+          {directMode && <section className={styles.directOfficialCatalogEditor} aria-label="직접 연결할 공식 카탈로그 상품">
+            <h4>공식 카탈로그 상품 선택</h4>
+            <p>자동 후보가 틀리거나 비어 있으면 공식 PX 상품을 직접 선택하세요. 영수증 원문은 유지하고, 선택한 공식 상품의 코드·snapshot·이미지 근거를 등록에 사용합니다.</p>
+            <label>공식 상품 검색<input type="search" value={officialCatalogSearch} onChange={(event) => setOfficialCatalogSearch(event.target.value)} placeholder="예: 컵누들, 빅컵누들, 37030" /></label>
+            <label>적용할 공식 상품<select required value={officialCatalogListingId} onChange={(event) => selectOfficialCatalogListing(event.target.value)}><option value="">공식 PX 상품을 선택하세요</option>{directOfficialCatalogOptions.map((listing) => <option key={listing.id} value={listing.id}>{listing.sourceNameRaw} · {listing.specificationTextRaw ?? "규격 없음"} · 코드 {listing.sourceProductCode}</option>)}</select></label>
+            {selectedOfficialCatalogListing ? <div className={styles.reusedProductInfo} aria-live="polite"><span>공식 원문 <b>{selectedOfficialCatalogListing.sourceNameRaw}</b></span><span>공식 코드 <b>{selectedOfficialCatalogListing.sourceProductCode}</b></span><span>공식 규격 <b>{selectedOfficialCatalogListing.specificationTextRaw ?? "없음"}</b></span>{selectedOfficialCatalogListing.image ? <a href={selectedOfficialCatalogListing.image.url} target="_blank" rel="noreferrer">공식 이미지 근거 확인</a> : <strong>대표 이미지 근거가 없는 상품은 등록할 수 없습니다.</strong>}</div> : <small>검색어를 입력한 뒤 등록할 공식 PX 상품을 선택하세요.</small>}
+          </section>}
           <form className={styles.manualForm} onSubmit={saveMapping}>
             <label>기존 표준 상품<select value={standardProductId} onChange={(event) => { const nextStandard = standards.find((standard) => standard.id === event.target.value); setStandardProductId(event.target.value); setBrandName(nextStandard?.brand ?? ""); setMappingSaved(false); setMessage(""); }}><option value="">새 표준 상품 만들기</option>{standards.map((standard) => <option key={standard.id} value={standard.id}>{standard.brand ? `${standard.brand} · ` : ""}{standard.canonical_name}</option>)}</select></label>
             {whitespaceEquivalentStandard && <p className={styles.standardNameCollision} role="alert">같은 이름의 표준 상품 <b>{whitespaceEquivalentStandard.canonical_name}</b>이 이미 있습니다. 새로 만들지 말고 위 목록에서 해당 표준 상품을 직접 선택하세요.</p>}
-             {selectedStandard ? <><section className={styles.reusedProductInfo} aria-label="사용할 표준 상품 정보"><span>표준 상품 <b>{selectedStandard.canonical_name}</b></span><span>브랜드 <b>{selectedStandard.brand ?? "미지정"}</b></span><span>하위 상품명 <b>{directMode || approvalProposal ? listingName : reusedListingName}</b></span>{reusedProductUrl ? <a href={reusedProductUrl} target="_blank" rel="noreferrer">기존 상품 URL 확인</a> : <strong>기존 URL이 없어 연결할 수 없습니다.</strong>}</section>{(approvalProposal || directMode) && <><label>적용할 판매 규격명<input required value={listingName} onChange={(event) => setListingName(event.target.value)} /><small>공식 카탈로그 원문: {candidate.officialSourceNameRaw}</small></label>{directMode && <label>상품 확인 URL<input required type="url" placeholder="https://" value={productUrl} onChange={(event) => setProductUrl(event.target.value)} /></label>}</>}</> : <><label>새 표준 상품명<input required value={standardName} onChange={(event) => setStandardName(event.target.value)} placeholder="예: 햇반" /></label><label>{approvalProposal ? "적용할 판매 규격명" : "공식 판매 규격명"}<input required value={approvalProposal || directMode ? listingName : candidate.officialSourceNameRaw ?? listingName} onChange={(event) => setListingName(event.target.value)} readOnly={!approvalProposal && !directMode && Boolean(candidate.officialSourceNameRaw)} placeholder="공식 카탈로그 원문" /><small>{approvalProposal || directMode ? `공식 카탈로그 원문: ${candidate.officialSourceNameRaw}` : "공식 스냅샷 원문은 수정하지 않습니다."}</small></label><label>상품 확인 URL<input required type="url" placeholder="https://" value={productUrl} onChange={(event) => setProductUrl(event.target.value)} /></label></>}
-            <section className={styles.reusedProductInfo} aria-label="공식 대표 이미지"><span>공식 대표 이미지 <b>표준 상품군에 적용</b></span>{candidate.officialImageUrl ? <a href={candidate.officialImageUrl} target="_blank" rel="noreferrer">공식 이미지 링크 확인</a> : <strong>공식 이미지 근거가 없어 연결할 수 없습니다.</strong>}</section>
+             {selectedStandard ? <><section className={styles.reusedProductInfo} aria-label="사용할 표준 상품 정보"><span>표준 상품 <b>{selectedStandard.canonical_name}</b></span><span>브랜드 <b>{selectedStandard.brand ?? "미지정"}</b></span><span>하위 상품명 <b>{directMode || approvalProposal ? listingName : reusedListingName}</b></span>{reusedProductUrl ? <a href={reusedProductUrl} target="_blank" rel="noreferrer">기존 상품 URL 확인</a> : <strong>기존 URL이 없어 연결할 수 없습니다.</strong>}</section>{(approvalProposal || directMode) && <><label>적용할 판매 규격명<input required value={listingName} onChange={(event) => setListingName(event.target.value)} /><small>공식 카탈로그 원문: {effectiveOfficialSourceNameRaw ?? "공식 카탈로그 매칭 없음"}</small></label>{directMode && <label>상품 확인 URL<input required type="url" placeholder="https://" value={productUrl} onChange={(event) => setProductUrl(event.target.value)} /></label>}</>}</> : <><label>새 표준 상품명<input required value={standardName} onChange={(event) => setStandardName(event.target.value)} placeholder="예: 햇반" /></label><label>{approvalProposal || directMode ? "적용할 판매 규격명" : "공식 판매 규격명"}<input required value={approvalProposal || directMode ? listingName : effectiveOfficialSourceNameRaw ?? listingName} onChange={(event) => setListingName(event.target.value)} readOnly={!approvalProposal && !directMode && Boolean(effectiveOfficialSourceNameRaw)} placeholder="공식 카탈로그 원문" /><small>{approvalProposal || directMode ? `공식 카탈로그 원문: ${effectiveOfficialSourceNameRaw ?? "공식 카탈로그 매칭 없음"}` : "공식 스냅샷 원문은 수정하지 않습니다."}</small></label><label>상품 확인 URL<input required type="url" placeholder="https://" value={productUrl} onChange={(event) => setProductUrl(event.target.value)} /></label></>}
+             <section className={styles.reusedProductInfo} aria-label="공식 대표 이미지"><span>공식 대표 이미지 <b>표준 상품군에 적용</b></span>{effectiveOfficialImageUrl ? <a href={effectiveOfficialImageUrl} target="_blank" rel="noreferrer">공식 이미지 링크 확인</a> : <strong>공식 이미지 근거가 없어 연결할 수 없습니다.</strong>}</section>
             <label>표준 브랜드<input list="standard-brand-options" value={brandName} onChange={(event) => setBrandName(event.target.value)} placeholder="예: Baskin Robbins" aria-describedby="standard-brand-hint" /><small id="standard-brand-hint">상품명과 분리해 표준 상품군에 지정하며, 하위 판매 규격이 이 값을 상속합니다.</small></label>
             <datalist id="standard-brand-options">{brands.map((brand) => <option key={brand.id} value={brand.canonical_name} />)}</datalist>
             {similarBrands.length > 0 && <div className={styles.brandSuggestions} aria-live="polite">
