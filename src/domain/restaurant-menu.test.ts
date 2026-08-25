@@ -6,6 +6,9 @@ import {
   filterRestaurantDirectoryEntries,
   filterRestaurantMenuEntries,
   filterRestaurantMenus,
+  groupRestaurantMenusForDisplay,
+  inferRestaurantMenuOptionParent,
+  restaurantMenuNameLooksLikeOption,
   restaurantDirectoryCategories,
   restaurantMenuCategories,
   summarizeRestaurantMenuPrices,
@@ -122,6 +125,7 @@ describe("restaurant menu domain", () => {
   it("continues accepting the v1 restaurant shape while v2 rolls out", () => {
     const restaurant = entry();
     const { category: _category, ...legacyRestaurant } = restaurant.restaurant;
+    void _category;
     const parsed = RestaurantDirectoryV1Schema.parse({
       schemaVersion: "restaurant-directory.v1",
       namespace: "pricetrace",
@@ -236,4 +240,39 @@ describe("restaurant menu domain", () => {
       restaurants: [invalidRestaurant],
     }).success).toBe(false);
   });
+it("recognizes and groups a receipt-style menu option without changing exact identities", () => {
+    const restaurant = entry();
+    const parent = restaurant.menus[0];
+    const option = {
+      ...parent,
+      id: "99999999-9999-4999-8999-999999999998",
+      catalogProductId: "99999999-9999-4999-8999-999999999997",
+      standardProductId: "99999999-9999-4999-8999-999999999996",
+      name: "계란 후라이 추가",
+      categoryLabel: "추가",
+      observations: [],
+    };
+    const link = {
+      id: "99999999-9999-4999-8999-999999999995",
+      parentMenuId: parent.id,
+      optionMenuId: option.id,
+      source: "automatic" as const,
+      confidence: 0.95,
+    };
+
+    expect(restaurantMenuNameLooksLikeOption(option.name)).toBe(true);
+    expect(inferRestaurantMenuOptionParent([parent, option], option.id)).toBe(parent.id);
+
+    const groups = groupRestaurantMenusForDisplay(
+      [parent, option],
+      [link],
+      "계란",
+      "전체",
+    );
+    expect(groups).toHaveLength(1);
+    expect(groups[0].menu.id).toBe(parent.id);
+    expect(groups[0].options).toHaveLength(1);
+    expect(groups[0].options[0].menu.id).toBe(option.id);
+  });
+
 });

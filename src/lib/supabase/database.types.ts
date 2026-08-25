@@ -80,6 +80,7 @@ export interface Database {
       restaurant_menu_source_mappings: { Row: { id:string; restaurant_id:string; restaurant_location_id:string; restaurant_menu_id:string; source_product_code_namespace:string; source_product_code:string; evidence_fingerprint:string; review_status:"pending"|"verified"|"rejected"; verification_status:"verified"|"unverified"; created_by:string|null; reviewed_by:string|null; reviewed_at:string|null; created_at:string }; Insert: { id?:string; restaurant_id:string; restaurant_location_id:string; restaurant_menu_id:string; source_product_code_namespace:string; source_product_code:string; evidence_fingerprint:string; review_status?:"pending"|"verified"|"rejected"; verification_status?:"verified"|"unverified"; created_by?:string|null; reviewed_by?:string|null; reviewed_at?:string|null }; Update: { review_status?:"pending"|"verified"|"rejected"; verification_status?:"verified"|"unverified"; reviewed_by?:string|null; reviewed_at?:string|null } };
       restaurant_menu_receipt_observations: { Row: { id:string; restaurant_id:string; restaurant_location_id:string; restaurant_menu_id:string; source_menu_mapping_id:string|null; owner_user_id:string; price_observation_id:string; receipt_id:string; receipt_item_id:string; observed_on:string; time_precision:"date"; unit_price_krw:number; quantity:number; total_price_krw:number; source_type:"database_receipt"; evidence_snapshot:Json; evidence_fingerprint:string; verification_status:"verified"; verified_by:string; verified_at:string; created_at:string }; Insert: { id?:string; restaurant_id:string; restaurant_location_id:string; restaurant_menu_id:string; source_menu_mapping_id?:string|null; owner_user_id:string; price_observation_id:string; receipt_id:string; receipt_item_id:string; observed_on:string; time_precision?:"date"; unit_price_krw:number; quantity:number; total_price_krw:number; source_type?:"database_receipt"; evidence_snapshot:Json; evidence_fingerprint:string; verification_status?:"verified"; verified_by:string; verified_at?:string }; Update: Record<string, never> };
       restaurant_menu_registration_executions: { Row: { id:string; idempotency_key:string; request_payload:Json; restaurant_id:string; restaurant_location_id:string; restaurant_menu_id:string; catalog_product_id:string; receipt_observation_id:string; created_by:string; created_at:string }; Insert: { id?:string; idempotency_key:string; request_payload:Json; restaurant_id:string; restaurant_location_id:string; restaurant_menu_id:string; catalog_product_id:string; receipt_observation_id:string; created_by:string }; Update: Record<string, never> };
+      restaurant_menu_option_links: { Row: { id:string; restaurant_id:string; parent_menu_id:string; option_menu_id:string; link_source:"automatic"|"manual"; confidence:number; evidence_snapshot:Json; created_by:string; created_at:string; updated_at:string }; Insert: { id?:string; restaurant_id:string; parent_menu_id:string; option_menu_id:string; link_source:"automatic"|"manual"; confidence:number; evidence_snapshot?:Json; created_by:string; created_at?:string; updated_at?:string }; Update: { parent_menu_id?:string; link_source?:"automatic"|"manual"; confidence?:number; evidence_snapshot?:Json; updated_at?:string } };
       restaurant_menu_manual_observations: { Row: { id:string; restaurant_id:string; restaurant_location_id:string; restaurant_menu_id:string; observed_on:string; unit_price_krw:number; quantity:number; total_price_krw:number; source_url:string|null; note:string|null; source_snapshot:Json; verification_status:"unverified"|"verified"|"rejected"; created_by:string; created_at:string }; Insert: { id?:string; restaurant_id:string; restaurant_location_id:string; restaurant_menu_id:string; observed_on:string; unit_price_krw:number; quantity:number; total_price_krw:number; source_url?:string|null; note?:string|null; source_snapshot:Json; verification_status?:"unverified"|"verified"|"rejected"; created_by:string; created_at?:string }; Update: Record<string, never> };
       admin_unverified_product_sale_registrations: { Row: { id:string; idempotency_key:string; request_payload:Json; standard_product_id:string; catalog_product_id:string; market_price_observation_id:string; created_by:string; created_at:string }; Insert: { id?:string; idempotency_key:string; request_payload:Json; standard_product_id:string; catalog_product_id:string; market_price_observation_id:string; created_by:string; created_at?:string }; Update: Record<string, never> };
       restaurant_menu_manual_registration_executions: { Row: { id:string; idempotency_key:string; request_payload:Json; restaurant_id:string; restaurant_location_id:string; restaurant_menu_id:string; catalog_product_id:string; manual_observation_id:string; created_by:string; created_at:string }; Insert: { id?:string; idempotency_key:string; request_payload:Json; restaurant_id:string; restaurant_location_id:string; restaurant_menu_id:string; catalog_product_id:string; manual_observation_id:string; created_by:string; created_at?:string }; Update: Record<string, never> };
@@ -616,6 +617,45 @@ export interface Database {
           category_id:string|null;
           category_slug:string|null;
           category_display_name:string|null;
+        }[];
+      };
+      admin_auto_link_restaurant_menu_options_v1: {
+        Args: {
+          p_restaurant_id:string;
+        };
+        Returns: {
+          id:string;
+          restaurant_id:string;
+          parent_menu_id:string;
+          option_menu_id:string;
+          link_source:"automatic"|"manual";
+          confidence:number;
+        }[];
+      };
+      admin_set_restaurant_menu_option_link_v1: {
+        Args: {
+          p_restaurant_id:string;
+          p_parent_menu_id:string;
+          p_option_menu_id:string;
+        };
+        Returns: {
+          id:string;
+          restaurant_id:string;
+          parent_menu_id:string;
+          option_menu_id:string;
+          link_source:"automatic"|"manual";
+          confidence:number;
+        }[];
+      };
+      admin_clear_restaurant_menu_option_link_v1: {
+        Args: {
+          p_restaurant_id:string;
+          p_option_menu_id:string;
+        };
+        Returns: {
+          restaurant_id:string;
+          option_menu_id:string;
+          cleared:boolean;
         }[];
       };
       admin_register_unverified_product_sale_v1: {

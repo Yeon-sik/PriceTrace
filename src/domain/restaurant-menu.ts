@@ -76,6 +76,14 @@ export const RestaurantMenuSchema = z.object({
   }
 });
 
+export const RestaurantMenuOptionLinkSchema = z.object({
+  id: z.string().uuid(),
+  parentMenuId: z.string().uuid(),
+  optionMenuId: z.string().uuid(),
+  source: z.enum(["automatic", "manual"]),
+  confidence: z.coerce.number().min(0).max(1),
+}).strict();
+
 export const RestaurantLocationSchema = z.object({
   id: z.string().uuid(),
   sourceLabel: z.string().trim().min(1),
@@ -280,6 +288,7 @@ export const RestaurantDetailV1Schema = z.object({
   restaurant: RestaurantProfileSchema,
   locations: z.array(RestaurantLocationSchema),
   menus: z.array(RestaurantMenuSchema),
+  optionLinks: z.array(RestaurantMenuOptionLinkSchema).default([]),
 }).strict().superRefine((detail, context) => {
   const locationIds = new Set<string>();
   const sourceIdentities = new Set<string>();
@@ -332,10 +341,54 @@ export const RestaurantDetailV1Schema = z.object({
       }
     }
   }
+
+  const optionLinkIds = new Set<string>();
+  const linkedOptionMenuIds = new Set<string>();
+  for (const [index, link] of detail.optionLinks.entries()) {
+    if (optionLinkIds.has(link.id)) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["optionLinks", index, "id"],
+        message: "메뉴 옵션 연결 ID가 중복되었습니다.",
+      });
+    }
+    optionLinkIds.add(link.id);
+
+    if (link.parentMenuId === link.optionMenuId) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["optionLinks", index],
+        message: "메뉴는 자기 자신을 옵션 부모로 연결할 수 없습니다.",
+      });
+    }
+    if (!menuIds.has(link.parentMenuId)) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["optionLinks", index, "parentMenuId"],
+        message: "옵션 연결의 부모 메뉴가 이 상세 응답에 없습니다.",
+      });
+    }
+    if (!menuIds.has(link.optionMenuId)) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["optionLinks", index, "optionMenuId"],
+        message: "옵션 연결의 옵션 메뉴가 이 상세 응답에 없습니다.",
+      });
+    }
+    if (linkedOptionMenuIds.has(link.optionMenuId)) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["optionLinks", index, "optionMenuId"],
+        message: "한 음식점의 옵션 메뉴에는 부모 연결이 하나만 있어야 합니다.",
+      });
+    }
+    linkedOptionMenuIds.add(link.optionMenuId);
+  }
 });
 
 export type RestaurantMenuPriceObservation = z.infer<typeof RestaurantMenuPriceObservationSchema>;
 export type RestaurantMenu = z.infer<typeof RestaurantMenuSchema>;
+export type RestaurantMenuOptionLink = z.infer<typeof RestaurantMenuOptionLinkSchema>;
 export type RestaurantLocation = z.infer<typeof RestaurantLocationSchema>;
 export type RestaurantCategory = z.infer<typeof RestaurantCategorySchema>;
 export type RestaurantMenuReadEntry = z.infer<typeof RestaurantMenuReadEntrySchema>;
@@ -373,6 +426,26 @@ export const RestaurantCategoryAssignmentRpcRowSchema = z.object({
 });
 
 export type RestaurantCategoryAssignmentResult = z.infer<typeof RestaurantCategoryAssignmentRpcRowSchema>;
+
+export const RestaurantMenuOptionLinkRpcRowSchema = z.object({
+  id: z.string().uuid(),
+  restaurant_id: z.string().uuid(),
+  parent_menu_id: z.string().uuid(),
+  option_menu_id: z.string().uuid(),
+  link_source: z.enum(["automatic", "manual"]),
+  confidence: z.coerce.number().min(0).max(1),
+}).strict();
+
+export function restaurantMenuOptionLinkFromRpc(input: unknown): RestaurantMenuOptionLink {
+  const row = RestaurantMenuOptionLinkRpcRowSchema.parse(input);
+  return {
+    id: row.id,
+    parentMenuId: row.parent_menu_id,
+    optionMenuId: row.option_menu_id,
+    source: row.link_source,
+    confidence: row.confidence,
+  };
+}
 
 const optionalTextInputSchema = z.string().trim().max(500).nullable();
 const optionalUrlInputSchema = httpUrlSchema.nullable();
@@ -590,4 +663,75 @@ export function filterRestaurantMenus(
       .includes(normalized);
     return matchesCategory && matchesQuery;
   });
+}
+
+const restaurantMenuOptionMarker = /추가|토핑|사리|곱빼기|곱배기|extra|add[\s_-]*on/i;
+
+export function restaurantMenuNameLooksLikeOption(name: string): boolean {
+  return restaurantMenuOptionMarker.test(name.trim());
+}
+
+export function inferRestaurantMenuOptionParent(
+  menus: readonly RestaurantMenu[],
+  optionMenuId: string,
+): string | null {
+  const optionMenu = menus.find((menu) => menu.id === optionMenuId);
+  if (!optionMenu || !restaurantMenuNameLooksLikeOption(optionMenu.name)) return null;
+
+  const baseMenus = menus.filter((menu) => (
+    menu.id !== optionMenuId
+    && !restaurantMenuNameLooksLikeOption(menu.name)
+  ));
+  return baseMenus.length === 1 ? baseMenus[0].id : null;
+}
+
+export type RestaurantMenuOptionGroup = {
+  menu: RestaurantMenu;
+  options: Array<{
+    menu: RestaurantMenu;
+    link: RestaurantMenuOptionLink;
+  }>;
+};
+
+export function groupRestaurantMenusForDisplay(
+  menus: readonly RestaurantMenu[],
+  optionLinks: readonly RestaurantMenuOptionLink[],
+  query: string,
+  category: string,
+): RestaurantMenuOptionGroup[] {
+  const menuById = new Map(menus.map((menu) => [menu.id, menu]));
+  const parentByOptionId = new Map(
+    optionLinks
+      .map((link) => [link.optionMenuId, link.parentMenuId] as const)
+      .filter(([optionId, parentId]) => menuById.has(optionId) && menuById.has(parentId)),
+  );
+  const normalized = query.trim().toLocaleLowerCase("ko-KR");
+
+  const matches = (menu: RestaurantMenu) => {
+    const matchesCategory = category === "전체" || (menu.categoryLabel ?? "기타") === category;
+    const matchesQuery = !normalized || [menu.name, menu.categoryLabel, menu.servingLabel]
+      .filter(Boolean)
+      .join(" ")
+      .toLocaleLowerCase("ko-KR")
+      .includes(normalized);
+    return matchesCategory && matchesQuery;
+  };
+
+  return menus
+    .filter((menu) => !parentByOptionId.has(menu.id))
+    .flatMap((menu) => {
+      const linkedOptions = optionLinks
+        .filter((link) => link.parentMenuId === menu.id)
+        .map((link) => {
+          const optionMenu = menuById.get(link.optionMenuId);
+          return optionMenu ? { menu: optionMenu, link } : null;
+        })
+        .filter((option): option is { menu: RestaurantMenu; link: RestaurantMenuOptionLink } => option !== null);
+      const matchingOptions = linkedOptions.filter((option) => matches(option.menu));
+      if (!matches(menu) && matchingOptions.length === 0) return [];
+      return [{
+        menu,
+        options: matches(menu) ? linkedOptions : matchingOptions,
+      }];
+    });
 }

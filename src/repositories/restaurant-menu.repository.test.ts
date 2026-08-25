@@ -343,4 +343,36 @@ describe("RestaurantMenuRepository", () => {
     expect(rpc).toHaveBeenCalledWith("get_admin_restaurant_menu_receipt_candidates_v1");
     expect(candidates[0].price_observation_id).toBe(observationId);
   });
+  it("runs automatic option recognition and supports exact manual override and clear", async () => {
+    const linkRow = {
+      id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+      restaurant_id: restaurantId,
+      parent_menu_id: menuId,
+      option_menu_id: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+      link_source: "automatic",
+      confidence: 0.95,
+    };
+    const rpc = vi.fn()
+      .mockResolvedValueOnce({ data: [linkRow], error: null })
+      .mockResolvedValueOnce({ data: [{ ...linkRow, link_source: "manual", confidence: 1 }], error: null })
+      .mockResolvedValueOnce({ data: [{ restaurant_id: restaurantId, option_menu_id: linkRow.option_menu_id, cleared: true }], error: null });
+    const repository = new RestaurantMenuRepository({ rpc } as unknown as SupabaseClient);
+
+    const automatic = await repository.autoLinkRestaurantMenuOptions(restaurantId);
+    const manual = await repository.setRestaurantMenuOptionLink(restaurantId, menuId, linkRow.option_menu_id);
+    const cleared = await repository.clearRestaurantMenuOptionLink(restaurantId, linkRow.option_menu_id);
+
+    expect(automatic[0]).toMatchObject({ optionMenuId: linkRow.option_menu_id, source: "automatic" });
+    expect(manual).toMatchObject({ parentMenuId: menuId, optionMenuId: linkRow.option_menu_id, source: "manual" });
+    expect(cleared).toBe(true);
+    expect(rpc).toHaveBeenNthCalledWith(1, "admin_auto_link_restaurant_menu_options_v1", {
+      p_restaurant_id: restaurantId,
+    });
+    expect(rpc).toHaveBeenNthCalledWith(2, "admin_set_restaurant_menu_option_link_v1", {
+      p_restaurant_id: restaurantId,
+      p_parent_menu_id: menuId,
+      p_option_menu_id: linkRow.option_menu_id,
+    });
+  });
+
 });
