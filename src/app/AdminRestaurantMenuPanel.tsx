@@ -12,6 +12,7 @@ import { formatKrw } from "@/domain/settlement";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import { RestaurantMenuRepository } from "@/repositories/restaurant-menu.repository";
 import { AdminDirectRestaurantMenuPanel } from "./AdminDirectRestaurantMenuPanel";
+import { AdminRestaurantMenuOptionPanel } from "./AdminRestaurantMenuOptionPanel";
 import styles from "./page.module.css";
 
 type RegistrationTab = "receipt" | "direct";
@@ -355,6 +356,8 @@ export function AdminRestaurantMenuPanel() {
       </select></label>
       <button type="button" disabled={!categoryRestaurantId || categorySaving} onClick={() => void saveRestaurantCategory()}>{categorySaving ? "저장 중…" : "카테고리 저장"}</button>
     </section>}
+
+    <AdminRestaurantMenuOptionPanel repository={repository} entries={entries} onSaved={load} />
 
     <div className={styles.unverifiedModeTabs} role="tablist" aria-label="음식점 메뉴 등록 방식">
       <button type="button" role="tab" aria-selected={registrationTab === "receipt"} onClick={() => setRegistrationTab("receipt")}>영수증 연결</button>

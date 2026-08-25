@@ -3,11 +3,12 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   filterRestaurantDirectoryEntries,
-  filterRestaurantMenus,
+  groupRestaurantMenusForDisplay,
   latestRestaurantMenuObservation,
   restaurantCategoryPathLabel,
   restaurantDirectoryCategories,
   restaurantMenuCategories,
+  restaurantMenuNameLooksLikeOption,
   summarizeRestaurantMenuPrices,
   type RestaurantMenu,
 } from "@/domain/restaurant-menu";
@@ -82,8 +83,8 @@ export function RestaurantBrowser({ selectedRestaurant, onSelectRestaurant }: Re
     () => detail ? restaurantMenuCategories(detail.menus) : [],
     [detail],
   );
-  const visibleMenus = useMemo(
-    () => detail ? filterRestaurantMenus(detail.menus, menuQuery, menuCategory) : [],
+  const visibleMenuGroups = useMemo(
+    () => detail ? groupRestaurantMenusForDisplay(detail.menus, detail.optionLinks, menuQuery, menuCategory) : [],
     [detail, menuCategory, menuQuery],
   );
 
@@ -266,17 +267,18 @@ export function RestaurantBrowser({ selectedRestaurant, onSelectRestaurant }: Re
         <strong>등록된 메뉴가 아직 없습니다.</strong>
         <span>식당 정보는 확인됐지만 메뉴 identity와 가격 관측이 공개된 상태는 아닙니다.</span>
       </div>}
-      {detail.menus.length > 0 && visibleMenus.length === 0 && <div className={styles.restaurantEmpty} role="status">
+      {detail.menus.length > 0 && visibleMenuGroups.length === 0 && <div className={styles.restaurantEmpty} role="status">
         <strong>조건에 맞는 메뉴가 없습니다.</strong>
         <span>다른 메뉴명이나 카테고리를 선택해 보세요.</span>
       </div>}
       <div className={styles.restaurantMenuList}>
-        {visibleMenus.map((menu) => {
+        {visibleMenuGroups.map(({ menu, options }) => {
           const summary = summarizeRestaurantMenuPrices(menu);
           const menuLatest = latestRestaurantMenuObservation(menu);
           return <article key={menu.id} className={styles.restaurantMenuCard}>
             <header>
               <div>
+                {restaurantMenuNameLooksLikeOption(menu.name) && options.length === 0 && <span className={styles.restaurantMenuOptionBadge}>추가 옵션 후보 · 부모 연결 대기</span>}
                 <small>{menu.categoryLabel ?? "메뉴"} · {menu.servingLabel}</small>
                 <h3>{menu.name}</h3>
                 <code title="Fitness Nutrition exact link key">catalog_product_id {menu.catalogProductId}</code>
@@ -318,6 +320,25 @@ export function RestaurantBrowser({ selectedRestaurant, onSelectRestaurant }: Re
                     {observation.receiptReference && <small>영수증 {observation.receiptReference.receiptId} · 항목 {observation.receiptReference.receiptItemId}</small>}
                   </article>)}</div>}
             </details>
+            {options.length > 0 && <section className={styles.restaurantMenuOptions} aria-label={menu.name + " 추가 옵션"}>
+              <div className={styles.restaurantMenuOptionsHeading}>
+                <strong>추가 옵션</strong>
+                <span>정확한 메뉴 ID 관계</span>
+              </div>
+              <ul className={styles.restaurantMenuOptionList}>
+                {options.map(({ menu: option, link }) => {
+                  const optionLatest = latestRestaurantMenuObservation(option);
+                  return <li key={option.id}>
+                    <div>
+                      <strong>{option.name}</strong>
+                      <small>{link.source === "automatic" ? "자동 인식 · 같은 영수증의 유일한 기본 메뉴" : "관리자 수동 연결"}</small>
+                      <code>catalog_product_id {option.catalogProductId}</code>
+                    </div>
+                    <b>{optionLatest ? formatKrw(optionLatest.unitPriceKrw) : "기록 없음"}</b>
+                  </li>;
+                })}
+              </ul>
+            </section>}
           </article>;
         })}
       </div>

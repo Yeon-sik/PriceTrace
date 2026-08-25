@@ -7,11 +7,13 @@ import {
   RestaurantMenuReadV1Schema,
   RestaurantMenuReceiptCandidateSchema,
   RestaurantMenuRegistrationRequestSchema,
+  restaurantMenuOptionLinkFromRpc,
   restaurantMenuRegistrationResultFromRpc,
   type RestaurantMenuReadV1,
   type RestaurantMenuReceiptCandidate,
   type RestaurantMenuRegistrationRequest,
   type RestaurantMenuRegistrationResult,
+  type RestaurantMenuOptionLink,
   type RestaurantDetailV1,
   type RestaurantDirectoryV1,
   type RestaurantCategoryAssignmentResult,
@@ -237,4 +239,59 @@ export class RestaurantMenuRepository {
     }
     return data.map((row) => RestaurantMenuReceiptCandidateSchema.parse(row));
   }
+
+  async autoLinkRestaurantMenuOptions(restaurantId: string): Promise<RestaurantMenuOptionLink[]> {
+    const { data, error } = await this.client.rpc(
+      "admin_auto_link_restaurant_menu_options_v1",
+      { p_restaurant_id: restaurantId },
+    );
+    if (error) {
+      throw new Error(remoteErrorMessage(error, "음식점 메뉴 옵션 자동 인식에 실패했습니다."));
+    }
+    if (!Array.isArray(data)) {
+      throw new Error("음식점 메뉴 옵션 자동 인식 RPC가 배열 계약을 반환하지 않았습니다.");
+    }
+    return data.map((row) => restaurantMenuOptionLinkFromRpc(row));
+  }
+
+  async setRestaurantMenuOptionLink(
+    restaurantId: string,
+    parentMenuId: string,
+    optionMenuId: string,
+  ): Promise<RestaurantMenuOptionLink> {
+    const { data, error } = await this.client.rpc(
+      "admin_set_restaurant_menu_option_link_v1",
+      {
+        p_restaurant_id: restaurantId,
+        p_parent_menu_id: parentMenuId,
+        p_option_menu_id: optionMenuId,
+      },
+    );
+    if (error) {
+      throw new Error(remoteErrorMessage(error, "음식점 메뉴 옵션을 연결하지 못했습니다."));
+    }
+    return restaurantMenuOptionLinkFromRpc(unwrapSingleRow(data));
+  }
+
+  async clearRestaurantMenuOptionLink(
+    restaurantId: string,
+    optionMenuId: string,
+  ): Promise<boolean> {
+    const { data, error } = await this.client.rpc(
+      "admin_clear_restaurant_menu_option_link_v1",
+      {
+        p_restaurant_id: restaurantId,
+        p_option_menu_id: optionMenuId,
+      },
+    );
+    if (error) {
+      throw new Error(remoteErrorMessage(error, "음식점 메뉴 옵션 연결을 해제하지 못했습니다."));
+    }
+    const row = unwrapSingleRow(data);
+    if (!row || typeof row !== "object" || typeof (row as { cleared?: unknown }).cleared !== "boolean") {
+      throw new Error("음식점 메뉴 옵션 연결 해제 RPC가 올바른 결과를 반환하지 않았습니다.");
+    }
+    return (row as { cleared: boolean }).cleared;
+  }
+
 }
