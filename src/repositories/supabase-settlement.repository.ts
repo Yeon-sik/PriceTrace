@@ -75,11 +75,19 @@ export class SupabaseSettlementRepository {
       }
 
       let storeProductId: string;
+      const categoryTags = item.foodServiceRole ? [item.foodServiceRole] : [];
       if (existingStoreProduct) {
         storeProductId = existingStoreProduct.id;
         if (purchaseType === "menu_item") {
+          const { data: existingProduct, error: existingProductError } = await client.from("products")
+            .select("category_tags")
+            .eq("user_id", user.id)
+            .eq("id", existingStoreProduct.product_id)
+            .single();
+          if (existingProductError) throw existingProductError;
+          const nextTags = [...new Set([...(existingProduct.category_tags ?? []), ...categoryTags])];
           const { error: productTypeError } = await client.from("products")
-            .update({ purchase_type: "menu_item" })
+            .update({ purchase_type: "menu_item", category_tags: nextTags })
             .eq("user_id", user.id)
             .eq("id", existingStoreProduct.product_id);
           if (productTypeError) throw productTypeError;
@@ -89,7 +97,7 @@ export class SupabaseSettlementRepository {
           user_id: user.id,
           name: item.productName,
           purchase_type: purchaseType,
-          category_tags: [],
+          category_tags: categoryTags,
         }).select("id").single();
         if (productError) throw productError;
 
@@ -146,6 +154,22 @@ export class SupabaseSettlementRepository {
         verified_at: new Date().toISOString(),
       }, { onConflict: "user_id,receipt_item_id" });
       if (observationError) throw observationError;
+    }
+
+    const optionSources = receipt.items.flatMap((item) => (
+      item.foodServiceRole === "option" && item.optionParentReceiptItemId
+        ? [{
+          user_id: user.id,
+          receipt_id: remoteReceipt.id,
+          option_receipt_item_id: item.id,
+          parent_receipt_item_id: item.optionParentReceiptItemId,
+          source: "receipt_v2" as const,
+        }]
+        : []
+    ));
+    if (optionSources.length > 0) {
+      const { error } = await client.from("receipt_item_menu_option_sources").upsert(optionSources, { onConflict: "option_receipt_item_id" });
+      if (error) throw error;
     }
   }
 

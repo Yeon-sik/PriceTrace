@@ -121,6 +121,11 @@ export const RestaurantCategorySchema = z.object({
   }
 });
 
+export const RestaurantFulfillmentModeSchema = z.object({
+  type: z.enum(["delivery", "takeout", "dine_in"]),
+  evidence: z.enum(["receipt", "manual"]),
+}).strict();
+
 export const RestaurantProfileSchema = z.object({
   id: z.string().uuid(),
   brandId: z.string().uuid().nullable(),
@@ -128,6 +133,7 @@ export const RestaurantProfileSchema = z.object({
   legalName: nullableTrimmedStringSchema,
   cuisineType: nullableTrimmedStringSchema,
   category: RestaurantCategorySchema.nullable().optional().default(null),
+  fulfillmentModes: z.array(RestaurantFulfillmentModeSchema).default([]),
   officialSiteUrl: nullableUrlSchema,
   updatedAt: offsetDateTimeSchema,
 }).strict();
@@ -391,11 +397,64 @@ export type RestaurantMenu = z.infer<typeof RestaurantMenuSchema>;
 export type RestaurantMenuOptionLink = z.infer<typeof RestaurantMenuOptionLinkSchema>;
 export type RestaurantLocation = z.infer<typeof RestaurantLocationSchema>;
 export type RestaurantCategory = z.infer<typeof RestaurantCategorySchema>;
+export type RestaurantFulfillmentMode = z.infer<typeof RestaurantFulfillmentModeSchema>;
 export type RestaurantMenuReadEntry = z.infer<typeof RestaurantMenuReadEntrySchema>;
 export type RestaurantMenuReadV1 = z.infer<typeof RestaurantMenuReadV1Schema>;
 export type RestaurantDirectoryEntry = z.infer<typeof RestaurantDirectoryEntrySchema>;
 export type RestaurantDirectoryV1 = z.infer<typeof RestaurantDirectoryV1Schema>;
 export type RestaurantDetailV1 = z.infer<typeof RestaurantDetailV1Schema>;
+
+export const RestaurantProfileEditorLocationSchema = z.object({
+  id: z.string().uuid(),
+  sourceLabel: z.string().trim().min(1),
+  sourceRestaurantCode: z.string().trim().min(1),
+  locationLabel: nullableTrimmedStringSchema,
+  officialUrl: nullableUrlSchema,
+  businessRegistrationNumber: z.string().regex(/^\d{3}-\d{2}-\d{5}$/).nullable(),
+  address: nullableTrimmedStringSchema,
+  phone: nullableTrimmedStringSchema,
+  profileSourceUrl: nullableUrlSchema,
+}).strict();
+
+export const RestaurantProfileEditorSchema = z.object({
+  id: z.string().uuid(),
+  canonicalName: z.string().trim().min(1),
+  legalName: nullableTrimmedStringSchema,
+  cuisineType: nullableTrimmedStringSchema,
+  officialSiteUrl: nullableUrlSchema,
+  locations: z.array(RestaurantProfileEditorLocationSchema).min(1),
+}).strict();
+
+const optionalProfileTextInputSchema = z.string().trim().max(500).nullable();
+const optionalBusinessRegistrationNumberInputSchema = z.string().trim().max(32).nullable().refine(
+  (value) => value === null || /^\d{3}-?\d{2}-?\d{5}$/.test(value),
+  "사업자등록번호는 숫자 10자리여야 합니다.",
+);
+
+export const RestaurantProfileEditorUpdateRequestSchema = z.object({
+  restaurantId: z.string().uuid(),
+  restaurantLocationId: z.string().uuid(),
+  canonicalName: z.string().trim().min(1).max(200),
+  legalName: optionalProfileTextInputSchema,
+  cuisineType: optionalProfileTextInputSchema,
+  officialSiteUrl: nullableUrlSchema,
+  locationLabel: optionalProfileTextInputSchema,
+  locationOfficialUrl: nullableUrlSchema,
+  businessRegistrationNumber: optionalBusinessRegistrationNumberInputSchema,
+  address: optionalProfileTextInputSchema,
+  phone: optionalProfileTextInputSchema,
+  sourceUrl: httpUrlSchema,
+}).strict();
+
+export const RestaurantProfileEditorUpdateRpcRowSchema = z.object({
+  restaurant_id: z.string().uuid(),
+  restaurant_location_id: z.string().uuid(),
+  updated_at: offsetDateTimeSchema,
+}).strict();
+
+export type RestaurantProfileEditor = z.infer<typeof RestaurantProfileEditorSchema>;
+export type RestaurantProfileEditorUpdateRequest = z.infer<typeof RestaurantProfileEditorUpdateRequestSchema>;
+export type RestaurantProfileEditorUpdateResult = z.infer<typeof RestaurantProfileEditorUpdateRpcRowSchema>;
 
 export const RestaurantCategoryNodeRowSchema = z.object({
   id: z.string().uuid(),
@@ -470,6 +529,14 @@ export const RestaurantMenuRegistrationRequestSchema = z.object({
 }).strict();
 
 export type RestaurantMenuRegistrationRequest = z.infer<typeof RestaurantMenuRegistrationRequestSchema>;
+
+export const RestaurantFulfillmentConfirmationRpcRowSchema = z.object({
+  restaurant_id: z.string().uuid(),
+  fulfillment_type: z.enum(["delivery", "takeout", "dine_in"]),
+  evidence_type: z.enum(["receipt", "manual"]),
+  replayed: z.boolean(),
+}).strict();
+export type RestaurantFulfillmentConfirmation = z.infer<typeof RestaurantFulfillmentConfirmationRpcRowSchema>;
 
 export const RestaurantMenuRegistrationRpcRowSchema = z.object({
   restaurant_id: z.string().uuid(),

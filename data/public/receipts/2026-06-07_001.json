@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "privacyPolicyVersion": 2,
-  "revision": "59c07d1bf439f243",
+  "revision": "1b6e50b28873e0c6",
   "id": "2026-06-07_001",
   "fileName": "2026-06-07_001.json",
   "merchant": {
@@ -22,6 +22,10 @@
     "issuedOn": "2026-06-07",
     "issuedAt": null,
     "currency": "KRW",
+    "fulfillment": {
+      "type": "unknown",
+      "evidence": "unknown"
+    },
     "captureMethod": "ocr",
     "transcriptionStatus": "parsed",
     "notes": [

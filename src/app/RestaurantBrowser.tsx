@@ -11,6 +11,7 @@ import {
   restaurantMenuNameLooksLikeOption,
   summarizeRestaurantMenuPrices,
   type RestaurantMenu,
+  type RestaurantFulfillmentMode,
 } from "@/domain/restaurant-menu";
 import { formatKrw } from "@/domain/settlement";
 import { useRestaurantMenuCatalog } from "@/features/restaurant-menu/use-restaurant-menu-catalog";
@@ -50,6 +51,23 @@ function latestRestaurantObservation(menus: readonly RestaurantMenu[]) {
 
 function sourceTypeLabel(sourceType: RestaurantMenu["observations"][number]["sourceType"]) {
   return sourceType === "database_receipt" || sourceType === "receipt" ? "영수증 검증" : "출처 검증";
+}
+
+function fulfillmentLabel(type: RestaurantFulfillmentMode["type"]) {
+  return type === "delivery" ? "배달" : type === "takeout" ? "포장" : "매장";
+}
+
+function RestaurantFulfillmentBadges({ modes, menuContext = false }: {
+  modes: readonly RestaurantFulfillmentMode[];
+  menuContext?: boolean;
+}) {
+  if (modes.length === 0) {
+    return <span className={styles.restaurantFulfillmentUnknown}>{menuContext ? "이 메뉴의 식당 이용 방식 확인 정보 없음" : "이용 방식 확인 정보 없음"}</span>;
+  }
+  return <span className={styles.restaurantFulfillmentModes} aria-label={menuContext ? "식당 공통 이용 방식" : "확인된 이용 방식"}>
+    {menuContext && <small>식당 공통</small>}
+    {modes.map((mode) => <span key={mode.type} title={mode.evidence === "receipt" ? "영수증으로 확인" : "직접 확인"}>{fulfillmentLabel(mode.type)}</span>)}
+  </span>;
 }
 
 export function RestaurantBrowser({ selectedRestaurant, onSelectRestaurant }: RestaurantBrowserProps) {
@@ -164,6 +182,7 @@ export function RestaurantBrowser({ selectedRestaurant, onSelectRestaurant }: Re
             <strong>{entry.restaurant.brand}</strong>
             {entry.restaurant.legalName && <span>{entry.restaurant.legalName}</span>}
             <span>메뉴 {entry.menuCount}개 · 확인 지점 {entry.locations.length}곳</span>
+            <RestaurantFulfillmentBadges modes={entry.restaurant.fulfillmentModes} />
             <b>{entry.latestObservedAt ? `최근 관측 ${formatObservedAt(entry.latestObservedAt)}` : "가격 관측 준비 중"}</b>
           </span>
           <span className={styles.arrow} aria-hidden="true">›</span>
@@ -219,6 +238,7 @@ export function RestaurantBrowser({ selectedRestaurant, onSelectRestaurant }: Re
         <p className={styles.kicker}>RESTAURANT DETAIL</p>
         <h1>{detail.restaurant.brand}</h1>
         <p>이 식당의 메뉴와 출처를 계층별로 확인하세요. 메뉴 가격은 지점과 관측 시점이 확인되는 기록이며 현재가나 재고 보장이 아닙니다.</p>
+        <RestaurantFulfillmentBadges modes={detail.restaurant.fulfillmentModes} />
       </div>
       <div className={styles.restaurantDetailHeaderMeta}>
         <strong>{detail.menus.length}개 메뉴</strong>
@@ -282,6 +302,7 @@ export function RestaurantBrowser({ selectedRestaurant, onSelectRestaurant }: Re
                 <small>{menu.categoryLabel ?? "메뉴"} · {menu.servingLabel}</small>
                 <h3>{menu.name}</h3>
                 <code title="Fitness Nutrition exact link key">catalog_product_id {menu.catalogProductId}</code>
+                <RestaurantFulfillmentBadges modes={detail.restaurant.fulfillmentModes} menuContext />
               </div>
               <div className={styles.restaurantMenuLatest}>
                 <span>최근 관측가</span>
@@ -352,6 +373,7 @@ export function RestaurantBrowser({ selectedRestaurant, onSelectRestaurant }: Re
         <div><dt>업종</dt><dd>{restaurantCategoryPathLabel(detail.restaurant) ?? "정보 없음"}</dd></div>
         <div><dt>메뉴 수</dt><dd>{detail.menus.length}개</dd></div>
         <div><dt>확인 지점</dt><dd>{detail.locations.length}곳</dd></div>
+        <div><dt>이용 방식</dt><dd><RestaurantFulfillmentBadges modes={detail.restaurant.fulfillmentModes} /></dd></div>
         <div><dt>정보 업데이트</dt><dd>{formatUpdatedAt(detail.restaurant.updatedAt)}</dd></div>
       </dl>
       {detail.restaurant.officialSiteUrl && <a className={styles.restaurantOfficialLink} href={detail.restaurant.officialSiteUrl} target="_blank" rel="noreferrer">공식 사이트 확인 ↗</a>}

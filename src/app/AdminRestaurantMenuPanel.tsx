@@ -13,6 +13,7 @@ import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import { RestaurantMenuRepository } from "@/repositories/restaurant-menu.repository";
 import { AdminDirectRestaurantMenuPanel } from "./AdminDirectRestaurantMenuPanel";
 import { AdminRestaurantMenuOptionPanel } from "./AdminRestaurantMenuOptionPanel";
+import { AdminRestaurantProfileEditor } from "./AdminRestaurantProfileEditor";
 import styles from "./page.module.css";
 
 type RegistrationTab = "receipt" | "direct";
@@ -34,6 +35,7 @@ type FormState = {
   menuCategoryLabel: string;
   servingLabel: string;
   menuOfficialUrl: string;
+  fulfillmentType: "" | "delivery" | "takeout" | "dine_in";
 };
 
 function newIdempotencyKey() {
@@ -61,6 +63,7 @@ function initialForm(): FormState {
     menuCategoryLabel: "",
     servingLabel: "1인분",
     menuOfficialUrl: "",
+    fulfillmentType: "",
   };
 }
 
@@ -98,6 +101,10 @@ function restaurantCategoryRowPathLabel(
   return path.reverse().join(" › ");
 }
 
+function fulfillmentLabel(type: "delivery" | "takeout" | "dine_in") {
+  return type === "delivery" ? "배달" : type === "takeout" ? "포장" : "매장";
+}
+
 export function AdminRestaurantMenuPanel() {
   const client = getSupabaseBrowserClient();
   const repository = useMemo(
@@ -118,6 +125,7 @@ export function AdminRestaurantMenuPanel() {
   const [categoryRestaurantId, setCategoryRestaurantId] = useState("");
   const [categoryId, setCategoryId] = useState("");
   const [categorySaving, setCategorySaving] = useState(false);
+  const [fulfillmentSaving, setFulfillmentSaving] = useState<"delivery" | "takeout" | "dine_in" | null>(null);
 
   const load = useCallback(async () => {
     if (!repository) return;
@@ -198,6 +206,27 @@ export function AdminRestaurantMenuPanel() {
     }
   }
 
+  async function confirmRestaurantFulfillmentManually(type: "delivery" | "takeout" | "dine_in") {
+    if (!repository || !categoryRestaurantId) {
+      setError("이용 방식을 확인할 음식점을 선택하세요.");
+      return;
+    }
+    setFulfillmentSaving(type);
+    setError("");
+    setMessage("");
+    try {
+      const result = await repository.confirmRestaurantFulfillmentManual(categoryRestaurantId, type);
+      setMessage(result.replayed
+        ? `${fulfillmentLabel(type)} 이용 방식은 이미 직접 확인되어 있습니다.`
+        : `${fulfillmentLabel(type)} 이용 방식을 직접 확인으로 등록했습니다.`);
+      await load();
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : "음식점 이용 방식을 저장하지 못했습니다.");
+    } finally {
+      setFulfillmentSaving(null);
+    }
+  }
+
   function chooseCandidate(priceObservationId: string) {
     const candidate = candidates.find((entry) => entry.price_observation_id === priceObservationId) ?? null;
     const exactRestaurant = candidate
@@ -229,6 +258,7 @@ export function AdminRestaurantMenuPanel() {
       menuCategoryLabel: "",
       servingLabel: "1인분",
       menuOfficialUrl: "",
+      fulfillmentType: "",
     }));
     setMessage("");
     setError("");
@@ -257,6 +287,7 @@ export function AdminRestaurantMenuPanel() {
       menuCategoryLabel: "",
       servingLabel: "1인분",
       menuOfficialUrl: "",
+      fulfillmentType: "",
     }));
     setError("");
   }
@@ -308,10 +339,19 @@ export function AdminRestaurantMenuPanel() {
         servingLabel: form.servingLabel,
         menuOfficialUrl: nullable(form.menuOfficialUrl),
       });
+      if (form.fulfillmentType) {
+        await repository.confirmRestaurantFulfillmentFromReceipt(
+          registered.restaurantId,
+          registered.receiptObservationId,
+          form.fulfillmentType,
+        );
+      }
       setResult(registered);
       setMessage(registered.replayed
-        ? "동일 요청을 다시 쓰지 않고 기존 등록 결과를 확인했습니다."
-        : "서버가 영수증 FK chain과 금액 보존식을 확인한 뒤 음식점·메뉴 가격을 등록했습니다.");
+        ? form.fulfillmentType ? "기존 영수증 메뉴 등록 결과와 이용 방식 확인을 다시 확인했습니다." : "동일 요청을 다시 쓰지 않고 기존 등록 결과를 확인했습니다."
+        : form.fulfillmentType
+          ? "서버가 영수증 FK chain과 금액 보존식을 확인한 뒤 음식점·메뉴 가격과 이용 방식을 등록했습니다."
+          : "서버가 영수증 FK chain과 금액 보존식을 확인한 뒤 음식점·메뉴 가격을 등록했습니다.");
       setForm(initialForm());
       await load();
     } catch (reason) {
@@ -357,6 +397,28 @@ export function AdminRestaurantMenuPanel() {
       <button type="button" disabled={!categoryRestaurantId || categorySaving} onClick={() => void saveRestaurantCategory()}>{categorySaving ? "저장 중…" : "카테고리 저장"}</button>
     </section>}
 
+    <AdminRestaurantProfileEditor repository={repository} />
+
+    <section className={styles.restaurantFulfillmentLinker} aria-labelledby="restaurant-fulfillment-title">
+      <div>
+        <h3 id="restaurant-fulfillment-title">음식점 이용 방식 확인</h3>
+        <p>직접 확인한 배달·포장·매장 제공 방식만 추가합니다. 등록되지 않은 방식은 불가가 아니라 확인 정보 없음입니다.</p>
+      </div>
+      <label>음식점<select value={categoryRestaurantId} onChange={(event) => chooseCategoryRestaurant(event.target.value)}>
+        <option value="">음식점을 선택하세요</option>
+        {categoryRestaurants.map((entry) => <option key={entry.restaurant.id} value={entry.restaurant.id}>{categoryRestaurantLabel(entry)}</option>)}
+      </select></label>
+      <div className={styles.restaurantFulfillmentActions} aria-label="직접 확인할 이용 방식">
+        {(["delivery", "takeout", "dine_in"] as const).map((type) => {
+          const confirmed = categoryRestaurants.find((entry) => entry.restaurant.id === categoryRestaurantId)
+            ?.restaurant.fulfillmentModes.some((mode) => mode.type === type) ?? false;
+          return <button key={type} type="button" disabled={!categoryRestaurantId || fulfillmentSaving !== null} onClick={() => void confirmRestaurantFulfillmentManually(type)}>
+            {fulfillmentSaving === type ? "저장 중…" : confirmed ? `${fulfillmentLabel(type)} 확인됨` : `${fulfillmentLabel(type)} 직접 확인`}
+          </button>;
+        })}
+      </div>
+    </section>
+
     <AdminRestaurantMenuOptionPanel repository={repository} entries={entries} onSaved={load} />
 
     <div className={styles.unverifiedModeTabs} role="tablist" aria-label="음식점 메뉴 등록 방식">
@@ -376,6 +438,12 @@ export function AdminRestaurantMenuPanel() {
           <code>price_observation_id {selectedCandidate.price_observation_id}</code>
         </div>}
         {!loading && candidates.length === 0 && <p className={styles.restaurantAdminHint}>등록 가능한 DB 영수증이 없습니다. 먼저 상품의 purchase_type이 menu_item인 영수증을 PriceTrace DB에 저장해야 합니다.</p>}
+        <label>영수증 이용 방식 확인<select value={form.fulfillmentType} onChange={(event) => setForm((current) => ({ ...current, fulfillmentType: event.target.value as FormState["fulfillmentType"] }))}>
+          <option value="">이번 영수증에서는 확인 안 함</option>
+          <option value="delivery">배달</option>
+          <option value="takeout">포장</option>
+          <option value="dine_in">매장</option>
+        </select><small>영수증이나 제출자가 직접 확인한 경우에만 선택하세요. 배달료·할인 문구만으로 추정하지 않습니다.</small></label>
       </fieldset>
 
       <fieldset disabled={!selectedCandidate}>

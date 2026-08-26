@@ -6,6 +6,8 @@ const receipt: Receipt = {
   id: "receipt-1",
   retailChannel: "regular",
   catalogNamespace: null,
+  fulfillmentType: "unknown",
+  fulfillmentEvidence: "unknown",
   storeLabel: "테스트 마트",
   purchasedAt: "2026-07-22",
   transactionNumber: "TX-1",

@@ -9,6 +9,18 @@ const directoryMigration = readFileSync(
   new URL("../../supabase/migrations/20260812170053_restaurant_directory_and_detail.sql", import.meta.url),
   "utf8",
 );
+const fulfillmentMigration = readFileSync(
+  new URL("../../supabase/migrations/20260825154433_restaurant_fulfillment_modes.sql", import.meta.url),
+  "utf8",
+);
+const profileEditorMigration = readFileSync(
+  new URL("../../supabase/migrations/20260825163530_admin_restaurant_profile_editing.sql", import.meta.url),
+  "utf8",
+);
+const optionSourceMigration = readFileSync(
+  new URL("../../supabase/migrations/20260826113000_receipt_menu_option_sources.sql", import.meta.url),
+  "utf8",
+);
 const publicReadFunction = migration.slice(
   migration.indexOf("create function public.get_restaurant_menu_read_v1"),
   migration.indexOf("create function public.get_admin_restaurant_menu_receipt_candidates_v1"),
@@ -82,5 +94,42 @@ describe("restaurant-menu-read.v1 migration contract", () => {
     expect(directoryMigration).toContain("grant execute on function public.get_restaurant_directory_v1(text, integer)");
     expect(directoryMigration).toContain("grant execute on function public.get_restaurant_detail_v1(uuid)");
     expect(directoryMigration).not.toContain("evidence_snapshot");
+  });
+
+  it("projects only admin-confirmed restaurant fulfilment modes without receipt identities", () => {
+    expect(fulfillmentMigration).toContain("create table public.restaurant_fulfillment_evidence");
+    expect(fulfillmentMigration).toContain("alter table public.restaurant_fulfillment_evidence enable row level security");
+    expect(fulfillmentMigration).toContain("admin_confirm_restaurant_fulfillment_manual_v1");
+    expect(fulfillmentMigration).toContain("admin_confirm_restaurant_fulfillment_from_receipt_v1");
+    expect(fulfillmentMigration).toContain("restaurant_id = p_restaurant_id");
+    expect(fulfillmentMigration).toContain("receipt_observation_id = p_receipt_observation_id");
+    expect(fulfillmentMigration).toContain("'{restaurant,fulfillmentModes}'");
+    expect(fulfillmentMigration).toContain("'type', chosen.fulfillment_type");
+    expect(fulfillmentMigration).toContain("'evidence', chosen.evidence_type");
+    expect(fulfillmentMigration).not.toContain("'receiptObservationId'");
+  });
+
+  it("keeps profile contact edits at an exact location behind administrator RPCs and an append-only audit", () => {
+    expect(profileEditorMigration).toContain("add column business_registration_number");
+    expect(profileEditorMigration).toContain("create table public.restaurant_profile_update_audits");
+    expect(profileEditorMigration).toContain("restaurant_profile_update_audits enable row level security");
+    expect(profileEditorMigration).toContain("Restaurant profile update audits are append-only");
+    expect(profileEditorMigration).toContain("admin_list_restaurant_profile_editors_v1");
+    expect(profileEditorMigration).toContain("admin_update_restaurant_profile_editor_v1");
+    expect(profileEditorMigration).toContain("'app_metadata' ->> 'role'");
+    expect(profileEditorMigration).toContain("location.id = p_restaurant_location_id");
+    expect(profileEditorMigration).toContain("사업자등록번호는 숫자 10자리여야 합니다.");
+    expect(profileEditorMigration).toContain("수정 근거 URL은 HTTP(S) 주소여야 합니다.");
+    expect(profileEditorMigration).toContain("revoke all on function public.admin_update_restaurant_profile_editor_v1");
+  });
+
+  it("keeps receipt-v2 option parents as user-owned evidence until exact menu registration", () => {
+    expect(optionSourceMigration).toContain("create table public.receipt_item_menu_option_sources");
+    expect(optionSourceMigration).toContain("option_receipt_item_id text primary key");
+    expect(optionSourceMigration).toContain("parent_receipt_item_id text not null");
+    expect(optionSourceMigration).toContain("receipt option sources own rows");
+    expect(optionSourceMigration).toContain("receipt-v2-explicit-option-parent");
+    expect(optionSourceMigration).toContain("'side'");
+    expect(optionSourceMigration).toContain("if v_parent_menu_id is null then");
   });
 });
