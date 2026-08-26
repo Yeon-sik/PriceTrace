@@ -66,6 +66,7 @@
                               + fee_amount_minor
                               + tip_amount_minor
                               + rounding_amount_minor
+                              + sum(refund line_items.net_amount_minor)
    ```
 
 5. 원본 이미지와 추출 JSON은 `private-data/`에만 보관한다. 실제 영수증을 `data/demo/`나 공개 번들에 복사하지 않는다.

@@ -5,6 +5,7 @@
 | 업로드 파일 | 저장소의 원본 | 용도 |
 |---|---|---|
 | `receipt-contract/receipt.ts` | `src/domain/receipt.ts` | `receipt.v2`의 실제 Zod 계약 |
+| `integration/VERIFIED_RECEIPT_INGESTION_V2.md` | `docs/contracts/VERIFIED_RECEIPT_INGESTION_V2.md` | 사용자 검증 후 PriceTrace 서버 projection 순서·privacy·identity 응답 계약 |
 | `receipt-contract/RECEIPT_V2_TEMPLATE.json` | `docs/templates/RECEIPT_V2_TEMPLATE.json` | 반환 JSON의 완성 예시 |
 | `receipt-contract/RECEIPT_IMAGE_ANALYSIS_PROMPT.md` | `docs/templates/RECEIPT_IMAGE_ANALYSIS_PROMPT.md` | 사진 판독 및 이용 방식 근거 규칙 |
 | `validation/validate-private-receipts.ts` | `scripts/validate-private-receipts.ts` | 저장 전 검증·총액 무결성 규칙 |

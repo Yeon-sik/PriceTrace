@@ -44,4 +44,10 @@
   {"status":"needs_recapture","missing":["..."],"reason":"..."}만 반환한다.
 
 중복 판정, 상품 추천, 표준 상품 연결, 가격 비교, 영수증 내용 설명은 이 작업의 출력에 포함하지 않는다.
+
+통합 OCR 파이프라인 인계 규칙:
+- 이 프로젝트의 출력은 항상 검증 전 `receipt.v2` 초안이다. 이 프로젝트가 `user_verified`를 출력하거나 PriceTrace UUID를 만들지 않는다.
+- OCR App이 원본 사진과 대조하고 사용자가 확인한 뒤에만 `document.source.transcription_status`를 `user_verified`로 바꾼다.
+- OCR App은 PriceTrace 호출 전에 `source_images`를 `[]`, `raw_text`를 `null`로 만들고 payment reference와 기타 민감 식별자를 제거한다.
+- PriceTrace의 `integration/VERIFIED_RECEIPT_INGESTION_V2.md`를 따라 `submit_verified_receipt_v2`를 호출한다. 상품·메뉴·음식점 UUID는 요청에 넣지 않고 서버 응답만 downstream projection에 전달한다.
 ```

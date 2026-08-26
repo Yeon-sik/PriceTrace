@@ -215,7 +215,8 @@ function validatePublicReceiptContent(receipt: Omit<PublicReceipt, "schemaVersio
   const gross = receipt.lineItems.filter((line) => line.type === "product" || line.type === "service").reduce((sum, line) => sum + line.grossAmountMinor!, 0);
   const discount = receipt.lineItems.reduce((sum, line) => sum + line.discountAmountMinor!, 0);
   const tax = receipt.lineItems.reduce((sum, line) => sum + line.taxAmountMinor!, 0);
-  const expectedGrandTotal = totals.itemsGrossAmountMinor! - totals.discountAmountMinor! + totals.taxAmountMinor! + totals.feeAmountMinor! + totals.tipAmountMinor! + totals.roundingAmountMinor!;
+  const refunds = receipt.lineItems.filter((line) => line.type === "refund").reduce((sum, line) => sum + (line.netAmountMinor ?? 0), 0);
+  const expectedGrandTotal = totals.itemsGrossAmountMinor! - totals.discountAmountMinor! + totals.taxAmountMinor! + totals.feeAmountMinor! + totals.tipAmountMinor! + totals.roundingAmountMinor! + refunds;
   if (gross !== totals.itemsGrossAmountMinor || discount !== totals.discountAmountMinor || tax !== totals.taxAmountMinor || expectedGrandTotal !== totals.grandTotalAmountMinor) {
     context.addIssue({ code: z.ZodIssueCode.custom, message: "공개 영수증 품목 집계와 합계가 일치하지 않습니다.", path: ["totals"] });
   }

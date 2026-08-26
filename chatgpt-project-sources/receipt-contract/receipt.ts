@@ -169,7 +169,8 @@ export function auditReceipt(receipt: Receipt, source?: ReceiptJson) {
       const discount = source.line_items.reduce((sum, line) => sum + (line.discount_amount_minor ?? 0), 0);
       const tax = source.line_items.reduce((sum, line) => sum + (line.tax_amount_minor ?? 0), 0);
       if (gross !== source.totals.items_gross_amount_minor || discount !== source.totals.discount_amount_minor || tax !== source.totals.tax_amount_minor) throw new Error("영수증 품목 집계가 totals와 일치하지 않습니다.");
-      const expected = source.totals.items_gross_amount_minor - source.totals.discount_amount_minor + source.totals.tax_amount_minor + source.totals.fee_amount_minor! + source.totals.tip_amount_minor! + source.totals.rounding_amount_minor!;
+      const refunds = source.line_items.filter((line) => line.type === "refund").reduce((sum, line) => sum + (line.net_amount_minor ?? 0), 0);
+      const expected = source.totals.items_gross_amount_minor - source.totals.discount_amount_minor + source.totals.tax_amount_minor + source.totals.fee_amount_minor! + source.totals.tip_amount_minor! + source.totals.rounding_amount_minor! + refunds;
       if (expected !== source.totals.grand_total_amount_minor) throw new Error("영수증 총액 무결성 검증에 실패했습니다.");
     }
   }
