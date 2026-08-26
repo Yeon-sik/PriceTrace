@@ -7,6 +7,10 @@ import {
   RestaurantMenuReadV1Schema,
   RestaurantMenuReceiptCandidateSchema,
   RestaurantMenuRegistrationRequestSchema,
+  RestaurantFulfillmentConfirmationRpcRowSchema,
+  RestaurantProfileEditorSchema,
+  RestaurantProfileEditorUpdateRequestSchema,
+  RestaurantProfileEditorUpdateRpcRowSchema,
   restaurantMenuOptionLinkFromRpc,
   restaurantMenuRegistrationResultFromRpc,
   type RestaurantMenuReadV1,
@@ -18,6 +22,10 @@ import {
   type RestaurantDirectoryV1,
   type RestaurantCategoryAssignmentResult,
   type RestaurantCategoryNodeRow,
+  type RestaurantFulfillmentConfirmation,
+  type RestaurantProfileEditor,
+  type RestaurantProfileEditorUpdateRequest,
+  type RestaurantProfileEditorUpdateResult,
 } from "../domain/restaurant-menu";
 
 function remoteErrorMessage(error: { message?: string } | null, fallback: string) {
@@ -153,6 +161,61 @@ export class RestaurantMenuRepository {
       throw new Error(remoteErrorMessage(error, "음식점 카테고리를 연결하지 못했습니다."));
     }
     return RestaurantCategoryAssignmentRpcRowSchema.parse(unwrapSingleRow(data));
+  }
+
+  async confirmRestaurantFulfillmentManual(
+    restaurantId: string,
+    fulfillmentType: "delivery" | "takeout" | "dine_in",
+  ): Promise<RestaurantFulfillmentConfirmation> {
+    const { data, error } = await this.client.rpc("admin_confirm_restaurant_fulfillment_manual_v1", {
+      p_restaurant_id: restaurantId,
+      p_fulfillment_type: fulfillmentType,
+    });
+    if (error) throw new Error(remoteErrorMessage(error, "음식점 이용 방식을 저장하지 못했습니다."));
+    return RestaurantFulfillmentConfirmationRpcRowSchema.parse(unwrapSingleRow(data));
+  }
+
+  async confirmRestaurantFulfillmentFromReceipt(
+    restaurantId: string,
+    receiptObservationId: string,
+    fulfillmentType: "delivery" | "takeout" | "dine_in",
+  ): Promise<RestaurantFulfillmentConfirmation> {
+    const { data, error } = await this.client.rpc("admin_confirm_restaurant_fulfillment_from_receipt_v1", {
+      p_restaurant_id: restaurantId,
+      p_receipt_observation_id: receiptObservationId,
+      p_fulfillment_type: fulfillmentType,
+    });
+    if (error) throw new Error(remoteErrorMessage(error, "영수증 이용 방식 확인을 저장하지 못했습니다."));
+    return RestaurantFulfillmentConfirmationRpcRowSchema.parse(unwrapSingleRow(data));
+  }
+
+  async readAdminRestaurantProfileEditors(): Promise<RestaurantProfileEditor[]> {
+    const { data, error } = await this.client.rpc("admin_list_restaurant_profile_editors_v1");
+    if (error) throw new Error(remoteErrorMessage(error, "음식점 프로필 편집 정보를 불러오지 못했습니다."));
+    if (!Array.isArray(data)) throw new Error("음식점 프로필 편집 RPC가 배열 계약을 반환하지 않았습니다.");
+    return data.map((row) => RestaurantProfileEditorSchema.parse(row));
+  }
+
+  async updateAdminRestaurantProfileEditor(
+    requestInput: RestaurantProfileEditorUpdateRequest,
+  ): Promise<RestaurantProfileEditorUpdateResult> {
+    const request = RestaurantProfileEditorUpdateRequestSchema.parse(requestInput);
+    const { data, error } = await this.client.rpc("admin_update_restaurant_profile_editor_v1", {
+      p_restaurant_id: request.restaurantId,
+      p_restaurant_location_id: request.restaurantLocationId,
+      p_canonical_name: request.canonicalName,
+      p_legal_name: request.legalName,
+      p_cuisine_type: request.cuisineType,
+      p_official_site_url: request.officialSiteUrl,
+      p_location_label: request.locationLabel,
+      p_location_official_url: request.locationOfficialUrl,
+      p_business_registration_number: request.businessRegistrationNumber,
+      p_address: request.address,
+      p_phone: request.phone,
+      p_source_url: request.sourceUrl,
+    });
+    if (error) throw new Error(remoteErrorMessage(error, "음식점 프로필을 저장하지 못했습니다."));
+    return RestaurantProfileEditorUpdateRpcRowSchema.parse(unwrapSingleRow(data));
   }
 
   async read({

@@ -3,6 +3,7 @@ import {
   RestaurantDetailV1Schema,
   RestaurantDirectoryV1Schema,
   RestaurantMenuReadV1Schema,
+  RestaurantProfileEditorUpdateRequestSchema,
   filterRestaurantDirectoryEntries,
   filterRestaurantMenuEntries,
   filterRestaurantMenus,
@@ -140,12 +141,47 @@ describe("restaurant menu domain", () => {
     });
 
     expect(parsed.restaurants[0].restaurant.category).toBeNull();
+    expect(parsed.restaurants[0].restaurant.fulfillmentModes).toEqual([]);
+  });
+
+  it("publishes only confirmed restaurant-level fulfilment modes", () => {
+    const restaurant = entry();
+    restaurant.restaurant.fulfillmentModes = [
+      { type: "delivery", evidence: "receipt" },
+      { type: "takeout", evidence: "manual" },
+    ];
+    expect(RestaurantDirectoryV1Schema.parse({
+      schemaVersion: "restaurant-directory.v2",
+      namespace: "pricetrace",
+      revision,
+      restaurants: [{ revision, restaurant: restaurant.restaurant, locations: restaurant.locations, menuCount: 1, latestObservedAt: null }],
+    }).restaurants[0].restaurant.fulfillmentModes).toEqual(restaurant.restaurant.fulfillmentModes);
   });
 
   it("keeps restaurant brand and exact catalog product identity separate", () => {
     const restaurant = entry();
     expect(restaurant.restaurant.brand).toBe("한결식당");
     expect(restaurant.menus[0].catalogProductId).toBe("55555555-5555-4555-8555-555555555555");
+  });
+
+  it("requires a source URL and a valid Korean business registration number for profile edits", () => {
+    const base = {
+      restaurantId: "11111111-1111-4111-8111-111111111111",
+      restaurantLocationId: "33333333-3333-4333-8333-333333333333",
+      canonicalName: "한결식당",
+      legalName: null,
+      cuisineType: null,
+      officialSiteUrl: null,
+      locationLabel: "서울점",
+      locationOfficialUrl: null,
+      businessRegistrationNumber: "123-45-67890",
+      address: null,
+      phone: null,
+      sourceUrl: "https://example.com/store",
+    };
+    expect(RestaurantProfileEditorUpdateRequestSchema.parse(base).businessRegistrationNumber).toBe("123-45-67890");
+    expect(() => RestaurantProfileEditorUpdateRequestSchema.parse({ ...base, sourceUrl: "" })).toThrow(/URL/);
+    expect(() => RestaurantProfileEditorUpdateRequestSchema.parse({ ...base, businessRegistrationNumber: "1234" })).toThrow(/사업자등록번호/);
   });
 
   it("summarizes price history by observation time", () => {

@@ -106,6 +106,7 @@ describe("public receipt files", () => {
 
   it("creates one transparent JSON file per receipt with a traceable date and sequence key", () => {
     const source = createPrivateSource();
+    source.document.fulfillment = { type: "takeout", evidence: "user_confirmed" };
     const files = buildPublicReceiptFiles([{ receiptId: "2026-07-22_001", source }]);
     const receipt = files[0];
     const index = buildPublicReceiptIndex(files);
@@ -122,7 +123,7 @@ describe("public receipt files", () => {
         address: "1 Transparent-ro",
         phone: "02-1234-5678",
       },
-      document: { issuedOn: "2026-07-22", currency: "KRW" },
+      document: { issuedOn: "2026-07-22", currency: "KRW", fulfillment: { type: "takeout", evidence: "user_confirmed" } },
       totals: { grandTotalAmountMinor: 12_000 },
     });
     expect(receipt.lineItems[0]).toMatchObject({
@@ -144,7 +145,9 @@ describe("public receipt files", () => {
   });
 
   it("maps verified public receipt files to the UI without a transaction number", () => {
-    const files = buildPublicReceiptFiles([{ receiptId: "2026-07-22_002", source: createPrivateSource() }]);
+    const source = createPrivateSource();
+    source.document.fulfillment = { type: "dine_in", evidence: "printed" };
+    const files = buildPublicReceiptFiles([{ receiptId: "2026-07-22_002", source }]);
     const receipt = publicReceiptFilesToReceipts(files)[0];
 
     expect(receipt).toMatchObject({
@@ -157,6 +160,8 @@ describe("public receipt files", () => {
       purchasedAt: "2026-07-22T00:00:00+09:00",
       transactionNumber: "",
       source: "public",
+      fulfillmentType: "dine_in",
+      fulfillmentEvidence: "printed",
       totalPriceKrw: 12_000,
     });
     expect(receipt.items[0]).toMatchObject({
@@ -165,6 +170,26 @@ describe("public receipt files", () => {
       quantityValue: 1,
       unitPriceKrw: 12_000,
     });
+  });
+
+  it("projects a restaurant option parent with public line IDs while keeping sides separate", () => {
+    const source = createPrivateSource();
+    source.merchant.business_kind = "food_service";
+    source.line_items[0].food_service = { role: "main", applies_to_line_id: null };
+    source.line_items.push({
+      id: "line-option", type: "product", description: "면추가", source_line_references: ["2"], identifiers: [], quantity: { value: 1, unit: "each" }, unit_price_amount_minor: 0, gross_amount_minor: 0, discount_amount_minor: 0, tax_amount_minor: 0, net_amount_minor: 0, confidence: "high", tax_rate_percent: null, food_service: { role: "option", applies_to_line_id: "line-1" },
+    });
+    source.line_items.push({
+      id: "line-side", type: "product", description: "교자", source_line_references: ["3"], identifiers: [], quantity: { value: 1, unit: "each" }, unit_price_amount_minor: 0, gross_amount_minor: 0, discount_amount_minor: 0, tax_amount_minor: 0, net_amount_minor: 0, confidence: "high", tax_rate_percent: null, food_service: { role: "side", applies_to_line_id: null },
+    });
+
+    const receipt = buildPublicReceiptFiles([{ receiptId: "2026-07-22_005", source }])[0];
+    expect(receipt.lineItems).toMatchObject([
+      { description: "Test product", foodService: { role: "main", appliesToLineId: null } },
+      { description: "면추가", foodService: { role: "option", appliesToLineId: receipt.lineItems[0].id } },
+      { description: "교자", foodService: { role: "side", appliesToLineId: null } },
+    ]);
+    expect(() => PublicReceiptSchema.parse(receipt)).not.toThrow();
   });
 
   it("rejects invalid key formats, stale index entries, and forbidden content", () => {

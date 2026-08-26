@@ -250,6 +250,67 @@ describe("RestaurantMenuRepository", () => {
     expect(result.category_id).toBe(categoryId);
   });
 
+  it("confirms direct and receipt-backed restaurant fulfilment through separate admin RPCs", async () => {
+    const rpc = vi.fn()
+      .mockResolvedValueOnce({ data: [{ restaurant_id: restaurantId, fulfillment_type: "delivery", evidence_type: "manual", replayed: false }], error: null })
+      .mockResolvedValueOnce({ data: [{ restaurant_id: restaurantId, fulfillment_type: "takeout", evidence_type: "receipt", replayed: false }], error: null });
+    const repository = new RestaurantMenuRepository({ rpc } as unknown as SupabaseClient);
+
+    await expect(repository.confirmRestaurantFulfillmentManual(restaurantId, "delivery")).resolves.toMatchObject({ evidence_type: "manual" });
+    await expect(repository.confirmRestaurantFulfillmentFromReceipt(restaurantId, observationId, "takeout")).resolves.toMatchObject({ evidence_type: "receipt" });
+    expect(rpc).toHaveBeenNthCalledWith(1, "admin_confirm_restaurant_fulfillment_manual_v1", { p_restaurant_id: restaurantId, p_fulfillment_type: "delivery" });
+    expect(rpc).toHaveBeenNthCalledWith(2, "admin_confirm_restaurant_fulfillment_from_receipt_v1", { p_restaurant_id: restaurantId, p_receipt_observation_id: observationId, p_fulfillment_type: "takeout" });
+  });
+
+  it("reads and saves one exact restaurant location profile through admin-only RPCs", async () => {
+    const profile = {
+      id: restaurantId,
+      canonicalName: "테스트 식당",
+      legalName: null,
+      cuisineType: "한식",
+      officialSiteUrl: null,
+      locations: [{
+        id: locationId,
+        sourceLabel: "pricetrace-db-store",
+        sourceRestaurantCode: "store-1",
+        locationLabel: "본점",
+        officialUrl: null,
+        businessRegistrationNumber: null,
+        address: null,
+        phone: null,
+        profileSourceUrl: null,
+      }],
+    };
+    const rpc = vi.fn()
+      .mockResolvedValueOnce({ data: [profile], error: null })
+      .mockResolvedValueOnce({ data: [{ restaurant_id: restaurantId, restaurant_location_id: locationId, updated_at: "2026-08-25T10:00:00+00:00" }], error: null });
+    const repository = new RestaurantMenuRepository({ rpc } as unknown as SupabaseClient);
+
+    await expect(repository.readAdminRestaurantProfileEditors()).resolves.toEqual([profile]);
+    await expect(repository.updateAdminRestaurantProfileEditor({
+      restaurantId,
+      restaurantLocationId: locationId,
+      canonicalName: "테스트 식당",
+      legalName: null,
+      cuisineType: "한식",
+      officialSiteUrl: null,
+      locationLabel: "본점",
+      locationOfficialUrl: null,
+      businessRegistrationNumber: "123-45-67890",
+      address: "서울시 테스트구 1길",
+      phone: "02-1234-5678",
+      sourceUrl: "https://example.com/store",
+    })).resolves.toMatchObject({ restaurant_id: restaurantId, restaurant_location_id: locationId });
+
+    expect(rpc).toHaveBeenNthCalledWith(1, "admin_list_restaurant_profile_editors_v1");
+    expect(rpc).toHaveBeenNthCalledWith(2, "admin_update_restaurant_profile_editor_v1", expect.objectContaining({
+      p_restaurant_id: restaurantId,
+      p_restaurant_location_id: locationId,
+      p_business_registration_number: "123-45-67890",
+      p_source_url: "https://example.com/store",
+    }));
+  });
+
   it("reads the versioned restaurant and exact menu contract", async () => {
     const rpc = vi.fn().mockResolvedValue({ data: readPayload(), error: null });
     const repository = new RestaurantMenuRepository({ rpc } as unknown as SupabaseClient);

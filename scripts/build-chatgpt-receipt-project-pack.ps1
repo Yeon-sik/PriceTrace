@@ -8,6 +8,7 @@ $zipPath = Join-Path $repositoryRoot "chatgpt-receipt-project-sources.zip"
 $copies = @(
   @{ Source = "src/domain/receipt.ts"; Destination = "receipt-contract/receipt.ts" },
   @{ Source = "docs/templates/RECEIPT_V2_TEMPLATE.json"; Destination = "receipt-contract/RECEIPT_V2_TEMPLATE.json" },
+  @{ Source = "docs/templates/RECEIPT_IMAGE_ANALYSIS_PROMPT.md"; Destination = "receipt-contract/RECEIPT_IMAGE_ANALYSIS_PROMPT.md" },
   @{ Source = "scripts/validate-private-receipts.ts"; Destination = "validation/validate-private-receipts.ts" },
   @{ Source = "scripts/private-receipt-source.ts"; Destination = "validation/private-receipt-source.ts" },
   @{ Source = "data/public/receipts/index.v1.json"; Destination = "reference/existing-public-receipt-index.v1.json" },

@@ -2,9 +2,12 @@ export type Confidence = "high" | "medium" | "low" | "user_verified";
 export type PurchaseType = "retail_product" | "menu_item" | "raw_material" | "property" | "service";
 export type ReceiptLineType = "product" | "service" | "discount" | "fee" | "tax" | "tip" | "refund" | "rounding" | "other";
 export type RetailChannel = "px" | "regular" | "unknown";
+export type ReceiptFulfillmentType = "delivery" | "takeout" | "dine_in" | "unknown";
+export type ReceiptFulfillmentEvidence = "printed" | "user_confirmed" | "unknown";
 export type BusinessKind = "retail" | "food_service" | "transport" | "accommodation" | "healthcare" | "professional_service" | "utility" | "government" | "financial" | "marketplace" | "other" | "unknown";
-export interface ReceiptItem { id:string; receiptId:string; sourceLineReferences:string[]; productName:string; sourceProductCode:string; unitPriceKrw:number; quantityValue:number; totalPriceKrw:number; confidence:Confidence; }
-export interface Receipt { id:string; publicReceiptFileName?:string; storeId?:string; storeName?:string|null; storeBranchName?:string|null; storeLabel:string; storeBusinessKind?:BusinessKind; storeMerchantId?:string|null; storeBusinessRegistrationNumber?:string|null; storeAddress?:string|null; storePhone?:string|null; retailChannel:RetailChannel; catalogNamespace:string|null; purchasedAt:string; transactionNumber:string; currency:"KRW"; totalPriceKrw:number; items:ReceiptItem[]; source?: "demo" | "private" | "public"; }
+export type FoodServiceLineRole = "main" | "option" | "side";
+export interface ReceiptItem { id:string; receiptId:string; sourceLineReferences:string[]; productName:string; sourceProductCode:string; unitPriceKrw:number; quantityValue:number; totalPriceKrw:number; confidence:Confidence; foodServiceRole?:FoodServiceLineRole; optionParentReceiptItemId?:string|null; }
+export interface Receipt { id:string; publicReceiptFileName?:string; storeId?:string; storeName?:string|null; storeBranchName?:string|null; storeLabel:string; storeBusinessKind?:BusinessKind; storeMerchantId?:string|null; storeBusinessRegistrationNumber?:string|null; storeAddress?:string|null; storePhone?:string|null; retailChannel:RetailChannel; catalogNamespace:string|null; fulfillmentType:ReceiptFulfillmentType; fulfillmentEvidence:ReceiptFulfillmentEvidence; purchasedAt:string; transactionNumber:string; currency:"KRW"; totalPriceKrw:number; items:ReceiptItem[]; source?: "demo" | "private" | "public"; }
 export interface Product { sourceProductCode:string; productName:string; purchaseType?:PurchaseType; categoryId?:string|null; categoryTags?:string[]; }
 export interface PriceObservation { receiptId:string; sourceProductCode:string; productName:string; storeLabel:string; observedAt:string; unitPriceKrw:number; quantity:number; confidence:Confidence; }
 export interface Recipient { id:string; name:string; createdAt:string; }

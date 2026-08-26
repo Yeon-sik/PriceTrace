@@ -34,6 +34,10 @@ const publicReceiptLineItemSchema = z.object({
   netAmountMinor: minorAmountSchema.nullable(),
   confidence: confidenceSchema,
   taxRatePercent: z.number().min(0).nullable(),
+  foodService: z.object({
+    role: z.enum(["main", "option", "side"]),
+    appliesToLineId: publicLineIdSchema.nullable(),
+  }).strict().nullable().optional(),
 }).strict();
 
 const publicReceiptPayloadSchema = z.object({
@@ -57,6 +61,10 @@ const publicReceiptPayloadSchema = z.object({
     issuedOn: z.string().date().nullable(),
     issuedAt: z.string().datetime({ offset: true }).nullable(),
     currency: z.literal("KRW"),
+    fulfillment: z.object({
+      type: z.enum(["delivery", "takeout", "dine_in", "unknown"]),
+      evidence: z.enum(["printed", "user_confirmed", "unknown"]),
+    }).strict(),
     captureMethod: z.enum(["pos_export", "e_receipt", "ocr", "manual_transcription", "manual_entry", "unknown"]),
     transcriptionStatus: z.enum(["unprocessed", "parsed", "verified", "user_verified", "unknown"]),
     notes: z.array(z.string()),
@@ -191,6 +199,13 @@ function validatePublicReceiptContent(receipt: Omit<PublicReceipt, "schemaVersio
       context.addIssue({ code: z.ZodIssueCode.custom, message: "공개 영수증 품목 ID가 중복되었습니다.", path: ["lineItems", lineIndex, "id"] });
     }
     lineIds.add(line.id);
+    const foodService = line.foodService;
+    if (foodService?.appliesToLineId !== null && foodService?.appliesToLineId !== undefined) {
+      const parent = receipt.lineItems.find((candidate) => candidate.id === foodService.appliesToLineId);
+      if (foodService.role !== "option" || !parent || parent.foodService?.role !== "main") {
+        context.addIssue({ code: z.ZodIssueCode.custom, message: "공개 옵션 연결은 같은 영수증의 main 메뉴를 가리켜야 합니다.", path: ["lineItems", lineIndex, "foodService"] });
+      }
+    }
   }
   const hasCompleteLineBreakdown = receipt.lineItems.every((line) => line.grossAmountMinor !== null && line.discountAmountMinor !== null && line.taxAmountMinor !== null);
   const totals = receipt.totals;
@@ -235,6 +250,7 @@ function toPublicReceipt({ receiptId, source: input }: PublicReceiptSource): Pub
       issuedOn: source.document.issued_on,
       issuedAt: source.document.issued_at,
       currency: "KRW" as const,
+      fulfillment: source.document.fulfillment,
       captureMethod: source.document.source.capture_method,
       transcriptionStatus: source.document.source.transcription_status,
       notes: source.document.source.notes,
@@ -253,6 +269,10 @@ function toPublicReceipt({ receiptId, source: input }: PublicReceiptSource): Pub
       netAmountMinor: line.net_amount_minor,
       confidence: line.confidence,
       taxRatePercent: line.tax_rate_percent,
+      foodService: line.food_service === null ? null : {
+        role: line.food_service.role,
+        appliesToLineId: line.food_service.applies_to_line_id === null ? null : publicLineId(parsedReceiptId, line.food_service.applies_to_line_id),
+      },
     })),
     totals: {
       itemsGrossAmountMinor: source.totals.items_gross_amount_minor,
@@ -323,6 +343,8 @@ export function publicReceiptFilesToReceipts(inputs: unknown[]): Receipt[] {
       storeAddress: publicReceipt.merchant.address,
       storePhone: publicReceipt.merchant.phone,
       retailChannel: publicReceipt.merchant.retailChannel,
+      fulfillmentType: publicReceipt.document.fulfillment.type,
+      fulfillmentEvidence: publicReceipt.document.fulfillment.evidence,
       catalogNamespace: publicReceipt.merchant.catalogNamespace,
       purchasedAt,
       transactionNumber: "",
