@@ -5,6 +5,7 @@ const minorAmount = z.number().int();
 const nonNegativeMinorAmount = minorAmount.nonnegative();
 const identifierSchema = z.object({ scheme: z.string().min(1), value: z.string().min(1) });
 const lineTypeSchema = z.enum(["product", "service", "discount", "fee", "tax", "tip", "refund", "rounding", "other"]);
+export const MerchantBusinessKindSchema = z.enum(["retail", "food_service", "transport", "accommodation", "healthcare", "professional_service", "utility", "government", "financial", "marketplace", "other", "unknown"]);
 const foodServiceLineSchema = z.object({
   /** A separately priced restaurant item; its amount is never folded into its parent. */
   role: z.enum(["main", "option", "side"]),
@@ -23,6 +24,10 @@ export const ReceiptFulfillmentEvidenceSchema = z.enum(["printed", "user_confirm
 export const ReceiptJsonSchema = z.object({
   schema_version: z.literal("receipt.v2"),
   document: z.object({
+    /**
+     * A source-printed document identifier when one exists. ChatGPT may return
+     * null, and an OCR App localDocumentId is deliberately outside receipt.v2.
+     */
     id: z.string().min(1).nullable(),
     type: z.enum(["receipt", "invoice", "order_confirmation", "credit_note", "statement", "voucher", "other"]),
     status: z.enum(["draft", "final", "voided", "refunded", "unknown"]),
@@ -46,7 +51,7 @@ export const ReceiptJsonSchema = z.object({
     /** The seller, issuer, provider, or payee printed on the source document. */
     name: z.string().min(1).nullable(),
     branch_name: z.string().min(1).nullable(),
-    business_kind: z.enum(["retail", "food_service", "transport", "accommodation", "healthcare", "professional_service", "utility", "government", "financial", "marketplace", "other", "unknown"]).default("unknown"),
+    business_kind: MerchantBusinessKindSchema.default("unknown"),
     retail_channel: z.enum(["px", "regular", "unknown"]).default("unknown"),
     /** Shared product-code catalog, only when the merchant explicitly confirms it. */
     catalog_namespace: z.string().trim().min(1).nullable().default(null),

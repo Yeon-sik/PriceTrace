@@ -1,4 +1,8 @@
+import { readFileSync } from "node:fs";
+import path from "node:path";
 import { describe, expect, it } from "vitest";
+import merchantProfileTemplate from "../../docs/templates/MERCHANT_PROFILE_V1_TEMPLATE.json";
+import { MerchantProfileV1Schema } from "./merchant-profile";
 import { auditReceipt, mapReceipt, ReceiptJsonSchema } from "./receipt";
 import { MerchantOnlyCandidateRequestSchema, VerifiedReceiptIngestionRequestSchema, verifiedReceiptIngestionFingerprint } from "./verified-receipt-ingestion";
 
@@ -35,6 +39,10 @@ describe("verified receipt ingestion contract", () => {
   it("accepts a SKU-less product without inventing an identifier", () => {
     const parsed = request(receipt());
     expect(parsed.receipt.line_items[0].identifiers).toEqual([]);
+  });
+
+  it("accepts document.id=null as a verified-ingestion source fact", () => {
+    expect(request(receipt()).receipt.document.id).toBeNull();
   });
 
   it("keeps same-name restaurant branches as distinct source facts", () => {
@@ -79,5 +87,41 @@ describe("verified receipt ingestion contract", () => {
   it("accepts merchant-only candidates only after explicit user verification", () => {
     expect(() => MerchantOnlyCandidateRequestSchema.parse({ schema_version: "merchant-only-candidate.v1", idempotency_key: "merchant-1", user_verified: true, merchant: { merchant_name: "가게", branch_name: "본점", business_registration_number: null, address: null, phone: null, business_kind: "food_service", source_namespace: null, source_location_code: null } })).not.toThrow();
     expect(() => MerchantOnlyCandidateRequestSchema.parse({ schema_version: "merchant-only-candidate.v1", idempotency_key: "merchant-1", user_verified: false, merchant: { merchant_name: "가게", branch_name: null, business_registration_number: null, address: null, phone: null, business_kind: "food_service", source_namespace: null, source_location_code: null } })).toThrow();
+  });
+
+  it("defines a merchant-only draft without client-owned identity fields", () => {
+    const profile = MerchantProfileV1Schema.parse(merchantProfileTemplate);
+    expect(profile.merchant).toMatchObject({ merchant_name: "예시 가게", business_kind: "unknown", source_namespace: null, source_location_code: null });
+    expect(MerchantOnlyCandidateRequestSchema.parse({ schema_version: "merchant-only-candidate.v1", idempotency_key: "merchant-profile-1", user_verified: true, merchant: profile.merchant }).merchant).toEqual(profile.merchant);
+    expect(() => MerchantProfileV1Schema.parse({ ...profile, merchant: { ...profile.merchant, catalog_product_id: "11111111-1111-4111-8111-111111111111" } })).toThrow();
+    expect(() => MerchantProfileV1Schema.parse({ ...profile, merchant: { ...profile.merchant, source_namespace: "provider", source_location_code: null } })).toThrow();
+  });
+
+  it("keeps receipt and merchant-profile source-pack copies synchronized", () => {
+    const root = process.cwd();
+    const copies = [
+      ["src/domain/receipt.ts", "chatgpt-project-sources/receipt-contract/receipt.ts"],
+      ["docs/templates/RECEIPT_V2_TEMPLATE.json", "chatgpt-project-sources/receipt-contract/RECEIPT_V2_TEMPLATE.json"],
+      ["docs/templates/RECEIPT_IMAGE_ANALYSIS_PROMPT.md", "chatgpt-project-sources/receipt-contract/RECEIPT_IMAGE_ANALYSIS_PROMPT.md"],
+      ["docs/contracts/VERIFIED_RECEIPT_INGESTION_V2.md", "chatgpt-project-sources/integration/VERIFIED_RECEIPT_INGESTION_V2.md"],
+      ["src/domain/merchant-profile.ts", "chatgpt-project-sources/merchant-profile/merchant-profile.ts"],
+      ["docs/templates/MERCHANT_PROFILE_V1_TEMPLATE.json", "chatgpt-project-sources/merchant-profile/MERCHANT_PROFILE_V1_TEMPLATE.json"],
+      ["docs/contracts/MERCHANT_PROFILE_V1.md", "chatgpt-project-sources/merchant-profile/MERCHANT_PROFILE_V1.md"],
+    ];
+    for (const [source, generated] of copies) {
+      expect(readFileSync(path.join(root, generated), "utf8")).toBe(readFileSync(path.join(root, source), "utf8"));
+    }
+    expect(JSON.parse(readFileSync(path.join(root, "chatgpt-project-sources/merchant-profile/MERCHANT_PROFILE_V1_TEMPLATE.json"), "utf8"))).toEqual(merchantProfileTemplate);
+  });
+
+  it("documents nullable receipt IDs and fact-only ChatGPT extraction", () => {
+    const root = process.cwd();
+    const ingestionContract = readFileSync(path.join(root, "docs/contracts/VERIFIED_RECEIPT_INGESTION_V2.md"), "utf8");
+    const imagePrompt = readFileSync(path.join(root, "docs/templates/RECEIPT_IMAGE_ANALYSIS_PROMPT.md"), "utf8");
+    expect(ingestionContract).toContain("`receipt.v2.document.id` is a nullable source-document fact");
+    expect(ingestionContract).toContain("localDocumentId");
+    expect(ingestionContract).toContain("does not normalize products, infer brands, create catalog links");
+    expect(imagePrompt).toContain('"scheme":"merchant_sku"');
+    expect(imagePrompt).toContain("source_images는 항상 []");
   });
 });

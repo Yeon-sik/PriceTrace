@@ -1,0 +1,13 @@
+{
+  "schema_version": "merchant-profile.v1",
+  "merchant": {
+    "merchant_name": "예시 가게",
+    "branch_name": null,
+    "business_kind": "unknown",
+    "business_registration_number": null,
+    "address": null,
+    "phone": null,
+    "source_namespace": null,
+    "source_location_code": null
+  }
+}

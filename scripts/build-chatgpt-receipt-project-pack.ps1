@@ -18,8 +18,11 @@ foreach ($file in $preservedPackFiles) {
 $copies = @(
   @{ Source = "GOAL.md"; Destination = "GOAL.md" },
   @{ Source = "src/domain/receipt.ts"; Destination = "receipt-contract/receipt.ts" },
+  @{ Source = "src/domain/merchant-profile.ts"; Destination = "merchant-profile/merchant-profile.ts" },
   @{ Source = "docs/contracts/VERIFIED_RECEIPT_INGESTION_V2.md"; Destination = "integration/VERIFIED_RECEIPT_INGESTION_V2.md" },
+  @{ Source = "docs/contracts/MERCHANT_PROFILE_V1.md"; Destination = "merchant-profile/MERCHANT_PROFILE_V1.md" },
   @{ Source = "docs/templates/RECEIPT_V2_TEMPLATE.json"; Destination = "receipt-contract/RECEIPT_V2_TEMPLATE.json" },
+  @{ Source = "docs/templates/MERCHANT_PROFILE_V1_TEMPLATE.json"; Destination = "merchant-profile/MERCHANT_PROFILE_V1_TEMPLATE.json" },
   @{ Source = "docs/templates/RECEIPT_IMAGE_ANALYSIS_PROMPT.md"; Destination = "receipt-contract/RECEIPT_IMAGE_ANALYSIS_PROMPT.md" },
   @{ Source = "scripts/validate-private-receipts.ts"; Destination = "validation/validate-private-receipts.ts" },
   @{ Source = "scripts/private-receipt-source.ts"; Destination = "validation/private-receipt-source.ts" },

@@ -1,20 +1,6 @@
 import { z } from "zod";
+import { MerchantProfileV1MerchantSchema } from "./merchant-profile";
 import { ReceiptJsonSchema, type ReceiptJson } from "./receipt";
-
-const verifiedMerchantFactsSchema = z.object({
-  merchant_name: z.string().trim().min(1).max(500),
-  branch_name: z.string().trim().min(1).max(500).nullable().default(null),
-  business_registration_number: z.string().trim().min(1).max(100).nullable().default(null),
-  address: z.string().trim().min(1).max(1000).nullable().default(null),
-  phone: z.string().trim().min(1).max(100).nullable().default(null),
-  business_kind: z.enum(["retail", "food_service", "transport", "accommodation", "healthcare", "professional_service", "utility", "government", "financial", "marketplace", "other", "unknown"]),
-  source_namespace: z.string().trim().min(1).max(200).nullable().default(null),
-  source_location_code: z.string().trim().min(1).max(200).nullable().default(null),
-}).superRefine((facts, context) => {
-  if ((facts.source_namespace === null) !== (facts.source_location_code === null)) {
-    context.addIssue({ code: z.ZodIssueCode.custom, path: ["source_namespace"], message: "source namespace와 source location code는 함께 있어야 합니다." });
-  }
-});
 
 export const VerifiedReceiptIngestionRequestSchema = z.object({
   schema_version: z.literal("verified-receipt-ingestion.v2"),
@@ -42,7 +28,7 @@ export const MerchantOnlyCandidateRequestSchema = z.object({
   schema_version: z.literal("merchant-only-candidate.v1"),
   idempotency_key: z.string().trim().min(1).max(200),
   user_verified: z.literal(true),
-  merchant: verifiedMerchantFactsSchema,
+  merchant: MerchantProfileV1MerchantSchema,
 });
 
 export type VerifiedReceiptIngestionRequest = z.infer<typeof VerifiedReceiptIngestionRequestSchema>;

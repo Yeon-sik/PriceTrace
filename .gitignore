@@ -41,6 +41,8 @@ docs/*
 !docs/Project_Detail.md
 !docs/PROJECT_DOCS_OPERATIONS.md
 !docs/예외처리_*.md
+!docs/contracts/
+!docs/contracts/MERCHANT_PROFILE_V1.md
 !docs/integrations/
 docs/integrations/*
 !docs/integrations/product-nutrition-link.md
