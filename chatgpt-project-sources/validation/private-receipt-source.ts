@@ -1,8 +1,8 @@
 import { createHash } from "node:crypto";
 import { readFile, readdir, stat } from "node:fs/promises";
 import path from "node:path";
-import { mapReceipt, ReceiptJsonSchema, type ReceiptJson } from "../src/domain/receipt";
-import type { PublicReceiptSource } from "../src/domain/public-receipt";
+import { mapReceipt, ReceiptJsonSchema, type ReceiptJson } from "../receipt-contract/receipt";
+import type { PublicReceiptSource } from "../receipt-contract/public-receipt";
 
 export type PrivateReceiptPublicationSourceResult = {
   sources: PublicReceiptSource[];

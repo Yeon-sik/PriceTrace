@@ -41,6 +41,12 @@ describe("verified receipt ingestion contract", () => {
     expect(parsed.receipt.line_items[0].identifiers).toEqual([]);
   });
 
+  it("accepts only merchant_sku as a line identifier", () => {
+    expect(() => request(receipt({
+      line_items: [{ ...receipt().line_items[0], identifiers: [{ scheme: "barcode", value: "8800000000000" }] }],
+    }))).toThrow();
+  });
+
   it("accepts document.id=null as a verified-ingestion source fact", () => {
     expect(request(receipt()).receipt.document.id).toBeNull();
   });
@@ -87,6 +93,7 @@ describe("verified receipt ingestion contract", () => {
   it("accepts merchant-only candidates only after explicit user verification", () => {
     expect(() => MerchantOnlyCandidateRequestSchema.parse({ schema_version: "merchant-only-candidate.v1", idempotency_key: "merchant-1", user_verified: true, merchant: { merchant_name: "가게", branch_name: "본점", business_registration_number: null, address: null, phone: null, business_kind: "food_service", source_namespace: null, source_location_code: null } })).not.toThrow();
     expect(() => MerchantOnlyCandidateRequestSchema.parse({ schema_version: "merchant-only-candidate.v1", idempotency_key: "merchant-1", user_verified: false, merchant: { merchant_name: "가게", branch_name: null, business_registration_number: null, address: null, phone: null, business_kind: "food_service", source_namespace: null, source_location_code: null } })).toThrow();
+    expect(() => MerchantOnlyCandidateRequestSchema.parse({ schema_version: "merchant-only-candidate.v1", idempotency_key: "merchant-1", user_verified: true, restaurant_id: "11111111-1111-4111-8111-111111111111", merchant: { merchant_name: "가게", branch_name: null, business_registration_number: null, address: null, phone: null, business_kind: "food_service", source_namespace: null, source_location_code: null } })).toThrow();
   });
 
   it("defines a merchant-only draft without client-owned identity fields", () => {
@@ -109,7 +116,11 @@ describe("verified receipt ingestion contract", () => {
       ["docs/contracts/MERCHANT_PROFILE_V1.md", "chatgpt-project-sources/merchant-profile/MERCHANT_PROFILE_V1.md"],
     ];
     for (const [source, generated] of copies) {
-      expect(readFileSync(path.join(root, generated), "utf8")).toBe(readFileSync(path.join(root, source), "utf8"));
+      let expected = readFileSync(path.join(root, source), "utf8");
+      if (generated === "chatgpt-project-sources/merchant-profile/merchant-profile.ts") {
+        expected = expected.replace('from "./receipt";', 'from "../receipt-contract/receipt";');
+      }
+      expect(readFileSync(path.join(root, generated), "utf8")).toBe(expected);
     }
     expect(JSON.parse(readFileSync(path.join(root, "chatgpt-project-sources/merchant-profile/MERCHANT_PROFILE_V1_TEMPLATE.json"), "utf8"))).toEqual(merchantProfileTemplate);
   });

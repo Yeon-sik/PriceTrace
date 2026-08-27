@@ -235,6 +235,61 @@ begin
   then
     raise exception 'receipt.v2 JSON object is required' using errcode = '22023';
   end if;
+  if exists (
+    select 1 from jsonb_object_keys(p_receipt) as field_name
+    where field_name not in ('schema_version', 'document', 'merchant', 'line_items', 'totals', 'payments')
+  )
+    or exists (
+      select 1 from jsonb_object_keys(
+        case when jsonb_typeof(p_receipt -> 'document') = 'object' then p_receipt -> 'document' else '{}'::jsonb end
+      ) as field_name
+      where field_name not in ('id', 'type', 'status', 'issued_on', 'issued_at', 'currency', 'fulfillment', 'source')
+    )
+    or exists (
+      select 1 from jsonb_object_keys(
+        case when jsonb_typeof(p_receipt -> 'merchant') = 'object' then p_receipt -> 'merchant' else '{}'::jsonb end
+      ) as field_name
+      where field_name not in ('name', 'branch_name', 'business_kind', 'retail_channel', 'catalog_namespace', 'merchant_id', 'business_registration_number', 'address', 'phone')
+    )
+    or exists (
+      select 1 from jsonb_object_keys(
+        case when jsonb_typeof(p_receipt -> 'totals') = 'object' then p_receipt -> 'totals' else '{}'::jsonb end
+      ) as field_name
+      where field_name not in ('items_gross_amount_minor', 'discount_amount_minor', 'tax_amount_minor', 'fee_amount_minor', 'tip_amount_minor', 'rounding_amount_minor', 'grand_total_amount_minor')
+    )
+    or exists (
+      select 1 from jsonb_object_keys(
+        case when jsonb_typeof(p_receipt -> 'payments') = 'object' then p_receipt -> 'payments' else '{}'::jsonb end
+      ) as field_name
+      where field_name not in ('method', 'amount_minor', 'status', 'reference')
+    )
+    or exists (
+      select 1 from jsonb_object_keys(
+        case when jsonb_typeof(p_receipt -> 'document' -> 'source') = 'object' then p_receipt -> 'document' -> 'source' else '{}'::jsonb end
+      ) as field_name
+      where field_name not in ('capture_method', 'original_document_id', 'source_images', 'transcription_status', 'notes', 'raw_text')
+    )
+    or exists (
+      select 1 from jsonb_object_keys(
+        case when jsonb_typeof(p_receipt -> 'document' -> 'fulfillment') = 'object' then p_receipt -> 'document' -> 'fulfillment' else '{}'::jsonb end
+      ) as field_name
+      where field_name not in ('type', 'evidence')
+    )
+    or exists (
+      select 1 from jsonb_array_elements(
+        case when jsonb_typeof(p_receipt -> 'payments') = 'array' then p_receipt -> 'payments' else '[]'::jsonb end
+      ) as payment(value)
+      where jsonb_typeof(payment.value) is distinct from 'object'
+        or exists (
+          select 1 from jsonb_object_keys(
+            case when jsonb_typeof(payment.value) = 'object' then payment.value else '{}'::jsonb end
+          ) as field_name
+          where field_name not in ('method', 'amount_minor', 'status', 'reference')
+        )
+    )
+  then
+    raise exception 'receipt.v2 contains unsupported identity or source fields' using errcode = '22023';
+  end if;
 
   perform pg_catalog.pg_advisory_xact_lock(
     pg_catalog.hashtextextended(v_user_id::text || ':' || v_key, 0)
@@ -264,13 +319,17 @@ begin
   v_source := p_receipt -> 'document' -> 'source';
   v_merchant := p_receipt -> 'merchant';
   v_totals := p_receipt -> 'totals';
-  if p_receipt -> 'document' ->> 'currency' <> 'KRW'
-    or v_source ->> 'transcription_status' <> 'user_verified'
-    or jsonb_typeof(v_source -> 'source_images') <> 'array'
+  if jsonb_typeof(p_receipt -> 'document') is distinct from 'object'
+    or jsonb_typeof(v_source) is distinct from 'object'
+    or jsonb_typeof(v_merchant) is distinct from 'object'
+    or jsonb_typeof(v_totals) is distinct from 'object'
+    or p_receipt -> 'document' ->> 'currency' is distinct from 'KRW'
+    or v_source ->> 'transcription_status' is distinct from 'user_verified'
+    or jsonb_typeof(v_source -> 'source_images') is distinct from 'array'
     or jsonb_array_length(case when jsonb_typeof(v_source -> 'source_images') = 'array' then v_source -> 'source_images' else '[]'::jsonb end) <> 0
     or v_source -> 'raw_text' is distinct from 'null'::jsonb
-    or jsonb_typeof(p_receipt -> 'payments') <> 'array'
-    or exists (select 1 from jsonb_array_elements(case when jsonb_typeof(p_receipt -> 'payments') = 'array' then p_receipt -> 'payments' else '[]'::jsonb end) as payment where payment ->> 'reference' is not null)
+    or jsonb_typeof(p_receipt -> 'payments') is distinct from 'array'
+    or exists (select 1 from jsonb_array_elements(case when jsonb_typeof(p_receipt -> 'payments') = 'array' then p_receipt -> 'payments' else '[]'::jsonb end) as payment where payment -> 'reference' is distinct from 'null'::jsonb)
   then
     raise exception 'only privacy-sanitized user_verified receipt.v2 is accepted' using errcode = '22023';
   end if;
@@ -299,18 +358,56 @@ begin
   end if;
 
   if exists (
+    select 1 from jsonb_array_elements(p_receipt -> 'line_items') as line(value)
+    where jsonb_typeof(line.value) is distinct from 'object'
+      or exists (
+        select 1 from jsonb_object_keys(
+          case when jsonb_typeof(line.value) = 'object' then line.value else '{}'::jsonb end
+        ) as field_name
+        where field_name not in ('id', 'type', 'description', 'source_line_references', 'identifiers', 'quantity', 'unit_price_amount_minor', 'gross_amount_minor', 'discount_amount_minor', 'tax_amount_minor', 'net_amount_minor', 'confidence', 'tax_rate_percent', 'food_service')
+      )
+      or exists (
+        select 1 from jsonb_array_elements(
+          case when jsonb_typeof(line.value -> 'identifiers') = 'array' then line.value -> 'identifiers' else '[]'::jsonb end
+        ) as identifier(value)
+        where jsonb_typeof(identifier.value) is distinct from 'object'
+          or exists (
+            select 1 from jsonb_object_keys(
+              case when jsonb_typeof(identifier.value) = 'object' then identifier.value else '{}'::jsonb end
+            ) as field_name
+            where field_name not in ('scheme', 'value')
+          )
+      )
+      or exists (
+        select 1 from jsonb_object_keys(
+          case when jsonb_typeof(line.value -> 'quantity') = 'object' then line.value -> 'quantity' else '{}'::jsonb end
+        ) as field_name
+        where field_name not in ('value', 'unit')
+      )
+      or exists (
+        select 1 from jsonb_object_keys(
+          case when jsonb_typeof(line.value -> 'food_service') = 'object' then line.value -> 'food_service' else '{}'::jsonb end
+        ) as field_name
+        where field_name not in ('role', 'applies_to_line_id')
+      )
+  ) then
+    raise exception 'receipt.v2 line items contain unsupported identity fields' using errcode = '22023';
+  end if;
+
+  if exists (
     select 1 from jsonb_array_elements(p_receipt -> 'line_items') as line
     where jsonb_typeof(line -> 'source_line_references') <> 'array'
       or jsonb_array_length(case when jsonb_typeof(line -> 'source_line_references') = 'array' then line -> 'source_line_references' else '[]'::jsonb end) = 0
+      or (line ->> 'type') is null
       or (line ->> 'type') not in ('product', 'service', 'discount', 'fee', 'tax', 'tip', 'refund', 'rounding', 'other')
-      or jsonb_typeof(line -> 'gross_amount_minor') <> 'number'
-      or jsonb_typeof(line -> 'discount_amount_minor') <> 'number'
-      or jsonb_typeof(line -> 'tax_amount_minor') <> 'number'
+      or jsonb_typeof(line -> 'gross_amount_minor') is distinct from 'number'
+      or jsonb_typeof(line -> 'discount_amount_minor') is distinct from 'number'
+      or jsonb_typeof(line -> 'tax_amount_minor') is distinct from 'number'
       or (line ->> 'gross_amount_minor')::integer < 0
       or (line ->> 'discount_amount_minor')::integer < 0
       or (line ->> 'tax_amount_minor')::integer < 0
-      or jsonb_typeof(coalesce(line -> 'identifiers', '[]'::jsonb)) <> 'array'
-      or exists (select 1 from jsonb_array_elements(case when jsonb_typeof(coalesce(line -> 'identifiers', '[]'::jsonb)) = 'array' then coalesce(line -> 'identifiers', '[]'::jsonb) else '[]'::jsonb end) as identifier where identifier ->> 'scheme' <> 'merchant_sku' or length(pg_catalog.btrim(coalesce(identifier ->> 'value', ''))) = 0)
+      or jsonb_typeof(line -> 'identifiers') is distinct from 'array'
+      or exists (select 1 from jsonb_array_elements(case when jsonb_typeof(line -> 'identifiers') = 'array' then line -> 'identifiers' else '[]'::jsonb end) as identifier where identifier ->> 'scheme' is distinct from 'merchant_sku' or length(pg_catalog.btrim(coalesce(identifier ->> 'value', ''))) = 0)
       or (select count(*) from jsonb_array_elements(case when jsonb_typeof(coalesce(line -> 'identifiers', '[]'::jsonb)) = 'array' then coalesce(line -> 'identifiers', '[]'::jsonb) else '[]'::jsonb end) as identifier where identifier ->> 'scheme' = 'merchant_sku') > 1
   ) then
     raise exception 'receipt.v2 line semantics or identifiers are invalid' using errcode = '22023';
@@ -335,13 +432,13 @@ begin
     raise exception 'food_service line option semantics are invalid' using errcode = '22023';
   end if;
 
-  if jsonb_typeof(v_totals -> 'items_gross_amount_minor') <> 'number'
-    or jsonb_typeof(v_totals -> 'discount_amount_minor') <> 'number'
-    or jsonb_typeof(v_totals -> 'tax_amount_minor') <> 'number'
-    or jsonb_typeof(v_totals -> 'fee_amount_minor') <> 'number'
-    or jsonb_typeof(v_totals -> 'tip_amount_minor') <> 'number'
-    or jsonb_typeof(v_totals -> 'rounding_amount_minor') <> 'number'
-    or jsonb_typeof(v_totals -> 'grand_total_amount_minor') <> 'number'
+  if jsonb_typeof(v_totals -> 'items_gross_amount_minor') is distinct from 'number'
+    or jsonb_typeof(v_totals -> 'discount_amount_minor') is distinct from 'number'
+    or jsonb_typeof(v_totals -> 'tax_amount_minor') is distinct from 'number'
+    or jsonb_typeof(v_totals -> 'fee_amount_minor') is distinct from 'number'
+    or jsonb_typeof(v_totals -> 'tip_amount_minor') is distinct from 'number'
+    or jsonb_typeof(v_totals -> 'rounding_amount_minor') is distinct from 'number'
+    or jsonb_typeof(v_totals -> 'grand_total_amount_minor') is distinct from 'number'
   then
     raise exception 'complete monetary totals are required for reconciliation' using errcode = '22023';
   end if;
@@ -554,34 +651,34 @@ begin
           and mapping.review_status = 'verified'
           and catalog.status = 'active' and catalog.purchase_type = v_product_type;
       end if;
-      select id into v_product_id from public.products
-      where user_id = v_user_id and name = v_description and purchase_type = v_product_type
-      order by created_at, id limit 1;
-      if v_product_id is null then
-        insert into public.products(user_id, name, purchase_type)
-        values (v_user_id, v_description, v_product_type)
-        returning id into v_product_id;
-      end if;
-      if v_sku is not null then
-        select id, product_id into v_store_product_id, v_product_id
-        from public.store_products
-        where user_id = v_user_id and store_id = v_store_id and store_product_code = v_sku
-        limit 1;
-      end if;
-      if v_store_product_id is null then
-        select id into v_store_product_id from public.store_products
-        where user_id = v_user_id and store_id = v_store_id and product_id = v_product_id and store_product_code is null
-        limit 1;
-      end if;
-      if v_store_product_id is null then
-        insert into public.store_products(user_id, store_id, product_id, store_product_code)
-        values (v_user_id, v_store_id, v_product_id, v_sku)
-        returning id into v_store_product_id;
-      end if;
       if v_quantity is not null and v_unit = 'each' and v_quantity = trunc(v_quantity)
         and v_quantity > 0 and v_net is not null and v_net >= 0
         and v_net % v_quantity::integer = 0
       then
+        select id into v_product_id from public.products
+        where user_id = v_user_id and name = v_description and purchase_type = v_product_type
+        order by created_at, id limit 1;
+        if v_product_id is null then
+          insert into public.products(user_id, name, purchase_type)
+          values (v_user_id, v_description, v_product_type)
+          returning id into v_product_id;
+        end if;
+        if v_sku is not null then
+          select id, product_id into v_store_product_id, v_product_id
+          from public.store_products
+          where user_id = v_user_id and store_id = v_store_id and store_product_code = v_sku
+          limit 1;
+        end if;
+        if v_store_product_id is null then
+          select id into v_store_product_id from public.store_products
+          where user_id = v_user_id and store_id = v_store_id and product_id = v_product_id and store_product_code is null
+          limit 1;
+        end if;
+        if v_store_product_id is null then
+          insert into public.store_products(user_id, store_id, product_id, store_product_code)
+          values (v_user_id, v_store_id, v_product_id, v_sku)
+          returning id into v_store_product_id;
+        end if;
         v_receipt_item_id := encode(extensions.digest(v_receipt_id::text || ':' || v_line_id, 'sha256'), 'hex');
         insert into public.receipt_items(
           id, user_id, receipt_id, store_product_id, unit_price_krw,
@@ -711,9 +808,20 @@ begin
   if v_user_id is null then raise exception 'authenticated user required' using errcode = '42501'; end if;
   if length(v_key) not between 1 and 200 then raise exception 'idempotency key must contain 1 to 200 characters' using errcode = '22023'; end if;
   if not coalesce(p_user_verified, false) then raise exception 'merchant facts require explicit user verification' using errcode = '22023'; end if;
+  if jsonb_typeof(p_merchant) is distinct from 'object'
+    or exists (
+      select 1 from jsonb_object_keys(
+        case when jsonb_typeof(p_merchant) = 'object' then p_merchant else '{}'::jsonb end
+      ) as field_name
+      where field_name not in ('merchant_name', 'branch_name', 'business_kind', 'business_registration_number', 'address', 'phone', 'source_namespace', 'source_location_code')
+    )
+  then
+    raise exception 'merchant profile contains unsupported identity fields' using errcode = '22023';
+  end if;
   if length(v_name) = 0 or v_kind not in ('retail', 'food_service', 'transport', 'accommodation', 'healthcare', 'professional_service', 'utility', 'government', 'financial', 'marketplace', 'other', 'unknown') then
     raise exception 'merchant name and business kind are required' using errcode = '22023';
   end if;
+  if p_merchant ->> 'business_kind' is null then raise exception 'merchant name and business kind are required' using errcode = '22023'; end if;
   if (v_namespace is null) <> (v_code is null) then raise exception 'source namespace and source code must be supplied together' using errcode = '22023'; end if;
   v_fingerprint := encode(extensions.digest(jsonb_build_object('merchantName', v_name, 'branchName', v_branch, 'businessKind', v_kind, 'businessRegistrationNumber', v_bnr, 'address', v_address, 'phone', v_phone, 'sourceNamespace', v_namespace, 'sourceCode', v_code)::text, 'sha256'), 'hex');
   perform pg_catalog.pg_advisory_xact_lock(pg_catalog.hashtextextended(v_user_id::text || ':merchant:' || v_key, 0));

@@ -25,13 +25,15 @@ C. 영수증의 필수 정보가 안 읽히는 경우: {"status":"needs_recaptur
 - 할인, 세금, 수수료, 봉사료, 반올림, 환불은 상품 행과 분리한다.
 - 금액은 KRW 정수다.
 - document.source.capture_method="ocr", transcription_status="parsed", source_images=[]로 둔다. 원본 파일명·경로·이미지 데이터는 JSON에 넣지 않는다.
-- document.id는 영수증에 인쇄된 고유 식별자가 없으면 null이다. OCR App localDocumentId, 임의 거래 ID, PriceTrace UUID를 만들거나 넣지 않는다.
+- `receipt.v2.document.id`는 영수증에 인쇄된 고유 식별자가 없으면 null이다. OCR App localDocumentId, 임의 거래 ID, PriceTrace UUID를 만들거나 넣지 않는다.
 - 카드번호, 승인번호, 주소, 전화번호, 사업자등록번호, 현금영수증 번호, 바코드 전체값, raw_text는 반환하지 않는다.
-- merchant.name, 발행일, KRW 총액이 사진에서 불명확하면 반드시 B만 반환한다.
+- merchant.name, 발행일, KRW 총액이 사진에서 불명확하면 반드시 C만 반환한다.
 - 중복 분석, 상품 추천, 표준 상품 연결, 가격 비교, 영수증 설명은 하지 않는다.
 - 식당의 document.fulfillment는 영수증에 직접 인쇄된 배달·포장·매장(홀) 또는 사용자가 사진과 함께 명시한 방식만 기록한다. 직접 인쇄면 evidence="printed", 사용자 명시면 evidence="user_confirmed"이다. 배달료·포장 할인·메뉴명만으로 추정하지 않으며, 그 외에는 type과 evidence를 모두 "unknown"으로 둔다.
 - 식당 product 행에는 food_service를 포함한다. 기본 메뉴는 {"role":"main","applies_to_line_id":null}, 별도 사이는 {"role":"side","applies_to_line_id":null}, 명확한 추가 옵션은 {"role":"option","applies_to_line_id":"부모 기본 메뉴 line id"}다. 부모가 직접 표시됐거나 기본 메뉴가 하나라서 유일할 때만 연결한다. 애매하면 food_service=null이며, 옵션·사이드는 기본 메뉴 가격에 합산하지 않고 별도 행으로 남긴다.
 - merchant-profile.v1에서는 merchant_name과 business_kind만 필수다. 상호명만 주어졌으면 business_kind="unknown"과 나머지 nullable source fact=null을 사용한다. 근거 없는 사업자번호·주소·전화번호·source code·SKU·UUID·브랜드·카탈로그는 만들지 않는다. 이 JSON은 user_verified가 아닌 검증 전 draft다.
+- OCR App은 원본과 대조해 사용자가 확인한 뒤에만 transcription_status를 user_verified로 바꾸고, source_images=[], raw_text=null 및 결제 reference 제거 후 `submit_verified_receipt_v2`를 호출한다. receiptId·storeId·restaurant/menu/catalog UUID는 서버 응답만 사용한다.
+- merchant-profile.v1은 사용자가 확인한 뒤에만 `submit_merchant_identity_candidate_v1`로 전달하며, ChatGPT나 OCR App이 PriceTrace UUID·표준상품 연결을 만들지 않는다.
 ```
 
 ## 적용 확인

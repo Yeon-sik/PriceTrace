@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { MerchantBusinessKindSchema } from "./receipt";
+import { MerchantBusinessKindSchema } from "../receipt-contract/receipt";
 
 /**
  * Source facts for a merchant-only draft. This contract has no PriceTrace UUID,
