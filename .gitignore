@@ -70,6 +70,7 @@ src/**/*.test.ts
 !src/domain/standard-product-image.test.ts
 !src/domain/app-navigation.test.ts
 !src/domain/strict-standard-product-lint-migration.test.ts
+!src/domain/chatgpt-project-pack.test.ts
 !src/repositories/public-official-channel-catalog.repository.test.ts
 !src/repositories/standard-product-link-proposal-queue.repository.test.ts
 tsconfig.tsbuildinfo

@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 
-const migration = readFileSync(path.join(process.cwd(), "supabase/migrations/20260827090000_verified_receipt_ingestion_v2.sql"), "utf8");
+const migration = readFileSync(path.join(process.cwd(), "supabase/migrations/20260827090000_verified_receipt_ingestion_v2.sql"), "utf8").replace(/\r\n/g, "\n");
 
 describe("verified receipt ingestion v2 migration contract", () => {
   it("keeps the old restaurant RPC and adds a generic verified boundary", () => {
@@ -13,6 +13,13 @@ describe("verified receipt ingestion v2 migration contract", () => {
     expect(migration).toContain("source_images");
     expect(migration).toContain("raw_text");
     expect(migration).toContain("payment reference");
+    expect(migration).toContain("p_receipt -> 'document' ->> 'currency' is distinct from 'KRW'");
+    expect(migration).toContain("v_source ->> 'transcription_status' is distinct from 'user_verified'");
+    expect(migration).toContain("payment -> 'reference' is distinct from 'null'::jsonb");
+    expect(migration).toContain("receipt.v2 contains unsupported identity or source fields");
+    expect(migration).toContain("receipt.v2 line items contain unsupported identity fields");
+    expect(migration).toContain("merchant profile contains unsupported identity fields");
+    expect(migration).not.toContain("p_receipt -> 'document' ->> 'currency' <> 'KRW'");
   });
 
   it("preserves all receipt monetary semantics and reconciles refunds", () => {
@@ -35,6 +42,7 @@ describe("verified receipt ingestion v2 migration contract", () => {
     expect(migration).not.toContain("insert into public.catalog_products");
     expect(migration).toContain("source_product_mappings");
     expect(migration).toContain("restaurant_menu_source_mappings");
+    expect(migration.indexOf("insert into public.products")).toBeGreaterThan(migration.indexOf("if v_quantity is not null and v_unit = 'each'"));
   });
 
   it("keeps branch and menu resolution exact and preserves option parents", () => {
@@ -55,6 +63,7 @@ describe("verified receipt ingestion v2 migration contract", () => {
     expect(migration).toContain("merchant identity candidate was already resolved");
     expect(migration).toContain("restaurant registration requires an exact source location identity; no fake source identity will be created");
     expect(migration).toContain("v_existing.business_kind = 'food_service' and p_restaurant_location_id is null");
+    expect(migration).toContain("p_merchant ->> 'business_kind' is null");
   });
 
   it("maps the receipt.v2 type key in the aggregate query", () => {

@@ -6,7 +6,7 @@ export const VerifiedReceiptIngestionRequestSchema = z.object({
   schema_version: z.literal("verified-receipt-ingestion.v2"),
   idempotency_key: z.string().trim().min(1).max(200),
   receipt: ReceiptJsonSchema,
-}).superRefine(({ receipt }, context) => {
+}).strict().superRefine(({ receipt }, context) => {
   if (receipt.document.source.transcription_status !== "user_verified") {
     context.addIssue({ code: z.ZodIssueCode.custom, path: ["receipt", "document", "source", "transcription_status"], message: "사용자 검증이 완료된 receipt.v2만 등록할 수 있습니다." });
   }
@@ -29,7 +29,7 @@ export const MerchantOnlyCandidateRequestSchema = z.object({
   idempotency_key: z.string().trim().min(1).max(200),
   user_verified: z.literal(true),
   merchant: MerchantProfileV1MerchantSchema,
-});
+}).strict();
 
 export type VerifiedReceiptIngestionRequest = z.infer<typeof VerifiedReceiptIngestionRequestSchema>;
 export type MerchantOnlyCandidateRequest = z.infer<typeof MerchantOnlyCandidateRequestSchema>;

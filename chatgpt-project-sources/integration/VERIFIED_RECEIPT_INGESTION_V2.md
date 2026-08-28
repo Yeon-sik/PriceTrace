@@ -17,7 +17,7 @@ submit_verified_receipt_v2(
 )
 ```
 
-The payload must have `schema_version: "receipt.v2"`, complete KRW totals, an issued date or offset timestamp, and `user_verified` transcription status. `source_images` must be `[]`, `raw_text` must be `null`, and every payment `reference` must be `null`. Only printed `merchant_sku` identifiers are accepted. Unknown SKU, menu, restaurant, or catalog identity remains null; the server never accepts a client-created UUID.
+The payload must have `schema_version: "receipt.v2"`, complete KRW totals, an issued date or offset timestamp, and `user_verified` transcription status. `source_images` must be `[]`, `raw_text` must be `null`, and every payment `reference` must be `null`. Only printed `merchant_sku` identifiers are accepted. Unsupported client identity fields (for example catalog, menu, restaurant, store, or PriceTrace UUIDs) are rejected. Unknown SKU, menu, restaurant, or catalog identity remains null; the server never accepts a client-created UUID.
 
 The server stores a sanitized source projection and line semantics. It does not store source images, raw OCR text, payment objects, payment references, or the local receipt JSON. Product/service rows that are `each` quantities with a non-negative net amount divisible by quantity become the existing user-owned receipt/observation chain. Other semantic rows remain in the source-line projection and are not silently converted into products.
 

@@ -18,6 +18,8 @@ foreach ($file in $preservedPackFiles) {
 $copies = @(
   @{ Source = "GOAL.md"; Destination = "GOAL.md" },
   @{ Source = "src/domain/receipt.ts"; Destination = "receipt-contract/receipt.ts" },
+  @{ Source = "src/domain/types.ts"; Destination = "receipt-contract/types.ts" },
+  @{ Source = "src/domain/public-receipt.ts"; Destination = "receipt-contract/public-receipt.ts" },
   @{ Source = "src/domain/merchant-profile.ts"; Destination = "merchant-profile/merchant-profile.ts" },
   @{ Source = "docs/contracts/VERIFIED_RECEIPT_INGESTION_V2.md"; Destination = "integration/VERIFIED_RECEIPT_INGESTION_V2.md" },
   @{ Source = "docs/contracts/MERCHANT_PROFILE_V1.md"; Destination = "merchant-profile/MERCHANT_PROFILE_V1.md" },
@@ -48,7 +50,22 @@ foreach ($copy in $copies) {
   }
   $destinationDirectory = Split-Path -Parent $destinationPath
   New-Item -ItemType Directory -Path $destinationDirectory -Force | Out-Null
-  Copy-Item -LiteralPath $sourcePath -Destination $destinationPath -Force
+  if ($copy.Destination -eq "merchant-profile/merchant-profile.ts") {
+    $content = [System.IO.File]::ReadAllText($sourcePath)
+    $content = $content.Replace('from "./receipt";', 'from "../receipt-contract/receipt";')
+    [System.IO.File]::WriteAllText($destinationPath, $content, [System.Text.UTF8Encoding]::new($false))
+  } elseif ($copy.Destination -eq "validation/validate-private-receipts.ts") {
+    $content = [System.IO.File]::ReadAllText($sourcePath)
+    $content = $content.Replace('from "../src/domain/receipt";', 'from "../receipt-contract/receipt";')
+    [System.IO.File]::WriteAllText($destinationPath, $content, [System.Text.UTF8Encoding]::new($false))
+  } elseif ($copy.Destination -eq "validation/private-receipt-source.ts") {
+    $content = [System.IO.File]::ReadAllText($sourcePath)
+    $content = $content.Replace('from "../src/domain/receipt";', 'from "../receipt-contract/receipt";')
+    $content = $content.Replace('from "../src/domain/public-receipt";', 'from "../receipt-contract/public-receipt";')
+    [System.IO.File]::WriteAllText($destinationPath, $content, [System.Text.UTF8Encoding]::new($false))
+  } else {
+    Copy-Item -LiteralPath $sourcePath -Destination $destinationPath -Force
+  }
 }
 
 Compress-Archive -Path (Join-Path $packRoot "*") -DestinationPath $zipPath -Force
