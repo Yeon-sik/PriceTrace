@@ -21,6 +21,8 @@ The payload must have `schema_version: "receipt.v2"`, complete KRW totals, an is
 
 The server stores a sanitized source projection and line semantics. It does not store source images, raw OCR text, payment objects, payment references, or the local receipt JSON. Product/service rows that are `each` quantities with a non-negative net amount divisible by quantity become the existing user-owned receipt/observation chain. Other semantic rows remain in the source-line projection and are not silently converted into products.
 
+Before any product/service row is projected, the server requires complete numeric amounts and rejects the row unless `gross_amount_minor - discount_amount_minor + tax_amount_minor = net_amount_minor`. This is an ingestion invariant; the OCR App must not repair a mismatch by inventing a value.
+
 Totals are reconciled as:
 
 ```text
@@ -35,7 +37,7 @@ The response is a JSON object with `schemaVersion: "verified-receipt-ingestion.v
 
 Restaurant identity resolves only from one exact verified active location: source namespace + source location code, normalized business registration number, or exact merchant/branch plus supplied contact facts. A same-name different-branch receipt is not merged. Exact existing menu resolution uses a verified restaurant menu mapping or one exact canonical menu name within the resolved restaurant. Similar names and ambiguous options are left unresolved. Exact menu observations use the existing `restaurant_menu_receipt_observations` chain and `receipt_item_menu_option_sources` / `restaurant_menu_option_links` flow.
 
-Retries with the same user and idempotency key return the original response. The same canonical payload sent under another key is also deduplicated. Reusing a key for another payload fails.
+Retries with the same user and idempotency key return the original response. The same canonical payload sent under another key is content-deduplicated but still creates a separate per-key binding, so every caller key is recorded. Reusing a key for another payload fails. Content fingerprints and idempotency keys are separate server-owned records.
 
 ## Merchant-only workflow
 

@@ -95,6 +95,19 @@ create table public.verified_receipt_source_lines (
 comment on table public.verified_receipt_source_lines is
   'Sanitized line semantics from receipt.v2, including discounts, taxes, fees, tips, refunds, rounding, source references, and optional menu option links.';
 
+create table public.verified_receipt_ingestion_contents (
+  user_id uuid not null references auth.users(id) on delete cascade,
+  request_fingerprint text not null check (request_fingerprint ~ '^[0-9a-f]{64}$'),
+  receipt_id uuid not null,
+  response jsonb not null,
+  created_at timestamptz not null default now(),
+  primary key (user_id, request_fingerprint),
+  foreign key (user_id, receipt_id) references public.receipts(user_id, id) on delete restrict
+);
+
+comment on table public.verified_receipt_ingestion_contents is
+  'Canonical content deduplication record for a verified receipt.v2. It is separate from per-key replay bindings so a retry with a new key still records that key.';
+
 create table public.verified_receipt_ingestion_requests (
   user_id uuid not null references auth.users(id) on delete cascade,
   idempotency_key text not null check (length(btrim(idempotency_key)) between 1 and 200),
@@ -103,7 +116,9 @@ create table public.verified_receipt_ingestion_requests (
   response jsonb not null,
   created_at timestamptz not null default now(),
   primary key (user_id, idempotency_key),
-  unique (user_id, request_fingerprint),
+  foreign key (user_id, request_fingerprint)
+    references public.verified_receipt_ingestion_contents(user_id, request_fingerprint)
+    on delete restrict,
   foreign key (user_id, receipt_id) references public.receipts(user_id, id) on delete restrict
 );
 
@@ -139,10 +154,12 @@ comment on table public.merchant_identity_candidates is
 
 alter table public.verified_receipt_sources enable row level security;
 alter table public.verified_receipt_source_lines enable row level security;
+alter table public.verified_receipt_ingestion_contents enable row level security;
 alter table public.verified_receipt_ingestion_requests enable row level security;
 alter table public.merchant_identity_candidates enable row level security;
 revoke all on public.verified_receipt_sources, public.verified_receipt_source_lines,
-  public.verified_receipt_ingestion_requests, public.merchant_identity_candidates
+  public.verified_receipt_ingestion_contents, public.verified_receipt_ingestion_requests,
+  public.merchant_identity_candidates
   from public, anon, authenticated;
 
 create index merchant_identity_candidates_review_idx
@@ -166,7 +183,7 @@ declare
   v_key text := pg_catalog.btrim(coalesce(p_idempotency_key, ''));
   v_fingerprint text;
   v_existing public.verified_receipt_ingestion_requests%rowtype;
-  v_duplicate public.verified_receipt_ingestion_requests%rowtype;
+  v_duplicate public.verified_receipt_ingestion_contents%rowtype;
   v_receipt_id uuid;
   v_store_id uuid;
   v_candidate_id uuid;
@@ -255,9 +272,14 @@ begin
   end if;
 
   select * into v_duplicate
-  from public.verified_receipt_ingestion_requests
+  from public.verified_receipt_ingestion_contents
   where user_id = v_user_id and request_fingerprint = v_fingerprint;
   if found then
+    insert into public.verified_receipt_ingestion_requests(
+      user_id, idempotency_key, request_fingerprint, receipt_id, response
+    ) values (
+      v_user_id, v_key, v_fingerprint, v_duplicate.receipt_id, v_duplicate.response
+    );
     return v_duplicate.response || jsonb_build_object('replayed', false, 'deduplicated', true);
   end if;
 
@@ -318,6 +340,20 @@ begin
 
   if exists (
     select 1 from jsonb_array_elements(p_receipt -> 'line_items') as line
+    where (line ->> 'type') in ('product', 'service')
+      and (
+        coalesce(jsonb_typeof(line -> 'net_amount_minor'), 'null') <> 'number'
+        or (line ->> 'gross_amount_minor')::numeric
+          - (line ->> 'discount_amount_minor')::numeric
+          + (line ->> 'tax_amount_minor')::numeric
+          <> (line ->> 'net_amount_minor')::numeric
+      )
+  ) then
+    raise exception 'product/service net amount reconciliation failed' using errcode = '23514';
+  end if;
+
+  if exists (
+    select 1 from jsonb_array_elements(p_receipt -> 'line_items') as line
     where line -> 'food_service' is not null
       and line -> 'food_service' <> 'null'::jsonb
       and (
@@ -347,13 +383,13 @@ begin
   end if;
 
   select
-    coalesce(sum(case when line_type in ('product', 'service') then coalesce(gross_amount_minor, 0) else 0 end), 0),
-    coalesce(sum(coalesce(discount_amount_minor, 0)), 0),
-    coalesce(sum(coalesce(tax_amount_minor, 0)), 0),
-    coalesce(sum(case when line_type = 'refund' then coalesce(net_amount_minor, 0) else 0 end), 0)
+    coalesce(sum(case when line."type" in ('product', 'service') then coalesce(line.gross_amount_minor, 0) else 0 end), 0),
+    coalesce(sum(coalesce(line.discount_amount_minor, 0)), 0),
+    coalesce(sum(coalesce(line.tax_amount_minor, 0)), 0),
+    coalesce(sum(case when line."type" = 'refund' then coalesce(line.net_amount_minor, 0) else 0 end), 0)
   into v_gross, v_discount, v_tax, v_refund
   from jsonb_to_recordset(p_receipt -> 'line_items') as line(
-    line_type text, gross_amount_minor integer, discount_amount_minor integer,
+    "type" text, gross_amount_minor integer, discount_amount_minor integer,
     tax_amount_minor integer, net_amount_minor integer
   );
   v_items_gross := (v_totals ->> 'items_gross_amount_minor')::integer;
@@ -669,6 +705,8 @@ begin
     'merchantResolutionStatus', case when v_restaurant_id is not null then 'exact' when v_candidate_id is not null then 'needs_user_selection' else 'not_applicable' end,
     'merchantCandidateId', v_candidate_id, 'observationIds', v_observation_ids, 'lines', v_line_results
   );
+  insert into public.verified_receipt_ingestion_contents(user_id, request_fingerprint, receipt_id, response)
+  values (v_user_id, v_fingerprint, v_receipt_id, v_response);
   insert into public.verified_receipt_ingestion_requests(user_id, idempotency_key, request_fingerprint, receipt_id, response)
   values (v_user_id, v_key, v_fingerprint, v_receipt_id, v_response);
   return v_response;
@@ -767,7 +805,15 @@ declare
 begin
   if auth.uid() is null or coalesce(auth.jwt() -> 'app_metadata' ->> 'role', '') <> 'admin' then raise exception 'Administrator authentication is required.' using errcode = '42501'; end if;
   if p_decision not in ('accept', 'reject') then raise exception 'candidate decision must be accept or reject' using errcode = '22023'; end if;
-  if p_decision = 'accept' and (p_restaurant_id is null or (p_restaurant_location_id is not null and not exists (select 1 from public.restaurant_locations where id = p_restaurant_location_id and restaurant_id = p_restaurant_id))) then raise exception 'accepted candidate requires an exact restaurant identity' using errcode = '23514'; end if;
+  select * into v_existing
+  from public.merchant_identity_candidates
+  where id = p_candidate_id;
+  if not found then raise exception 'pending merchant identity candidate not found' using errcode = 'P0002'; end if;
+  if p_decision = 'accept' and (
+    p_restaurant_id is null
+    or (v_existing.business_kind = 'food_service' and p_restaurant_location_id is null)
+    or (p_restaurant_location_id is not null and not exists (select 1 from public.restaurant_locations where id = p_restaurant_location_id and restaurant_id = p_restaurant_id))
+  ) then raise exception 'accepted candidate requires an exact restaurant and location identity' using errcode = '23514'; end if;
   update public.merchant_identity_candidates
   set review_status = case when p_decision = 'accept' then 'accepted' else 'rejected' end,
       matched_restaurant_id = case when p_decision = 'accept' then p_restaurant_id else null end,
@@ -775,10 +821,6 @@ begin
       updated_at = now()
   where id = p_candidate_id and review_status = 'pending';
   if not found then
-    select * into v_existing
-    from public.merchant_identity_candidates
-    where id = p_candidate_id;
-    if not found then raise exception 'pending merchant identity candidate not found' using errcode = 'P0002'; end if;
     if (p_decision = 'accept' and v_existing.review_status = 'accepted' and v_existing.matched_restaurant_id = p_restaurant_id and v_existing.matched_restaurant_location_id is not distinct from p_restaurant_location_id)
       or (p_decision = 'reject' and v_existing.review_status = 'rejected')
     then
@@ -813,26 +855,30 @@ begin
   select * into v_candidate from public.merchant_identity_candidates where id = p_candidate_id for update;
   if not found then raise exception 'pending merchant identity candidate not found' using errcode = 'P0002'; end if;
   if v_candidate.review_status = 'accepted' then
+    if v_candidate.business_kind = 'food_service' and v_candidate.matched_restaurant_location_id is null then
+      raise exception 'accepted food_service candidate is missing an exact location identity' using errcode = '23514';
+    end if;
     return query select p_candidate_id, v_candidate.matched_restaurant_id, v_candidate.matched_restaurant_location_id, v_candidate.review_status;
     return;
   end if;
   if v_candidate.review_status <> 'pending' then raise exception 'merchant identity candidate is not pending' using errcode = '23514'; end if;
   if v_candidate.business_kind <> 'food_service' then raise exception 'restaurant registration requires a food_service candidate' using errcode = '23514'; end if;
+  if v_candidate.source_namespace is null or v_candidate.source_code is null then
+    raise exception 'restaurant registration requires an exact source location identity; no fake source identity will be created' using errcode = '23514';
+  end if;
   insert into public.restaurants(canonical_name, review_status, status, created_by)
   values (v_candidate.merchant_name, 'pending', 'active', v_actor)
   returning id into v_restaurant_id;
-  if v_candidate.source_namespace is not null then
-    v_digits := nullif(pg_catalog.regexp_replace(coalesce(v_candidate.business_registration_number, ''), '[^0-9]', '', 'g'), '');
-    insert into public.restaurant_locations(
-      restaurant_id, source_namespace, source_location_code, location_label,
-      business_registration_number, address, phone, review_status, created_by
-    ) values (
-      v_restaurant_id, v_candidate.source_namespace, v_candidate.source_code,
-      v_candidate.branch_name,
-      case when length(v_digits) = 10 then substr(v_digits, 1, 3) || '-' || substr(v_digits, 4, 2) || '-' || substr(v_digits, 6, 5) else null end,
-      v_candidate.address, v_candidate.phone, 'pending', v_actor
-    ) returning id into v_location_id;
-  end if;
+  v_digits := nullif(pg_catalog.regexp_replace(coalesce(v_candidate.business_registration_number, ''), '[^0-9]', '', 'g'), '');
+  insert into public.restaurant_locations(
+    restaurant_id, source_namespace, source_location_code, location_label,
+    business_registration_number, address, phone, review_status, created_by
+  ) values (
+    v_restaurant_id, v_candidate.source_namespace, v_candidate.source_code,
+    v_candidate.branch_name,
+    case when length(v_digits) = 10 then substr(v_digits, 1, 3) || '-' || substr(v_digits, 4, 2) || '-' || substr(v_digits, 6, 5) else null end,
+    v_candidate.address, v_candidate.phone, 'pending', v_actor
+  ) returning id into v_location_id;
   update public.merchant_identity_candidates
   set review_status = 'accepted', matched_restaurant_id = v_restaurant_id,
       matched_restaurant_location_id = v_location_id, updated_at = now()

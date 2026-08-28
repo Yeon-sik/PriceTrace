@@ -17,5 +17,6 @@ export function nutritionValueAtAmount(
 ) {
   if (value === null || food.basisAmount <= 0) return null;
   if (food.basisUnit.trim().toLowerCase() !== targetUnit) return null;
-  return (value / food.basisAmount) * targetAmount;
+  const normalizedTargetAmount = targetUnit === "serving" ? 1 : targetAmount;
+  return (value / food.basisAmount) * normalizedTargetAmount;
 }

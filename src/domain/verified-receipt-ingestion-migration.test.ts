@@ -19,11 +19,17 @@ describe("verified receipt ingestion v2 migration contract", () => {
     for (const lineType of ["product", "service", "discount", "fee", "tax", "tip", "refund", "rounding", "other"]) expect(migration).toContain(`'${lineType}'`);
     expect(migration).toContain("v_items_gross - v_total_discount + v_total_tax + v_total_fee + v_total_tip + v_total_rounding + v_refund");
     expect(migration).toContain("verified_receipt_source_lines");
+    expect(migration).toContain("product/service net amount reconciliation failed");
+    expect(migration).toContain("gross_amount_minor')::numeric");
+    expect(migration).toContain("net_amount_minor')::numeric");
   });
 
   it("guards retries and refuses client-owned catalog identity", () => {
     expect(migration).toContain("primary key (user_id, idempotency_key)");
-    expect(migration).toContain("unique (user_id, request_fingerprint)");
+    expect(migration).toContain("create table public.verified_receipt_ingestion_contents");
+    expect(migration).toContain("primary key (user_id, request_fingerprint)");
+    expect(migration).toContain("insert into public.verified_receipt_ingestion_requests(");
+    expect(migration).toContain("v_duplicate.receipt_id, v_duplicate.response");
     expect(migration).toContain("pg_advisory_xact_lock");
     expect(migration).toContain("return v_duplicate.response || jsonb_build_object('replayed', false, 'deduplicated', true)");
     expect(migration).not.toContain("insert into public.catalog_products");
@@ -47,5 +53,13 @@ describe("verified receipt ingestion v2 migration contract", () => {
     expect(migration).toContain("merchant facts require explicit user verification");
     expect(migration).toContain("never auto-creates a canonical restaurant");
     expect(migration).toContain("merchant identity candidate was already resolved");
+    expect(migration).toContain("restaurant registration requires an exact source location identity; no fake source identity will be created");
+    expect(migration).toContain("v_existing.business_kind = 'food_service' and p_restaurant_location_id is null");
+  });
+
+  it("maps the receipt.v2 type key in the aggregate query", () => {
+    expect(migration).toContain('as line(\n    "type" text, gross_amount_minor integer');
+    expect(migration).toContain('line."type" in (\'product\', \'service\')');
+    expect(migration).not.toContain("as line(\n    line_type text, gross_amount_minor integer");
   });
 });

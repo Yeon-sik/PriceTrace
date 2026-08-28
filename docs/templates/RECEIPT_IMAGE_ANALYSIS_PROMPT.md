@@ -33,6 +33,7 @@
 8. 통합 OCR → PriceTrace 흐름에서는 실제로 인쇄된 판매처 SKU만 {"scheme":"merchant_sku","value":"..."}로 넣는다. SKU가 없거나 barcode·제조사 코드뿐이면 []로 두며, 배열 안에 null을 넣지 않는다. 상품명으로 표준 상품·브랜드·카탈로그 연결을 만들지 않는다.
 9. 인쇄된 상품, 서비스, 할인, 세금, 수수료, 팁, 환불, 반올림은 각각 별도 line_items 행으로 보존한다. 할인 행의 net_amount_minor는 음수일 수 있지만, discount_amount_minor와 totals.discount_amount_minor는 할인 절대값의 0 이상 정수다.
 10. gross_amount_minor, discount_amount_minor, tax_amount_minor, tax_rate_percent를 이미지에서 확인할 수 없으면 null로 둔다. 모든 금액 분해값을 확인한 경우에만 항목 합계와 totals를 일치시킨다.
+   product/service 행의 금액이 모두 확인된 경우 `gross_amount_minor - discount_amount_minor + tax_amount_minor = net_amount_minor`인지 확인한다. 맞지 않으면 값을 추정하거나 고치지 말고 사용자 검토 대상으로 둔다.
 11. issued_on은 YYYY-MM-DD다. 시각과 시간대가 인쇄된 경우에만 issued_at에 ISO 8601 오프셋 형식(예: 2026-01-15T14:30:00+09:00)을 넣고, 그렇지 않으면 null이다.
 12. document.id는 영수증에 실제로 인쇄된 고유 문서 식별자가 있을 때만 넣고, 없으면 null이다. OCR App의 localDocumentId는 별도 로컬 상태이며 receipt.v2에 넣지 않는다.
 13. retail_channel은 이미지 또는 사용자가 명시적으로 확인한 경우만 px 또는 regular로 설정한다. 그렇지 않으면 unknown이다. catalog_namespace는 확인 전까지 null이다.
