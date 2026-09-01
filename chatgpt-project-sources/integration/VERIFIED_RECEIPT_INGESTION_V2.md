@@ -19,7 +19,7 @@ submit_verified_receipt_v2(
 
 The payload must have `schema_version: "receipt.v2"`, complete KRW totals, an issued date or offset timestamp, and `user_verified` transcription status. `source_images` must be `[]`, `raw_text` must be `null`, and every payment `reference` must be `null`. Only printed `merchant_sku` identifiers are accepted. Unsupported client identity fields (for example catalog, menu, restaurant, store, or PriceTrace UUIDs) are rejected. Unknown SKU, menu, restaurant, or catalog identity remains null; the server never accepts a client-created UUID.
 
-The server stores a sanitized source projection and line semantics. It does not store source images, raw OCR text, payment objects, payment references, or the local receipt JSON. Product/service rows that are `each` quantities with a non-negative net amount divisible by quantity become the existing user-owned receipt/observation chain. Other semantic rows remain in the source-line projection and are not silently converted into products.
+The server stores a sanitized source projection and line semantics. It does not store source images, raw OCR text, payment objects, payment references, or the local receipt JSON. Every described `product` or `service` row receives a server-owned user `productId` and seller-specific `storeProductId`, even when quantity or amount data is insufficient for a price observation. Rows with `each` quantities, a non-negative net amount, and a net amount divisible by quantity additionally become the existing user-owned receipt/observation chain. Other semantic rows remain in the source-line projection and are not silently converted into products.
 
 Before any product/service row is projected, the server requires complete numeric amounts and rejects the row unless `gross_amount_minor - discount_amount_minor + tax_amount_minor = net_amount_minor`. This is an ingestion invariant; the OCR App must not repair a mismatch by inventing a value.
 
@@ -33,7 +33,20 @@ Discount, fee, tax, tip, refund, and rounding rows are kept as their original li
 
 ## Resolution and response
 
-The response is a JSON object with `schemaVersion: "verified-receipt-ingestion.v2"`, `receiptId`, `storeId`, optional `restaurantId` and `restaurantLocationId`, `merchantResolutionStatus`, optional `merchantCandidateId`, `observationIds`, and a `lines` array. Each line reports `receiptItemId`, `observationId`, `restaurantObservationId`, `restaurantMenuId`, `catalogProductId`, and `resolutionStatus` when applicable. These IDs are server-owned outputs.
+The response is a JSON object with `schemaVersion: "verified-receipt-ingestion.v2"`, `receiptId`, **always-present `storeId`**, optional `restaurantId` and `restaurantLocationId`, `merchantResolutionStatus`, optional `merchantCandidateId`, `observationIds`, and a `lines` array. Each line is returned in the original source order with a one-based server-assigned `lineOrdinal`. For `product` and `service` lines, the line reports every available PriceTrace identity: `productId`, `storeProductId`, `catalogProductId`, and `restaurantMenuId`, plus `receiptItemId`, `observationId`, `restaurantObservationId`, and `resolutionStatus`. Unavailable semantic identities remain `null`. These IDs and the ordinal are server-owned outputs; OCR and ChatGPT never create or trust them.
+
+## Identity deep links and authenticated reads
+
+The application accepts stable exact-identity links while preserving the existing public pages:
+
+```text
+?view=markets&storeId=<server storeId>
+?view=products&storeProductId=<server storeProductId>
+?view=products&catalogProductId=<server catalogProductId>
+?view=restaurants&restaurantMenuId=<server restaurantMenuId>
+```
+
+`storeId` opens the authenticated seller detail. `storeProductId`, `catalogProductId`, and `restaurantMenuId` open the corresponding exact identity screen. After login, that screen calls the authenticated, owner-scoped `get_authenticated_identity_detail_v1` RPC with exactly one selector and shows the related private receipt, source-line, product, seller-product, and price-observation rows. Shared catalog/menu metadata is returned only from active verified rows. A private read never broadens ownership by trusting a UUID from OCR or by matching a name alone.
 
 Restaurant identity resolves only from one exact verified active location: source namespace + source location code, normalized business registration number, or exact merchant/branch plus supplied contact facts. A same-name different-branch receipt is not merged. Exact existing menu resolution uses a verified restaurant menu mapping or one exact canonical menu name within the resolved restaurant. Similar names and ambiguous options are left unresolved. Exact menu observations use the existing `restaurant_menu_receipt_observations` chain and `receipt_item_menu_option_sources` / `restaurant_menu_option_links` flow.
 
