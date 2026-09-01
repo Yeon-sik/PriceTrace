@@ -73,6 +73,10 @@ export default function Home() {
   const [page, setPage] = useState<AppPage>("home");
   const [selectedMarket, setSelectedMarket] = useState<string | null>(null);
   const [selectedRestaurant, setSelectedRestaurant] = useState<string | null>(null);
+  const [selectedStoreId, setSelectedStoreId] = useState<string | null>(null);
+  const [selectedStoreProductId, setSelectedStoreProductId] = useState<string | null>(null);
+  const [selectedRestaurantMenuId, setSelectedRestaurantMenuId] = useState<string | null>(null);
+  const [selectedCatalogProductId, setSelectedCatalogProductId] = useState<string | null>(null);
   const [category, setCategory] = useState<ProductCategory>("전체");
   const [query, setQuery] = useState("");
   const [martType, setMartType] = useState<MartType>("all");
@@ -99,6 +103,10 @@ export default function Home() {
     options: {
       selectedMarket?: string | null;
       selectedRestaurant?: string | null;
+      selectedStoreId?: string | null;
+      selectedStoreProductId?: string | null;
+      selectedRestaurantMenuId?: string | null;
+      selectedCatalogProductId?: string | null;
       replace?: boolean;
     } = {},
   ) => {
@@ -106,15 +114,27 @@ export default function Home() {
     const nextRestaurant = nextPage === "restaurants"
       ? options.selectedRestaurant ?? null
       : null;
+    const nextStoreId = nextPage === "markets" ? options.selectedStoreId ?? null : null;
+    const nextStoreProductId = nextPage === "products" ? options.selectedStoreProductId ?? null : null;
+    const nextRestaurantMenuId = nextPage === "restaurants" ? options.selectedRestaurantMenuId ?? null : null;
+    const nextCatalogProductId = nextPage === "products" ? options.selectedCatalogProductId ?? null : null;
     setPage(nextPage);
     setSelectedMarket(nextMarket);
     setSelectedRestaurant(nextRestaurant);
+    setSelectedStoreId(nextStoreId);
+    setSelectedStoreProductId(nextStoreProductId);
+    setSelectedRestaurantMenuId(nextRestaurantMenuId);
+    setSelectedCatalogProductId(nextCatalogProductId);
     if (typeof window === "undefined") return;
 
     const nextUrl = buildAppNavigationUrl(window.location.href, {
       page: nextPage,
       selectedMarket: nextMarket,
       selectedRestaurant: nextRestaurant,
+      selectedStoreId: nextStoreId,
+      selectedStoreProductId: nextStoreProductId,
+      selectedRestaurantMenuId: nextRestaurantMenuId,
+      selectedCatalogProductId: nextCatalogProductId,
     });
     const currentUrl = `${window.location.pathname}${window.location.search}${window.location.hash}`;
     if (nextUrl === currentUrl) return;
@@ -146,6 +166,10 @@ export default function Home() {
       setPage(navigation.page);
       setSelectedMarket(navigation.selectedMarket);
       setSelectedRestaurant(navigation.selectedRestaurant);
+      setSelectedStoreId(navigation.selectedStoreId);
+      setSelectedStoreProductId(navigation.selectedStoreProductId);
+      setSelectedRestaurantMenuId(navigation.selectedRestaurantMenuId);
+      setSelectedCatalogProductId(navigation.selectedCatalogProductId);
       if (closeTransientUi) {
         setAuthOpen(false);
         setTrendGroup(null);
@@ -257,9 +281,9 @@ export default function Home() {
 
     <main className={styles.main}>
       {page === "home" && <><section className={styles.hero}><p className={styles.kicker}>PRICE OBSERVATION PLATFORM</p><h1>음식점 메뉴와 상품 가격을<br /><span>관측 기록으로 비교하세요.</span></h1><p>판매처·지점과 시점이 명확한 영수증 관측가를 비교하고,<br />메뉴는 Fitness Nutrition DB의 영양성분까지 확인할 수 있습니다.</p><div className={styles.heroActions}><button onClick={() => navigate("restaurants")}>음식점 둘러보기 <span>→</span></button><button onClick={() => openProducts()}>상품 둘러보기 <span>→</span></button></div></section><section className={styles.homeGrid}><ExploreTypeBox onRestaurants={() => navigate("restaurants")} onProducts={() => openProducts()} /><CartBox count={cartGroups.length} quantity={cartQuantityTotal} total={cartTotal} onOpen={() => navigate("cart")} /></section></>}
-      {page === "restaurants" && <RestaurantBrowser selectedRestaurant={selectedRestaurant} onSelectRestaurant={(restaurantId) => navigate("restaurants", { selectedRestaurant: restaurantId, replace: restaurantId === null })} />}
-      {page === "products" && <ProductBrowser groups={productGroups} query={query} setQuery={setQuery} category={category} setCategory={setCategory} martType={martType} setMartType={setMartType} selectedStore={selectedStore} setSelectedStore={setSelectedStore} sort={sort} setSort={setSort} authRevision={authRevision} onAdd={openCartModal} onTrend={setTrendGroup} onOpenStore={(store) => navigate("markets", { selectedMarket: store })} />}
-      {page === "markets" && <MarketBrowser receipts={receipts} observations={observationListings} selectedStore={selectedMarket} onSelectStore={(store) => navigate("markets", { selectedMarket: store, replace: true })} onOpenTrend={setTrendGroup} />}
+      {page === "restaurants" && <RestaurantBrowser selectedRestaurant={selectedRestaurant} selectedRestaurantMenuId={selectedRestaurantMenuId} onSelectRestaurant={(restaurantId) => navigate("restaurants", { selectedRestaurant: restaurantId, replace: restaurantId === null })} onClearMenuIdentity={() => navigate("restaurants", { replace: true })} />}
+      {page === "products" && <ProductBrowser groups={productGroups} query={query} setQuery={setQuery} category={category} setCategory={setCategory} martType={martType} setMartType={setMartType} selectedStore={selectedStore} setSelectedStore={setSelectedStore} sort={sort} setSort={setSort} authRevision={authRevision} selectedStoreProductId={selectedStoreProductId} selectedCatalogProductId={selectedCatalogProductId} onClearIdentity={() => navigate("products", { replace: true })} onAdd={openCartModal} onTrend={setTrendGroup} onOpenStore={(store) => navigate("markets", { selectedMarket: store })} />}
+      {page === "markets" && <MarketBrowser receipts={receipts} observations={observationListings} selectedStore={selectedMarket} selectedStoreId={selectedStoreId} onSelectStore={(store) => navigate("markets", { selectedMarket: store, replace: true })} onSelectStoreId={() => navigate("markets", { replace: true })} onOpenTrend={setTrendGroup} />}
       {page === "cart" && <CartPage products={cartProducts} lines={lines} onQuantityChange={updateCartQuantity} onRemove={removeCart} onClear={clearCart} onBrowse={() => navigate("products")} />}
       {page === "admin" && isAdmin && <AdminPage candidates={officialCandidates} approvalCandidates={approvalCandidates} receipts={receipts} />}
     </main>

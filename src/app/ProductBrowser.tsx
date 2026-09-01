@@ -36,6 +36,7 @@ import { PublicOfficialChannelCatalogRepository } from "@/repositories/public-of
 import { CoupangComparisonMessage } from "./CoupangComparisonMessage";
 import { ProductImage } from "./ProductImage";
 import { PxOfficialProductBrowser } from "./PxOfficialProductBrowser";
+import { PrivateIdentityDetail } from "./PrivateIdentityDetail";
 import { StandardProductDetailModal } from "./StandardProductDetailModal";
 import { StoreListModal } from "./StoreListModal";
 import styles from "./page.module.css";
@@ -107,8 +108,8 @@ function OfficialLinkedStandardCard({
    </article>;
 }
 
-export function ProductBrowser({ groups, query, setQuery, category, setCategory, martType, setMartType, selectedStore, setSelectedStore, sort, setSort, authRevision, onAdd, onTrend, onOpenStore }: {
-  groups: ProductGroup[]; query: string; setQuery: (value: string) => void; category: ProductCategory; setCategory: (value: ProductCategory) => void; martType: MartType; setMartType: (value: MartType) => void; selectedStore: string; setSelectedStore: (value: string) => void; sort: ProductSort; setSort: (value: ProductSort) => void; authRevision: number; onAdd: (product: CartProduct) => void; onTrend: (group: ProductGroup) => void; onOpenStore: (store: string) => void;
+export function ProductBrowser({ groups, query, setQuery, category, setCategory, martType, setMartType, selectedStore, setSelectedStore, sort, setSort, authRevision, selectedStoreProductId, selectedCatalogProductId, onClearIdentity, onAdd, onTrend, onOpenStore }: {
+  groups: ProductGroup[]; query: string; setQuery: (value: string) => void; category: ProductCategory; setCategory: (value: ProductCategory) => void; martType: MartType; setMartType: (value: MartType) => void; selectedStore: string; setSelectedStore: (value: string) => void; sort: ProductSort; setSort: (value: ProductSort) => void; authRevision: number; selectedStoreProductId: string | null; selectedCatalogProductId: string | null; onClearIdentity: () => void; onAdd: (product: CartProduct) => void; onTrend: (group: ProductGroup) => void; onOpenStore: (store: string) => void;
 }) {
   const { linkedByStandardProduct, standaloneListings } = useMemo(
     () => partitionOfficialChannelListingsByStandardProduct(publicPxCatalog.listings),
@@ -225,6 +226,15 @@ export function ProductBrowser({ groups, query, setQuery, category, setCategory,
       setSort("cheap");
     }
   };
+
+  if (selectedStoreProductId || selectedCatalogProductId) {
+    return <PrivateIdentityDetail
+      selector={selectedStoreProductId
+        ? { type: "store_product", id: selectedStoreProductId }
+        : { type: "catalog_product", id: selectedCatalogProductId as string }}
+      onBack={onClearIdentity}
+    />;
+  }
 
   return <section className={styles.browser}>
     <div className={styles.browserHead}>
