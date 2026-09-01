@@ -4,7 +4,7 @@ import { describe, expect, it } from "vitest";
 import merchantProfileTemplate from "../../docs/templates/MERCHANT_PROFILE_V1_TEMPLATE.json";
 import { MerchantProfileV1Schema } from "./merchant-profile";
 import { auditReceipt, mapReceipt, ReceiptJsonSchema } from "./receipt";
-import { MerchantOnlyCandidateRequestSchema, VerifiedReceiptIngestionRequestSchema, verifiedReceiptIngestionFingerprint } from "./verified-receipt-ingestion";
+import { MerchantOnlyCandidateRequestSchema, VerifiedReceiptIngestionRequestSchema, VerifiedReceiptIngestionResponseSchema, verifiedReceiptIngestionFingerprint } from "./verified-receipt-ingestion";
 
 function receipt(overrides: Record<string, unknown> = {}) {
   const base = {
@@ -27,6 +27,37 @@ function request(input: Record<string, unknown>) {
 }
 
 describe("verified receipt ingestion contract", () => {
+  it("requires the server-owned store, ordinal, and identity fields in the v2 response", () => {
+    const response = VerifiedReceiptIngestionResponseSchema.parse({
+      schemaVersion: "verified-receipt-ingestion.v2",
+      replayed: false,
+      deduplicated: false,
+      receiptId: "11111111-1111-4111-8111-111111111111",
+      storeId: "22222222-2222-4222-8222-222222222222",
+      restaurantId: null,
+      restaurantLocationId: null,
+      merchantResolutionStatus: "not_applicable",
+      merchantCandidateId: null,
+      observationIds: [],
+      lines: [{
+        sourceLineId: "line-001",
+        lineOrdinal: 1,
+        receiptItemId: null,
+        observationId: null,
+        restaurantObservationId: null,
+        productId: "33333333-3333-4333-8333-333333333333",
+        storeProductId: "44444444-4444-4444-8444-444444444444",
+        catalogProductId: null,
+        restaurantMenuId: null,
+        resolutionStatus: "unresolved_catalog",
+      }],
+    });
+
+    expect(response.storeId).toBe("22222222-2222-4222-8222-222222222222");
+    expect(response.lines[0].lineOrdinal).toBe(1);
+    expect(() => VerifiedReceiptIngestionResponseSchema.parse({ ...response, storeId: undefined })).toThrow();
+  });
+
   it.each([
     ["일반 소매 영수증", receipt()],
     ["음식점 영수증", receipt({ merchant: { name: "식당", branch_name: "강남점", business_kind: "food_service", retail_channel: "unknown", catalog_namespace: null, merchant_id: null, business_registration_number: null, address: null, phone: null } })],

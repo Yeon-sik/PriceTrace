@@ -31,9 +31,39 @@ export const MerchantOnlyCandidateRequestSchema = z.object({
   merchant: MerchantProfileV1MerchantSchema,
 }).strict();
 
+const nullableUuidSchema = z.string().uuid().nullable();
+
+export const VerifiedReceiptIngestionLineSchema = z.object({
+  sourceLineId: z.string().trim().min(1),
+  lineOrdinal: z.number().int().positive(),
+  receiptItemId: z.string().trim().min(1).nullable(),
+  observationId: nullableUuidSchema,
+  restaurantObservationId: nullableUuidSchema,
+  productId: nullableUuidSchema,
+  storeProductId: nullableUuidSchema,
+  catalogProductId: nullableUuidSchema,
+  restaurantMenuId: nullableUuidSchema,
+  resolutionStatus: z.enum(["resolved", "unresolved_catalog", "semantic_only"]),
+}).strict();
+
+export const VerifiedReceiptIngestionResponseSchema = z.object({
+  schemaVersion: z.literal("verified-receipt-ingestion.v2"),
+  replayed: z.boolean(),
+  deduplicated: z.boolean(),
+  receiptId: z.string().uuid(),
+  storeId: z.string().uuid(),
+  restaurantId: nullableUuidSchema,
+  restaurantLocationId: nullableUuidSchema,
+  merchantResolutionStatus: z.enum(["exact", "needs_user_selection", "not_applicable"]),
+  merchantCandidateId: nullableUuidSchema,
+  observationIds: z.array(z.string().uuid()),
+  lines: z.array(VerifiedReceiptIngestionLineSchema),
+}).strict();
+
 export type VerifiedReceiptIngestionRequest = z.infer<typeof VerifiedReceiptIngestionRequestSchema>;
 export type MerchantOnlyCandidateRequest = z.infer<typeof MerchantOnlyCandidateRequestSchema>;
 export type VerifiedReceiptInput = ReceiptJson;
+export type VerifiedReceiptIngestionResponse = z.infer<typeof VerifiedReceiptIngestionResponseSchema>;
 
 export function verifiedReceiptIngestionFingerprint(receipt: ReceiptJson) {
   return JSON.stringify(receipt);
