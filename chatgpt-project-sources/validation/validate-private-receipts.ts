@@ -1,6 +1,6 @@
 import { readFile, readdir } from "node:fs/promises";
 import path from "node:path";
-import { auditReceipt, mapReceipt, ReceiptJsonSchema } from "../src/domain/receipt";
+import { auditReceipt, mapReceipt, ReceiptJsonSchema } from "../receipt-contract/receipt";
 
 const privateDirectory = path.join(process.cwd(), "private-data");
 

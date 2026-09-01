@@ -5,7 +5,13 @@
 | 업로드 파일 | 저장소의 원본 | 용도 |
 |---|---|---|
 | `receipt-contract/receipt.ts` | `src/domain/receipt.ts` | `receipt.v2`의 실제 Zod 계약 |
+| `receipt-contract/types.ts` | `src/domain/types.ts` | `receipt.ts`가 참조하는 도메인 타입 의존성 |
+| `receipt-contract/public-receipt.ts` | `src/domain/public-receipt.ts` | validation source가 참조하는 공개 투영 타입 의존성 |
+| `merchant-profile/merchant-profile.ts` | `src/domain/merchant-profile.ts` | `merchant-profile.v1`의 실제 Zod 계약 |
+| `integration/VERIFIED_RECEIPT_INGESTION_V2.md` | `docs/contracts/VERIFIED_RECEIPT_INGESTION_V2.md` | 사용자 검증 후 PriceTrace 서버 projection 순서·privacy·identity 응답 계약 |
+| `merchant-profile/MERCHANT_PROFILE_V1.md` | `docs/contracts/MERCHANT_PROFILE_V1.md` | 영수증 없는 판매처 source fact 초안·검증·등록 경계 |
 | `receipt-contract/RECEIPT_V2_TEMPLATE.json` | `docs/templates/RECEIPT_V2_TEMPLATE.json` | 반환 JSON의 완성 예시 |
+| `merchant-profile/MERCHANT_PROFILE_V1_TEMPLATE.json` | `docs/templates/MERCHANT_PROFILE_V1_TEMPLATE.json` | 가게명 입력용 최소 canonical JSON 예시 |
 | `receipt-contract/RECEIPT_IMAGE_ANALYSIS_PROMPT.md` | `docs/templates/RECEIPT_IMAGE_ANALYSIS_PROMPT.md` | 사진 판독 및 이용 방식 근거 규칙 |
 | `validation/validate-private-receipts.ts` | `scripts/validate-private-receipts.ts` | 저장 전 검증·총액 무결성 규칙 |
 | `validation/private-receipt-source.ts` | `scripts/private-receipt-source.ts` | 파일명 및 private 영수증 선택 규칙 |
@@ -14,6 +20,8 @@
 | `PROJECT_INSTRUCTIONS.md` | 이 폴더 | 전체 운영 지침 |
 | `PASTE_TO_PROJECT_SETTINGS.md` | 이 폴더 | Project settings에 반드시 붙여 넣을 강제 JSON 지침과 적용 확인 |
 | `supabase/CHATGPT_PROJECT_SOURCE_SYNC.md` | `supabase/CHATGPT_PROJECT_SOURCE_SYNC.md` | migration 변경 시 동기화 의무 |
+
+`receipt-contract/`는 패키지 안에서 상대 import가 닫히도록 필요한 domain 의존성을 함께 포함한다. 원본 앱 경로(`../src/domain/*`)를 사용하는 validation 스크립트와 merchant profile 계약은 패키지 생성 시 `receipt-contract/` 기준 상대경로로 변환되며, ZIP의 모든 상대 TypeScript import는 저장소 테스트에서 해석 가능 여부를 검사한다.
 
 ## 의도적으로 제외한 파일
 

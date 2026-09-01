@@ -5,6 +5,7 @@ const minorAmount = z.number().int();
 const nonNegativeMinorAmount = minorAmount.nonnegative();
 const identifierSchema = z.object({ scheme: z.string().min(1), value: z.string().min(1) });
 const lineTypeSchema = z.enum(["product", "service", "discount", "fee", "tax", "tip", "refund", "rounding", "other"]);
+export const MerchantBusinessKindSchema = z.enum(["retail", "food_service", "transport", "accommodation", "healthcare", "professional_service", "utility", "government", "financial", "marketplace", "other", "unknown"]);
 const foodServiceLineSchema = z.object({
   /** A separately priced restaurant item; its amount is never folded into its parent. */
   role: z.enum(["main", "option", "side"]),
@@ -23,6 +24,10 @@ export const ReceiptFulfillmentEvidenceSchema = z.enum(["printed", "user_confirm
 export const ReceiptJsonSchema = z.object({
   schema_version: z.literal("receipt.v2"),
   document: z.object({
+    /**
+     * A source-printed document identifier when one exists. ChatGPT may return
+     * null, and an OCR App localDocumentId is deliberately outside receipt.v2.
+     */
     id: z.string().min(1).nullable(),
     type: z.enum(["receipt", "invoice", "order_confirmation", "credit_note", "statement", "voucher", "other"]),
     status: z.enum(["draft", "final", "voided", "refunded", "unknown"]),
@@ -46,7 +51,7 @@ export const ReceiptJsonSchema = z.object({
     /** The seller, issuer, provider, or payee printed on the source document. */
     name: z.string().min(1).nullable(),
     branch_name: z.string().min(1).nullable(),
-    business_kind: z.enum(["retail", "food_service", "transport", "accommodation", "healthcare", "professional_service", "utility", "government", "financial", "marketplace", "other", "unknown"]).default("unknown"),
+    business_kind: MerchantBusinessKindSchema.default("unknown"),
     retail_channel: z.enum(["px", "regular", "unknown"]).default("unknown"),
     /** Shared product-code catalog, only when the merchant explicitly confirms it. */
     catalog_namespace: z.string().trim().min(1).nullable().default(null),
@@ -169,7 +174,8 @@ export function auditReceipt(receipt: Receipt, source?: ReceiptJson) {
       const discount = source.line_items.reduce((sum, line) => sum + (line.discount_amount_minor ?? 0), 0);
       const tax = source.line_items.reduce((sum, line) => sum + (line.tax_amount_minor ?? 0), 0);
       if (gross !== source.totals.items_gross_amount_minor || discount !== source.totals.discount_amount_minor || tax !== source.totals.tax_amount_minor) throw new Error("영수증 품목 집계가 totals와 일치하지 않습니다.");
-      const expected = source.totals.items_gross_amount_minor - source.totals.discount_amount_minor + source.totals.tax_amount_minor + source.totals.fee_amount_minor! + source.totals.tip_amount_minor! + source.totals.rounding_amount_minor!;
+      const refunds = source.line_items.filter((line) => line.type === "refund").reduce((sum, line) => sum + (line.net_amount_minor ?? 0), 0);
+      const expected = source.totals.items_gross_amount_minor - source.totals.discount_amount_minor + source.totals.tax_amount_minor + source.totals.fee_amount_minor! + source.totals.tip_amount_minor! + source.totals.rounding_amount_minor! + refunds;
       if (expected !== source.totals.grand_total_amount_minor) throw new Error("영수증 총액 무결성 검증에 실패했습니다.");
     }
   }

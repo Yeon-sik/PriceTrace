@@ -1,7 +1,7 @@
 {
   "schema_version": "receipt.v2",
   "document": {
-    "id": "receipt:example-001",
+    "id": null,
     "type": "receipt",
     "status": "final",
     "issued_on": "2026-01-15",
@@ -13,10 +13,8 @@
     },
     "source": {
       "capture_method": "ocr",
-      "original_document_id": "EXAMPLE-001",
-      "source_images": [
-        "receipt_example_001.jpg"
-      ],
+      "original_document_id": null,
+      "source_images": [],
       "transcription_status": "parsed",
       "notes": [],
       "raw_text": null
