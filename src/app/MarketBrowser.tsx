@@ -5,6 +5,7 @@ import { groupProductObservations, type ProductGroup, type ProductObservationLis
 import { sellerPricePointsFromGroup, summarizeSellerPrices, type SellerPriceSummary } from "@/domain/seller-price-insights";
 import type { Receipt } from "@/domain/types";
 import { formatKrw } from "@/domain/settlement";
+import { PrivateIdentityDetail } from "./PrivateIdentityDetail";
 import styles from "./page.module.css";
 
 type Market = {
@@ -23,7 +24,9 @@ type MarketBrowserProps = {
   receipts: Receipt[];
   observations: ProductObservationListing[];
   selectedStore: string | null;
+  selectedStoreId: string | null;
   onSelectStore: (store: string | null) => void;
+  onSelectStoreId: () => void;
   onOpenTrend: (group: ProductGroup) => void;
 };
 
@@ -32,7 +35,7 @@ type MarketProductInsight = {
   summary: SellerPriceSummary;
 };
 
-export function MarketBrowser({ receipts, observations, selectedStore, onSelectStore, onOpenTrend }: MarketBrowserProps) {
+export function MarketBrowser({ receipts, observations, selectedStore, selectedStoreId, onSelectStore, onSelectStoreId, onOpenTrend }: MarketBrowserProps) {
   const [query, setQuery] = useState("");
   const [changedOnly, setChangedOnly] = useState(false);
   const markets = useMemo(() => {
@@ -66,7 +69,14 @@ export function MarketBrowser({ receipts, observations, selectedStore, onSelectS
   useEffect(() => {
     setQuery("");
     setChangedOnly(false);
-  }, [selectedStore]);
+  }, [selectedStore, selectedStoreId]);
+
+  if (selectedStoreId) {
+    return <PrivateIdentityDetail
+      selector={{ type: "store", id: selectedStoreId }}
+      onBack={onSelectStoreId}
+    />;
+  }
 
   const market = markets.find((entry) => entry.name === selectedStore) ?? null;
 

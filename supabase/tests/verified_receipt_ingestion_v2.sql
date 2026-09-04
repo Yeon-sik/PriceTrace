@@ -15,6 +15,7 @@ declare
   v_first jsonb;
   v_replayed jsonb;
   v_deduplicated jsonb;
+  v_private jsonb;
   v_receipt_id uuid;
   v_option_receipt_item_id text;
   v_parent_receipt_item_id text;
@@ -46,14 +47,14 @@ begin
   v_retail := jsonb_build_object(
     'schema_version', 'receipt.v2',
     'document', jsonb_build_object(
-      'id', null, 'type', 'receipt', 'status', 'issued', 'currency', 'KRW',
+      'id', null, 'type', 'receipt', 'status', 'final', 'currency', 'KRW',
       'issued_on', '2026-08-28', 'issued_at', null,
       'source', jsonb_build_object(
         'original_document_id', 'integration-retail-' || v_suffix,
         'transcription_status', 'user_verified', 'source_images', '[]'::jsonb,
-        'raw_text', null, 'capture_method', 'ocr_app'
+        'raw_text', null, 'capture_method', 'ocr'
       ),
-      'fulfillment', jsonb_build_object('type', 'in_store', 'evidence', 'printed receipt')
+      'fulfillment', jsonb_build_object('type', 'unknown', 'evidence', 'unknown')
     ),
     'merchant', jsonb_build_object(
       'name', 'Integration Retail ' || v_suffix, 'branch_name', null,
@@ -84,11 +85,25 @@ begin
     raise exception 'normal retail receipt was not ingested as a new receipt';
   end if;
   v_receipt_id := (v_first ->> 'receiptId')::uuid;
+  if (v_first ->> 'storeId') is null
+    or ((v_first -> 'lines' -> 0) ->> 'lineOrdinal') <> '1'
+    or ((v_first -> 'lines' -> 0) ->> 'productId') is null
+    or ((v_first -> 'lines' -> 0) ->> 'storeProductId') is null
+    or ((v_first -> 'lines' -> 0) ->> 'catalogProductId') is not null
+    or ((v_first -> 'lines' -> 0) ->> 'restaurantMenuId') is not null
+  then
+    raise exception 'retail identity response did not contain the server-owned store, ordinal, and private IDs';
+  end if;
 
   v_replayed := public.submit_verified_receipt_v2('integration-retail-key-' || v_suffix, v_retail);
   if (v_replayed ->> 'replayed') <> 'true' or (v_replayed ->> 'deduplicated') <> 'true'
   then
     raise exception 'same idempotency key and payload was not replayed';
+  end if;
+  if (v_replayed ->> 'storeId') <> (v_first ->> 'storeId')
+    or ((v_replayed -> 'lines' -> 0) ->> 'storeProductId') <> ((v_first -> 'lines' -> 0) ->> 'storeProductId')
+  then
+    raise exception 'replayed identity response changed its server-owned references';
   end if;
 
   v_deduplicated := public.submit_verified_receipt_v2('integration-retail-key-2-' || v_suffix, v_retail);
@@ -185,10 +200,25 @@ begin
   end if;
   if ((v_first -> 'lines' -> 0) ->> 'restaurantMenuId') <> v_menu_id::text
     or ((v_first -> 'lines' -> 0) ->> 'catalogProductId') <> v_catalog_product_id::text
+    or ((v_first -> 'lines' -> 0) ->> 'lineOrdinal') <> '1'
+    or ((v_first -> 'lines' -> 0) ->> 'productId') is null
+    or ((v_first -> 'lines' -> 0) ->> 'storeProductId') is null
+    or ((v_first -> 'lines' -> 1) ->> 'lineOrdinal') <> '2'
+    or ((v_first -> 'lines' -> 1) ->> 'productId') is null
+    or ((v_first -> 'lines' -> 1) ->> 'storeProductId') is null
   then
     raise exception 'verified restaurant menu identity was not returned';
   end if;
   v_receipt_id := (v_first ->> 'receiptId')::uuid;
+  v_private := public.get_authenticated_identity_detail_v1(
+    p_store_id => (v_first ->> 'storeId')::uuid
+  );
+  if (v_private -> 'selector' ->> 'type') <> 'store'
+    or (v_private -> 'selector' ->> 'id') <> (v_first ->> 'storeId')
+    or jsonb_array_length(v_private -> 'receipts') = 0
+  then
+    raise exception 'authenticated private store read did not return the linked receipt';
+  end if;
   select option_receipt_item_id, parent_receipt_item_id
     into v_option_receipt_item_id, v_parent_receipt_item_id
   from public.receipt_item_menu_option_sources

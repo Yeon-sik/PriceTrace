@@ -15,12 +15,15 @@ import {
 } from "@/domain/restaurant-menu";
 import { formatKrw } from "@/domain/settlement";
 import { useRestaurantMenuCatalog } from "@/features/restaurant-menu/use-restaurant-menu-catalog";
+import { PrivateIdentityDetail } from "./PrivateIdentityDetail";
 import { StandardProductNutritionModal } from "./StandardProductNutritionModal";
 import styles from "./page.module.css";
 
 type RestaurantBrowserProps = {
   selectedRestaurant: string | null;
+  selectedRestaurantMenuId: string | null;
   onSelectRestaurant: (restaurantId: string | null) => void;
+  onClearMenuIdentity: () => void;
 };
 
 type RestaurantDetailTab = "menus" | "info" | "locations";
@@ -70,7 +73,7 @@ function RestaurantFulfillmentBadges({ modes, menuContext = false }: {
   </span>;
 }
 
-export function RestaurantBrowser({ selectedRestaurant, onSelectRestaurant }: RestaurantBrowserProps) {
+export function RestaurantBrowser({ selectedRestaurant, selectedRestaurantMenuId, onSelectRestaurant, onClearMenuIdentity }: RestaurantBrowserProps) {
   const {
     configured,
     directory,
@@ -112,6 +115,13 @@ export function RestaurantBrowser({ selectedRestaurant, onSelectRestaurant }: Re
     setMenuCategory("전체");
     setNutritionMenu(null);
   }, [selectedRestaurant]);
+
+  if (selectedRestaurantMenuId) {
+    return <PrivateIdentityDetail
+      selector={{ type: "restaurant_menu", id: selectedRestaurantMenuId }}
+      onBack={onClearMenuIdentity}
+    />;
+  }
 
   if (!selectedRestaurant) {
     const menuCount = entries.reduce((total, entry) => total + entry.menuCount, 0);
