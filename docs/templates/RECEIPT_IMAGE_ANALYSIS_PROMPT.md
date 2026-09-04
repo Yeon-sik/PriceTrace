@@ -1,4 +1,4 @@
-# 영수증 이미지 → `receipt.v2` JSON 추출 요청서
+# 영수증 이미지 → `yeonsik-ocr.v1` canonical envelope 추출 요청서
 
 ## 입력 계약
 
@@ -8,16 +8,22 @@
 
 - 기준 예시: [RECEIPT_V2_TEMPLATE.json](./RECEIPT_V2_TEMPLATE.json)
 - 실제 검증기: `src/domain/receipt.ts`의 `ReceiptJsonSchema`
+- `receipt.v2`는 `yeonsik-ocr.v1` envelope의 중첩 `receipt` 필드에 들어가는 내부 projection 계약이다.
+- envelope의 필수 top-level 필드는 `schema_version`, `mode`, `source`, `merchant_candidate`, `receipt`, `nutrition`, `classification_hints`, `links`, `review`이며 `projection_targets`는 routing hint다.
+  `mode`는 `merchant`, `restaurant`, `packaged_product` 중 하나이고, `review`는 `status`, `blocking_issues`, `warnings`를 포함한다.
 - 템플릿의 상호, 상품명, 금액, 날짜, 코드, 파일명은 예시이므로 복사하지 않는다.
 - 모든 미확인 사실은 추정하지 않는다.
 
 ## 모델에 그대로 전달할 요청문
 
 ```text
-첨부한 영수증 이미지를 분석해 완성된 receipt.v2 JSON 객체 하나를 반환하라.
+첨부한 영수증 이미지를 분석해 `yeonsik-ocr.v1` canonical envelope JSON 객체 하나를 반환하라.
+완성된 `receipt.v2`는 envelope의 `receipt` 필드에 중첩하고, 최상위에 직접 반환하지 말라.
 
 다운로드 파일을 만들거나 첨부하지 말고, JSON 본문만 채팅 응답으로 출력한다.
-파일명·원본 경로·이미지 데이터는 JSON 객체 안에 넣지 않는다. 호출자가 검증 후 원하는 파일명으로 저장한다.
+파일명·원본 경로·이미지 데이터는 JSON 객체 안에 넣지 않는다. `source.source_files`에는 논리적 id/type/label만 넣는다.
+`schema_version`은 `yeonsik-ocr.v1`, `source.producer`는 `chatgpt`로 둔다.
+`mode`는 `merchant`, `restaurant`, `packaged_product` 중 하나로 두고, 미검증 출력의 `review.status`는 `needs_review` 또는 `blocked`로 둔다.
 
 반드시 제공한 RECEIPT_V2_TEMPLATE.json의 모든 키, 중첩 구조, 필드 이름, 자료형을 따른다.
 특히 line_items의 각 객체는 템플릿의 모든 필드를 빠짐없이 포함한다.
@@ -37,12 +43,14 @@
 11. issued_on은 YYYY-MM-DD다. 시각과 시간대가 인쇄된 경우에만 issued_at에 ISO 8601 오프셋 형식(예: 2026-01-15T14:30:00+09:00)을 넣고, 그렇지 않으면 null이다.
 12. document.id는 영수증에 실제로 인쇄된 고유 문서 식별자가 있을 때만 넣고, 없으면 null이다. OCR App의 localDocumentId는 별도 로컬 상태이며 receipt.v2에 넣지 않는다.
 13. retail_channel은 이미지 또는 사용자가 명시적으로 확인한 경우만 px 또는 regular로 설정한다. 그렇지 않으면 unknown이다. catalog_namespace는 확인 전까지 null이다.
-14. ChatGPT Project 출력의 source_images는 항상 []다. OCR App이 원본 이미지와 자체 localDocumentId를 로컬에서 보관하며, 파일명·경로·이미지 데이터·base64·외부 URL은 receipt.v2에 넣지 않는다. 카드번호·승인번호 같은 민감한 결제 참조값도 넣지 않는다.
-15. confidence는 이미지 판독 신뢰도다. high, medium, low 중 하나를 사용하고, 사람이 확인·수정한 값만 user_verified를 사용한다.
-16. 음식점 영수증의 document.fulfillment.type은 영수증에 배달·포장·매장(홀) 이용이 직접 인쇄된 경우에만 각각 delivery, takeout, dine_in으로 쓴다. 배달료·포장 할인·메뉴명만으로 이용 방식을 추정하지 않는다. 확인할 수 없으면 unknown이다.
-17. 이용 방식이 영수증에 직접 인쇄돼 확인되면 evidence는 printed다. 사용자가 이미지와 함께 이용 방식을 명시한 경우에만 user_confirmed다. 둘 다 아니면 type과 evidence 모두 unknown이다.
-18. 식당 영수증의 product 행은 메뉴 역할을 직접 확인할 수 있을 때만 food_service를 기록한다. 기본 메뉴는 {"role":"main","applies_to_line_id":null}, 별도 사이드는 {"role":"side","applies_to_line_id":null}이다. “면 추가”, “토핑 추가”처럼 추가 옵션으로 명확한 행은 {"role":"option","applies_to_line_id":"기본메뉴 line id"}로 쓴다. 부모 메뉴는 영수증에 직접 표시됐거나 같은 영수증에 기본 메뉴가 정확히 하나여서 유일하게 결정될 때만 연결한다. 그 외, 또는 일반 소매 영수증은 food_service를 null로 둔다.
-19. 옵션과 사이드는 항상 별도 product 행과 자체 금액으로 보존한다. 옵션 금액을 기본 메뉴의 금액에 더하거나, 사이드를 옵션으로 연결하지 않는다. 예: 라면 line-001, 면추가 line-002, 교자 line-003이면 line-001은 main, line-002는 option → line-001, line-003은 side다.
+14. ChatGPT Project 출력의 nested receipt.v2의 source_images는 항상 []다. OCR App이 원본 이미지와 자체 localDocumentId를 로컬에서 보관하며, 파일명·경로·이미지 데이터·base64·외부 URL은 receipt.v2에 넣지 않는다. 카드번호·승인번호·payment reference·현금영수증 식별번호 같은 결제 식별자와 raw OCR text는 downstream PriceTrace projection 전에 제거한다. `payments[].reference`는 null이다.
+15. 영수증에 실제 인쇄되어 읽을 수 있는 merchant.name, branch_name, business_registration_number, address, phone은 envelope의 merchant_candidate와 nested receipt.merchant에 source fact로 보존할 수 있다. 보이지 않는 값은 null이며 상호명이나 외부 추정으로 채우지 않는다.
+16. confidence는 이미지 판독 신뢰도다. high, medium, low 중 하나를 사용한다. ChatGPT는 user_verified를 사용하지 않으며, nested receipt의 transcription_status는 parsed, envelope review.status는 needs_review 또는 blocked로 둔다. OCR App만 사용자 검증 후 user_verified를 설정한다.
+17. `projection_targets`는 routing hint일 뿐 source fact·검증·PriceTrace identity의 authority가 아니다. PriceTrace의 productId, storeProductId, catalogProductId, restaurantMenuId, storeId, receiptId는 RPC 응답만 사용한다.
+18. 음식점 영수증의 document.fulfillment.type은 영수증에 배달·포장·매장(홀) 이용이 직접 인쇄된 경우에만 각각 delivery, takeout, dine_in으로 쓴다. 배달료·포장 할인·메뉴명만으로 이용 방식을 추정하지 않는다. 확인할 수 없으면 unknown이다.
+19. 이용 방식이 영수증에 직접 인쇄돼 확인되면 evidence는 printed다. 사용자가 이미지와 함께 이용 방식을 명시한 경우에만 user_confirmed다. 둘 다 아니면 type과 evidence 모두 unknown이다.
+20. 식당 영수증의 product 행은 메뉴 역할을 직접 확인할 수 있을 때만 food_service를 기록한다. 기본 메뉴는 {"role":"main","applies_to_line_id":null}, 별도 사이드는 {"role":"side","applies_to_line_id":null}이다. “면 추가”, “토핑 추가”처럼 추가 옵션으로 명확한 행은 {"role":"option","applies_to_line_id":"기본메뉴 line id"}로 쓴다. 부모 메뉴는 영수증에 직접 표시됐거나 같은 영수증에 기본 메뉴가 정확히 하나여서 유일하게 결정될 때만 연결한다. 그 외, 또는 일반 소매 영수증은 food_service를 null로 둔다.
+21. 옵션과 사이드는 항상 별도 product 행과 자체 금액으로 보존한다. 옵션 금액을 기본 메뉴의 금액에 더하거나, 사이드를 옵션으로 연결하지 않는다. 예: 라면 line-001, 면추가 line-002, 교자 line-003이면 line-001은 main, line-002는 option → line-001, line-003은 side다.
 반환 전 자체 점검:
 - line_items의 모든 행에 필수 키가 있는가?
 - quantity가 객체 또는 null인가?
@@ -57,7 +65,7 @@
 ## 추출 후 검증
 
 1. JSON 문법을 확인한다.
-2. `ReceiptJsonSchema` 검증을 통과해야 한다.
+2. envelope의 `receipt`가 null이 아니면 nested `receipt.v2`가 `ReceiptJsonSchema` 검증을 통과해야 한다.
 3. `product` 행을 가격 관측·배분에 사용하려면 `description`이 있고, `quantity.unit`이 `each`이며, 수량이 양의 정수이고, `net_amount_minor`가 수량으로 나누어떨어져야 한다.
 4. 모든 금액 분해값과 totals가 채워진 경우에만 다음 식을 검증한다.
 
@@ -81,3 +89,4 @@
 - PX 여부, 매장 지점, 상품 SKU를 이미지에서 확인할 수 없는 경우
 
 이 경우 값을 만들어 내지 말고 `null`, `[]`, `unknown`, 낮은 `confidence`를 사용하고 `document.source.notes`에 판독 한계를 기록한다.
+필수 영수증 사실 자체가 없으면 직접 receipt.v2를 반환하지 말고 `needs_recapture` control JSON을 반환한다.

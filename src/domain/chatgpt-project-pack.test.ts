@@ -171,7 +171,7 @@ describe("ChatGPT Project source pack", () => {
     const ingestionContract = readFileSync(path.join(repositoryRoot, "docs/contracts/VERIFIED_RECEIPT_INGESTION_V2.md"), "utf8");
     const merchantContract = readFileSync(path.join(repositoryRoot, "docs/contracts/MERCHANT_PROFILE_V1.md"), "utf8");
 
-    for (const marker of ["receipt.v2.document.id", "localDocumentId", "source_images", "raw_text", "submit_verified_receipt_v2", "user_verified", "merchant-profile.v1"]) {
+    for (const marker of ["yeonsik-ocr.v1", "receipt.v2.document.id", "localDocumentId", "source_images", "raw_text", "submit_verified_receipt_v2", "user_verified", "projection_targets", "merchant-profile.v1"]) {
       expect(instructions, `PROJECT_INSTRUCTIONS.md: ${marker}`).toContain(marker);
       expect(settings, `PASTE_TO_PROJECT_SETTINGS.md: ${marker}`).toContain(marker);
     }
@@ -181,7 +181,14 @@ describe("ChatGPT Project source pack", () => {
     for (const marker of ["검증 전 판매처 source fact 초안", "merchant-profile.v1", "submit_merchant_identity_candidate_v1", "PriceTrace UUID", "SKU", "브랜드"]) {
       expect(merchantContract, `MERCHANT_PROFILE_V1.md: ${marker}`).toContain(marker);
     }
-    expect(settings).toContain("반드시 C만 반환한다");
+    expect(instructions).toContain("최상위에 `receipt.v2`를 직접 반환하지 않는다");
+    expect(settings).toContain("최상위에 `receipt.v2`를 직접 반환하지 않는다");
+    expect(settings).toContain("business_registration_number");
+    expect(settings).toContain("payment reference");
+    expect(settings).toContain("사용자 검증 gate");
+    expect(settings).toContain("needs_recapture");
+    expect(settings).not.toContain("반드시 C만 반환한다");
+    expect(settings).not.toContain("카드번호, 승인번호, 주소, 전화번호, 사업자등록번호, 현금영수증 번호, 바코드 전체값, raw_text는 반환하지 않는다.");
     expect(settings).not.toContain("반드시 B만 반환한다");
   });
 });

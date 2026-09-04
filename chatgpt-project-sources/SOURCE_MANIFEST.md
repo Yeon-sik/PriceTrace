@@ -4,15 +4,15 @@
 
 | 업로드 파일 | 저장소의 원본 | 용도 |
 |---|---|---|
-| `receipt-contract/receipt.ts` | `src/domain/receipt.ts` | `receipt.v2`의 실제 Zod 계약 |
+| `receipt-contract/receipt.ts` | `src/domain/receipt.ts` | `yeonsik-ocr.v1`의 중첩 `receipt` 필드에 들어가는 `receipt.v2` 실제 Zod 계약 |
 | `receipt-contract/types.ts` | `src/domain/types.ts` | `receipt.ts`가 참조하는 도메인 타입 의존성 |
 | `receipt-contract/public-receipt.ts` | `src/domain/public-receipt.ts` | validation source가 참조하는 공개 투영 타입 의존성 |
 | `merchant-profile/merchant-profile.ts` | `src/domain/merchant-profile.ts` | `merchant-profile.v1`의 실제 Zod 계약 |
 | `integration/VERIFIED_RECEIPT_INGESTION_V2.md` | `docs/contracts/VERIFIED_RECEIPT_INGESTION_V2.md` | 사용자 검증 후 PriceTrace 서버 projection 순서·privacy·identity 응답 계약 |
 | `merchant-profile/MERCHANT_PROFILE_V1.md` | `docs/contracts/MERCHANT_PROFILE_V1.md` | 영수증 없는 판매처 source fact 초안·검증·등록 경계 |
-| `receipt-contract/RECEIPT_V2_TEMPLATE.json` | `docs/templates/RECEIPT_V2_TEMPLATE.json` | 반환 JSON의 완성 예시 |
+| `receipt-contract/RECEIPT_V2_TEMPLATE.json` | `docs/templates/RECEIPT_V2_TEMPLATE.json` | envelope의 중첩 `receipt.v2` 완성 예시 |
 | `merchant-profile/MERCHANT_PROFILE_V1_TEMPLATE.json` | `docs/templates/MERCHANT_PROFILE_V1_TEMPLATE.json` | 가게명 입력용 최소 canonical JSON 예시 |
-| `receipt-contract/RECEIPT_IMAGE_ANALYSIS_PROMPT.md` | `docs/templates/RECEIPT_IMAGE_ANALYSIS_PROMPT.md` | 사진 판독 및 이용 방식 근거 규칙 |
+| `receipt-contract/RECEIPT_IMAGE_ANALYSIS_PROMPT.md` | `docs/templates/RECEIPT_IMAGE_ANALYSIS_PROMPT.md` | `yeonsik-ocr.v1` envelope 사진 판독 및 이용 방식 근거 규칙 |
 | `validation/validate-private-receipts.ts` | `scripts/validate-private-receipts.ts` | 저장 전 검증·총액 무결성 규칙 |
 | `validation/private-receipt-source.ts` | `scripts/private-receipt-source.ts` | 파일명 및 private 영수증 선택 규칙 |
 | `reference/existing-public-receipt-index.v1.json` | `data/public/receipts/index.v1.json` | 공개된 기존 영수증의 중복 참고 목록 |
