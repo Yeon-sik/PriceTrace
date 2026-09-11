@@ -6,6 +6,20 @@ product identity. OCR and GPT provide observed facts and evidence; they do not
 create or confirm a public `standard_products` row, `catalog_products` row,
 `restaurant_menus` row, or Nutrition link.
 
+The canonical retail sequence is:
+
+```text
+Product Candidate facts
+  -> PriceTrace authority resolution
+  -> standalone price observation
+```
+
+The candidate's `client_key` is an opaque, user-scoped OCR-App reference. It
+is not a merchant SKU, a store product code, a source mapping value, or a
+PriceTrace UUID; UUID-shaped values are rejected at the boundary. PriceTrace
+stores the reference only so a later standalone request can name the
+already-resolved candidate without sending a server ID.
+
 ## RPC
 
 Authenticated clients call:
@@ -33,8 +47,10 @@ The JSON object uses snake_case because it crosses the OCR-App boundary:
   "source_app": "pricetrace_ocr_app",
   "source_version": "0.0.0",
   "candidate_type": "retail_product",
+  "client_key": "product-1",
   "product_name": "관측된 상품명",
   "brand": "관측된 브랜드 또는 null",
+  "sub_brand": "관측된 서브브랜드 또는 null",
   "manufacturer": "관측된 제조사 또는 null",
   "specification": "관측된 규격 표현 또는 null",
   "content_amount": 500,
@@ -66,12 +82,23 @@ The JSON object uses snake_case because it crosses the OCR-App boundary:
 }
 ```
 
-`brand`, `manufacturer`, `specification`, `content_amount`, `content_unit`,
+For the canonical v3 retail flow, `client_key` is required if the candidate
+will later be referenced by a standalone retail observation. The RPC keeps
+accepting requests without it for existing v1 callers, but such a request
+cannot satisfy the standalone retail prerequisite. `brand`, `sub_brand`,
+`manufacturer`, `specification`, `content_amount`, `content_unit`,
 `package_count`, `variant`, and `nutrition_food_id` may be `null` or omitted
-when unknown. A content amount and unit are all-or-nothing. `package_count`,
-when present, is a positive integer. `identifiers` may be empty, but each
-identifier must be a digit-only EAN, UPC, or GTIN value after spaces/hyphens
-are removed. `evidence` must contain at least one sanitized source fact.
+when unknown. These are source facts and are retained as provided; in
+particular, `sub_brand` is not collapsed into `brand` or used as a catalog
+identity by itself. A content amount and unit are all-or-nothing.
+`package_count`, when present, is a positive integer. `identifiers` may be
+empty, but each identifier must be a digit-only EAN, UPC, or GTIN value after
+spaces/hyphens are removed. `evidence` must contain at least one sanitized
+source fact.
+
+`client_key` must not be copied into `merchant_sku`. A Product Candidate does
+not accept `merchant_sku`; a real printed/listed merchant SKU belongs only in
+the later standalone observation, and only when it was actually observed.
 
 Evidence references are opaque source references, not local file paths or
 binary data. The request rejects raw OCR text, image paths/URIs/base64,
@@ -102,7 +129,9 @@ of exactly these outcomes:
 | `private_unverified_candidate_created` | No unique exact catalog identity was found. A private `product_identity_candidates` row was created with `verificationStatus: "unverified"`. |
 | `review_required` | The facts are semantically non-retail, conflict with a verified identifier, or match more than one catalog identity. A private review candidate was created. |
 
-The response contains these server-owned fields:
+The response contains these server-owned fields. `clientKey` and
+`productClientKey` echo the opaque local reference for correlation; they are
+not server identities and must not be converted into UUIDs or SKUs:
 
 ```json
 {
@@ -116,6 +145,8 @@ The response contains these server-owned fields:
   "reviewStatus": "not_required",
   "reviewReasons": [],
   "possibleCatalogProductIds": [],
+  "clientKey": "product-1",
+  "productClientKey": "product-1",
   "restaurantMenuCandidateCreated": false,
   "nutritionHandoff": {
     "status": "awaiting_nutrition_food_id",
@@ -133,6 +164,13 @@ The response contains these server-owned fields:
 `catalog_product_reused` is reuse of an already verified PriceTrace identity;
 it is not public verification of OCR/GPT output. A name-only, incomplete, or
 ambiguous match does not reuse a catalog product.
+
+Only a `catalog_product_reused` result creates an eligible private authority
+projection for standalone retail. `private_unverified_candidate_created` and
+`review_required` retain the candidate as private/review evidence and must not
+be used to submit a retail standalone observation. The next request passes
+`product_client_key: "product-1"`, not `catalogProductId`, `standardProductId`,
+or another externally supplied PriceTrace UUID.
 
 ## Nutrition handoff
 
@@ -153,10 +191,13 @@ Record data.
 
 ## Persistence and public-read boundary
 
-New candidates are stored in `product_identity_candidates` with
+New unresolved candidates are stored in `product_identity_candidates` with
 `verification_status = 'unverified'` and `visibility = 'private'`, scoped to
 the authenticated user. They are not inserted into `standard_products` or
-`catalog_products`. `get_product_read_v1` is unchanged and continues to expose
-only active, verified catalog variants. The ingestion replay tables contain
-only the sanitized request fingerprint, server result, and private candidate
-reference.
+`catalog_products`. A `product_candidate_authority_projections` row binds a
+user's opaque `client_key` to the resolution result; only a verified catalog
+reuse is eligible for standalone retail. `get_product_read_v1` is unchanged
+and continues to expose only active, verified catalog variants. The ingestion
+replay tables contain the sanitized request fingerprint, server result, and
+private candidate/projection reference. No CashOS submission or other project
+database write occurs.
