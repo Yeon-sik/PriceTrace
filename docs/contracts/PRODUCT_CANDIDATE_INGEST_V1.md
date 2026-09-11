@@ -96,6 +96,16 @@ empty, but each identifier must be a digit-only EAN, UPC, or GTIN value after
 spaces/hyphens are removed. `evidence` must contain at least one sanitized
 source fact.
 
+`evidence[].source_type` also accepts `order_history` for facts actually
+observed in a marketplace or delivery-app order history. For this source the
+`field` must describe a product fact such as `product_name`, `option_text`,
+`merchant_sku`, `variant`, `brand`, `manufacturer`, `specification`, or
+content/package measurements, and `observed_value` must be a non-empty string
+for that fact. Platform, seller, store, payment, authority, and other identity
+fields are not Product Candidate facts. The evidence keeps only the sanitized
+reference/fact value; raw screenshots, raw OCR, image paths/binary,
+authentication material, and PriceTrace UUIDs remain forbidden.
+
 `client_key` must not be copied into `merchant_sku`. A Product Candidate does
 not accept `merchant_sku`; a real printed/listed merchant SKU belongs only in
 the later standalone observation, and only when it was actually observed.

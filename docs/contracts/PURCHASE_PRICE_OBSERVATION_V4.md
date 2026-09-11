@@ -20,7 +20,11 @@ The payload must use `schema_version` `purchase-price-observation.v4`,
 `contract_version` `purchase-price.v4`, `source_app`
 `pricetrace_ocr_app`, and `transcription_status` `user_verified`.
 `verification_basis` is `source_evidence` or `manual_canonical_review`.
-`kind` is `retail_purchase` or `restaurant_purchase`.
+`purchase_kind` is required and is `retail`, `restaurant`, `other`, or
+`unknown`. `kind` remains an optional compatibility alias using
+`retail_purchase`, `restaurant_purchase`, `other`, or `unknown`; when both are
+present they must agree. Only `retail` and `restaurant` can create an
+observation. `other` and `unknown` preserve the source and lines only.
 
 ```json
 {
@@ -28,7 +32,7 @@ The payload must use `schema_version` `purchase-price-observation.v4`,
   "contract_version": "purchase-price.v4",
   "source_app": "pricetrace_ocr_app",
   "source_version": "order-capture-1",
-  "kind": "retail_purchase",
+  "purchase_kind": "retail",
   "verification_basis": "source_evidence",
   "transcription_status": "user_verified",
   "platform": { "name": "쿠팡", "code": "coupang" },
@@ -59,6 +63,13 @@ The payload must use `schema_version` `purchase-price-observation.v4`,
   "items": [
     {
       "line_key": "line-1",
+      "seller": {
+        "seller_name": "확인된 판매자",
+        "branch_name": null,
+        "source_namespace": "coupang-seller",
+        "source_code": "seller-123",
+        "business_kind": "retail"
+      },
       "product": {
         "client_key": "candidate-1",
         "product_name": "검증된 상품",
@@ -85,6 +96,13 @@ RPC rejects UUID-shaped values and identity-like keys before source or
 authority rows are written. `merchant_sku` remains an observed seller SKU and
 is never filled from `client_key`.
 
+`platform` is order-source provenance only. It is never copied into the
+top-level or line seller, store name, merchant ID, or product identity. A
+marketplace may omit the top-level seller and provide a separate seller on
+each line; a line seller overrides the top-level seller. An unknown seller
+blocks only that line, while the purchase source and other eligible lines are
+still accepted.
+
 ## Source and observation rules
 
 The migration adds four append-only, user-scoped tables:
@@ -103,9 +121,17 @@ stored as an instant while its written offset date remains the calendar date
 used for validation. If order date is known it is the observation date; payment
 date is the fallback only when order date is unknown.
 
+`order.status` and `payment.status` are normalized into `transactionState`:
+`paid`, `shipped`, or `delivered` (from either order or payment evidence) are
+`settled`; `cancelled`, `pending`, `unknown`, and `refunded` remain source-only.
+A refunded request never creates a new normal price observation and does not
+rewrite an earlier observation.
+
 An item creates an observation only when all of these are true:
 
 - the line price is `itemized` and at least one item price fact is known;
+- `purchase_kind` is `retail` or `restaurant`;
+- the transaction state is `settled`;
 - the seller is explicitly confirmed;
 - an order or payment date is known;
 - a retail line has a Product Candidate `product_client_key`;
@@ -118,17 +144,24 @@ whose seller/date/product authority is unresolved is retained as a
 PriceTrace observation. Unknown discount stays `NULL`; it is not converted to
 zero.
 
-The `seller` object may be omitted, `null`, or an all-null object when the
-seller is unknown. Partial seller identity is rejected.
+`other`/`unknown` purchase kinds and cancelled/pending/unknown/refunded
+transactions use the same source-only behavior, with `observationCreated:
+false` and `not_created` line results when item lines are present. Payment-only
+input has no lines and creates no observation.
 
-For `retail_purchase`, the Product Candidate authority projection must resolve
+The `seller` object may be omitted, `null`, or an all-null object when the
+seller is unknown. A line may carry its own `seller` object. Partial or
+ambiguous line seller facts are retained as source evidence but cannot become
+authority.
+
+For `retail`, the Product Candidate authority projection must resolve
 one active verified retail catalog/standard identity. PriceTrace then reuses or
 creates the existing user-owned store/product/store-product identity and writes
 the existing `price_observations` shape with `observation_kind =
 'standalone_purchase'`. The store fingerprint uses confirmed seller facts only;
 `platform` is excluded.
 
-For `restaurant_purchase`, the source must carry an exact existing, verified
+For `restaurant`, the source must carry an exact existing, verified
 `restaurant_locations` source namespace/code and an active, verified matching
 `restaurant_menus` authority. A menu line is matched by the confirmed seller,
 source location code, menu name, and serving label; a Product Candidate UUID or
@@ -142,6 +175,13 @@ This migration is additive. The V3 receipt RPCs and
 `ingest_verified_standalone_price_observation_v1` remain unchanged. V4 uses its
 own source, line, replay, and content-dedup tables and does not rewrite V3
 records.
+
+The RPC response separates source acceptance from observation creation:
+`purchaseSourceId` identifies the accepted private source, `lineResults` gives
+one result per retained line, `observationCreated` is true only when at least
+one line created an observation, and `observationIds` contains only the
+server-created observation IDs. `purchaseKind` and `transactionState` expose
+the normalized gates; they do not expose caller-supplied PriceTrace IDs.
 
 The same idempotency key with the same payload replays the stored response. The
 same payload with another key is content-deduplicated to the original source and

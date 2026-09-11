@@ -1,5 +1,6 @@
--- Run after 20260911140000_purchase_price_observation_v4.sql in a linked SQL
--- editor or local Supabase database. Fixture writes are rolled back.
+-- Run after 20260911140000_purchase_price_observation_v4.sql and
+-- 20260911150000_product_candidate_order_history_allowlist.sql in a linked
+-- SQL editor or local Supabase database. Fixture writes are rolled back.
 
 begin;
 
@@ -17,6 +18,21 @@ declare
   v_purchase jsonb;
   v_naver_purchase jsonb;
   v_unknown_seller jsonb;
+  v_unresolved_purchase jsonb;
+  v_unresolved_candidate jsonb;
+  v_unresolved_client_key text;
+  v_unresolved_product_name text;
+  v_other_purchase jsonb;
+  v_unknown_kind_purchase jsonb;
+  v_cancelled_purchase jsonb;
+  v_pending_purchase jsonb;
+  v_unknown_state_purchase jsonb;
+  v_refunded_purchase jsonb;
+  v_multi_seller_purchase jsonb;
+  v_multi_line jsonb;
+  v_multi_line_b jsonb;
+  v_multi_line_missing jsonb;
+  v_legacy_kind_purchase jsonb;
   v_payment_only jsonb;
   v_ambiguous_line jsonb;
   v_date_only jsonb;
@@ -26,6 +42,15 @@ declare
   v_first jsonb;
   v_naver jsonb;
   v_unknown jsonb;
+  v_unresolved_response jsonb;
+  v_other_response jsonb;
+  v_unknown_kind_response jsonb;
+  v_cancelled_response jsonb;
+  v_pending_response jsonb;
+  v_unknown_state_response jsonb;
+  v_refunded_response jsonb;
+  v_multi_response jsonb;
+  v_legacy_kind_response jsonb;
   v_payment_only_response jsonb;
   v_ambiguous_response jsonb;
   v_date_only_response jsonb;
@@ -37,6 +62,14 @@ declare
   v_source_id uuid;
   v_naver_source_id uuid;
   v_unknown_source_id uuid;
+  v_unresolved_source_id uuid;
+  v_other_source_id uuid;
+  v_unknown_kind_source_id uuid;
+  v_cancelled_source_id uuid;
+  v_pending_source_id uuid;
+  v_unknown_state_source_id uuid;
+  v_refunded_source_id uuid;
+  v_multi_source_id uuid;
   v_payment_only_source_id uuid;
   v_ambiguous_source_id uuid;
   v_date_only_source_id uuid;
@@ -65,6 +98,7 @@ declare
   v_source_count integer;
   v_observation_count integer;
   v_store_count integer;
+  v_platform_store_count integer;
   v_line_count integer;
   v_status text;
   v_reason text;
@@ -173,8 +207,8 @@ begin
         'scheme', 'ean', 'value', v_barcode
       )),
       'evidence', jsonb_build_array(jsonb_build_object(
-        'source_type', 'product_photo',
-        'source_ref', 'capture:v4-' || v_suffix,
+        'source_type', 'order_history',
+        'source_ref', 'order-history:v4-' || v_suffix,
         'field', 'product_name',
         'observed_value', v_product_name
       )),
@@ -198,7 +232,7 @@ begin
     'contract_version', 'purchase-price.v4',
     'source_app', 'pricetrace_ocr_app',
     'source_version', 'v4-test',
-    'kind', 'retail_purchase',
+    'purchase_kind', 'retail',
     'verification_basis', 'source_evidence',
     'transcription_status', 'user_verified',
     'platform', jsonb_build_object('name', '쿠팡', 'code', 'coupang'),
@@ -249,6 +283,7 @@ begin
   );
   v_source_id := (v_first ->> 'purchaseSourceId')::uuid;
   if v_first ->> 'observationCreated' <> 'true'
+    or v_first ->> 'purchaseKind' <> 'retail'
     or v_first ->> 'platform' <> '쿠팡'
     or (v_first ->> 'seller') <> ('__v4-confirmed-seller-' || v_suffix)
     or v_first ->> 'orderedOn' <> '2026-09-11'
@@ -322,6 +357,10 @@ begin
   from public.stores
   where user_id = v_user_id
     and merchant_name = '__v4-confirmed-seller-' || v_suffix;
+  select count(*) into v_platform_store_count
+  from public.stores
+  where user_id = v_user_id
+    and merchant_name = '쿠팡';
 
   v_naver_purchase := jsonb_set(
     jsonb_set(v_purchase, '{platform,name}', to_jsonb('네이버쇼핑'::text)),
@@ -424,12 +463,113 @@ begin
   from public.stores
   where user_id = v_user_id
     and merchant_name = '__v4-confirmed-seller-' || v_suffix;
+  select count(*) into v_source_count
+  from public.stores
+  where user_id = v_user_id
+    and merchant_name = '쿠팡';
   if v_status <> 'not_created'
     or v_reason <> 'seller_unknown'
     or v_line_count <> v_store_count
+    or v_source_count <> v_platform_store_count
   then
     raise exception 'seller-unknown source line/store safety failed';
   end if;
+
+  -- A new candidate without a verified catalog authority may be ingested as
+  -- private source evidence, but it must not unlock a purchase observation.
+  v_unresolved_client_key := 'v4-unresolved-product-' || v_suffix;
+  v_unresolved_product_name := '__v4-unresolved-product-' || v_suffix;
+  v_unresolved_candidate := jsonb_build_object(
+      'schema_version', 'PRICETRACE_PRODUCT_CANDIDATE',
+      'contract_version', 'product-candidate.v1',
+      'source_app', 'pricetrace_ocr_app',
+      'source_version', 'v4-test',
+      'candidate_type', 'retail_product',
+      'client_key', v_unresolved_client_key,
+      'product_name', v_unresolved_product_name,
+      'brand', null,
+      'manufacturer', null,
+      'specification', null,
+      'content_amount', null,
+      'content_unit', null,
+      'package_count', null,
+      'variant', null,
+      'identifiers', '[]'::jsonb,
+      'evidence', jsonb_build_array(jsonb_build_object(
+        'source_type', 'order_history',
+        'source_ref', 'order-history:unresolved-' || v_suffix,
+        'field', 'product_name',
+        'observed_value', v_unresolved_product_name
+      )),
+      'provenance', jsonb_build_object(
+        'extraction_method', 'manual',
+        'source_revision', 'v4-unresolved-test'
+      )
+  );
+  v_candidate_response := public.submit_product_candidate_v1(
+    'v4-unresolved-candidate-' || v_suffix,
+    v_unresolved_candidate
+  );
+  if v_candidate_response ->> 'outcome' <> 'private_unverified_candidate_created'
+    or v_candidate_response ->> 'catalogProductId' is not null
+    or v_candidate_response ->> 'standardProductId' is not null
+  then
+    raise exception 'unresolved Product Candidate was promoted to authority: %', v_candidate_response;
+  end if;
+  v_unresolved_purchase := jsonb_set(
+    v_purchase,
+    '{order,order_reference}',
+    to_jsonb(('unresolved-candidate-order-' || v_suffix)::text)
+  );
+  v_unresolved_purchase := jsonb_set(
+    v_unresolved_purchase,
+    '{items,0,product,client_key}',
+    to_jsonb(v_unresolved_client_key)
+  );
+  v_unresolved_purchase := jsonb_set(
+    v_unresolved_purchase,
+    '{items,0,product,product_name}',
+    to_jsonb(v_unresolved_product_name)
+  );
+  v_unresolved_response := public.ingest_verified_purchase_price_observation_v1(
+    'v4-unresolved-purchase-' || v_suffix,
+    v_unresolved_purchase
+  );
+  v_unresolved_source_id := (v_unresolved_response ->> 'purchaseSourceId')::uuid;
+  select line.observation_status, line.observation_reason
+  into v_status, v_reason
+  from public.purchase_price_source_lines as line
+  where line.user_id = v_user_id
+    and line.purchase_source_id = v_unresolved_source_id
+    and line.line_ordinal = 1;
+  if v_unresolved_response ->> 'observationCreated' <> 'false'
+    or v_status <> 'not_created'
+    or v_reason <> 'product_candidate_authority_unresolved'
+  then
+    raise exception 'unresolved Product Candidate created a price observation: %', v_unresolved_response;
+  end if;
+  select count(*)
+  into v_source_count
+  from public.product_identity_candidates as candidate
+  where candidate.user_id = v_user_id
+    and candidate.id = (v_candidate_response ->> 'candidateId')::uuid
+    and candidate.evidence @> jsonb_build_array(jsonb_build_object(
+      'source_type', 'order_history',
+      'field', 'product_name',
+      'observed_value', v_unresolved_product_name
+    ));
+  if v_source_count <> 1 then
+    raise exception 'order_history evidence was not preserved on the candidate source: %', v_candidate_response;
+  end if;
+  begin
+    perform public.submit_product_candidate_v1(
+      'v4-order-history-identity-field-' || v_suffix,
+      jsonb_set(v_unresolved_candidate, '{evidence,0,field}', '"seller_name"'::jsonb)
+    );
+    raise exception 'order_history accepted a seller identity fact';
+  exception when sqlstate '22023' then
+    null;
+  end;
 
   v_payment_only := v_unknown_seller - 'items';
   v_payment_only_response := public.ingest_verified_purchase_price_observation_v1(
@@ -451,6 +591,316 @@ begin
     and line.purchase_source_id = v_payment_only_source_id;
   if v_observation_count <> 0 then
     raise exception 'payment-only order created a PriceTrace observation';
+  end if;
+
+  -- Explicit purchase_kind semantics: non-observable kinds preserve source
+  -- lines even when the order is otherwise paid and itemized.
+  v_other_purchase := jsonb_set(v_purchase, '{purchase_kind}', '"other"'::jsonb);
+  v_other_purchase := jsonb_set(
+    v_other_purchase,
+    '{order,order_reference}',
+    to_jsonb(('other-kind-order-' || v_suffix)::text)
+  );
+  v_other_response := public.ingest_verified_purchase_price_observation_v1(
+    'v4-other-kind-' || v_suffix,
+    v_other_purchase
+  );
+  v_other_source_id := (v_other_response ->> 'purchaseSourceId')::uuid;
+  select line.observation_status, line.observation_reason
+  into v_status, v_reason
+  from public.purchase_price_source_lines as line
+  where line.user_id = v_user_id
+    and line.purchase_source_id = v_other_source_id
+    and line.line_ordinal = 1;
+  if v_other_response ->> 'purchaseKind' <> 'other'
+    or v_other_response ->> 'kind' <> 'other'
+    or v_other_response ->> 'transactionState' <> 'settled'
+    or v_other_response ->> 'observationCreated' <> 'false'
+    or v_status <> 'not_created'
+    or v_reason <> 'purchase_kind_not_observable'
+  then
+    raise exception 'other purchase kind created an observation: %', v_other_response;
+  end if;
+
+  v_unknown_kind_purchase := jsonb_set(v_purchase, '{purchase_kind}', '"unknown"'::jsonb);
+  v_unknown_kind_purchase := jsonb_set(
+    v_unknown_kind_purchase,
+    '{order,order_reference}',
+    to_jsonb(('unknown-kind-order-' || v_suffix)::text)
+  );
+  v_unknown_kind_response := public.ingest_verified_purchase_price_observation_v1(
+    'v4-unknown-kind-' || v_suffix,
+    v_unknown_kind_purchase
+  );
+  v_unknown_kind_source_id := (v_unknown_kind_response ->> 'purchaseSourceId')::uuid;
+  select line.observation_status, line.observation_reason
+  into v_status, v_reason
+  from public.purchase_price_source_lines as line
+  where line.user_id = v_user_id
+    and line.purchase_source_id = v_unknown_kind_source_id
+    and line.line_ordinal = 1;
+  if v_unknown_kind_response ->> 'purchaseKind' <> 'unknown'
+    or v_unknown_kind_response ->> 'kind' <> 'unknown'
+    or v_unknown_kind_response ->> 'observationCreated' <> 'false'
+    or v_status <> 'not_created'
+    or v_reason <> 'purchase_kind_not_observable'
+  then
+    raise exception 'unknown purchase kind created an observation: %', v_unknown_kind_response;
+  end if;
+
+  -- Settlement is a separate gate from item price and seller authority.
+  v_cancelled_purchase := jsonb_set(
+    v_purchase,
+    '{order,status}',
+    '"cancelled"'::jsonb
+  );
+  v_cancelled_purchase := jsonb_set(
+    v_cancelled_purchase,
+    '{order,order_reference}',
+    to_jsonb(('cancelled-order-' || v_suffix)::text)
+  );
+  v_cancelled_response := public.ingest_verified_purchase_price_observation_v1(
+    'v4-cancelled-' || v_suffix,
+    v_cancelled_purchase
+  );
+  v_cancelled_source_id := (v_cancelled_response ->> 'purchaseSourceId')::uuid;
+  select line.observation_status, line.observation_reason
+  into v_status, v_reason
+  from public.purchase_price_source_lines as line
+  where line.user_id = v_user_id
+    and line.purchase_source_id = v_cancelled_source_id
+    and line.line_ordinal = 1;
+  if v_cancelled_response ->> 'transactionState' <> 'cancelled'
+    or v_cancelled_response ->> 'observationCreated' <> 'false'
+    or v_status <> 'not_created'
+    or v_reason <> 'transaction_cancelled'
+  then
+    raise exception 'cancelled transaction created an observation: %', v_cancelled_response;
+  end if;
+
+  v_pending_purchase := jsonb_set(
+    v_purchase,
+    '{order,status}',
+    '"pending"'::jsonb
+  );
+  v_pending_purchase := jsonb_set(
+    v_pending_purchase,
+    '{payment,status}',
+    '"pending"'::jsonb
+  );
+  v_pending_purchase := jsonb_set(
+    v_pending_purchase,
+    '{order,order_reference}',
+    to_jsonb(('pending-order-' || v_suffix)::text)
+  );
+  v_pending_response := public.ingest_verified_purchase_price_observation_v1(
+    'v4-pending-' || v_suffix,
+    v_pending_purchase
+  );
+  v_pending_source_id := (v_pending_response ->> 'purchaseSourceId')::uuid;
+  select line.observation_status, line.observation_reason
+  into v_status, v_reason
+  from public.purchase_price_source_lines as line
+  where line.user_id = v_user_id
+    and line.purchase_source_id = v_pending_source_id
+    and line.line_ordinal = 1;
+  if v_pending_response ->> 'transactionState' <> 'pending'
+    or v_pending_response ->> 'observationCreated' <> 'false'
+    or v_status <> 'not_created'
+    or v_reason <> 'transaction_pending'
+  then
+    raise exception 'pending transaction created an observation: %', v_pending_response;
+  end if;
+
+  v_unknown_state_purchase := jsonb_set(
+    v_purchase,
+    '{order,status}',
+    '"unknown"'::jsonb
+  );
+  v_unknown_state_purchase := jsonb_set(
+    v_unknown_state_purchase,
+    '{payment,status}',
+    '"unknown"'::jsonb
+  );
+  v_unknown_state_purchase := jsonb_set(
+    v_unknown_state_purchase,
+    '{order,order_reference}',
+    to_jsonb(('unknown-state-order-' || v_suffix)::text)
+  );
+  v_unknown_state_response := public.ingest_verified_purchase_price_observation_v1(
+    'v4-unknown-state-' || v_suffix,
+    v_unknown_state_purchase
+  );
+  v_unknown_state_source_id := (v_unknown_state_response ->> 'purchaseSourceId')::uuid;
+  select line.observation_status, line.observation_reason
+  into v_status, v_reason
+  from public.purchase_price_source_lines as line
+  where line.user_id = v_user_id
+    and line.purchase_source_id = v_unknown_state_source_id
+    and line.line_ordinal = 1;
+  if v_unknown_state_response ->> 'transactionState' <> 'unknown'
+    or v_unknown_state_response ->> 'observationCreated' <> 'false'
+    or v_status <> 'not_created'
+    or v_reason <> 'transaction_unknown'
+  then
+    raise exception 'unknown transaction state created an observation: %', v_unknown_state_response;
+  end if;
+
+  v_refunded_purchase := jsonb_set(
+    v_purchase,
+    '{order,status}',
+    '"refunded"'::jsonb
+  );
+  v_refunded_purchase := jsonb_set(
+    v_refunded_purchase,
+    '{payment,status}',
+    '"refunded"'::jsonb
+  );
+  v_refunded_purchase := jsonb_set(
+    v_refunded_purchase,
+    '{order,order_reference}',
+    to_jsonb(('refunded-order-' || v_suffix)::text)
+  );
+  v_refunded_response := public.ingest_verified_purchase_price_observation_v1(
+    'v4-refunded-' || v_suffix,
+    v_refunded_purchase
+  );
+  v_refunded_source_id := (v_refunded_response ->> 'purchaseSourceId')::uuid;
+  select line.observation_status, line.observation_reason
+  into v_status, v_reason
+  from public.purchase_price_source_lines as line
+  where line.user_id = v_user_id
+    and line.purchase_source_id = v_refunded_source_id
+    and line.line_ordinal = 1;
+  if v_refunded_response ->> 'transactionState' <> 'refunded'
+    or v_refunded_response ->> 'observationCreated' <> 'false'
+    or v_status <> 'not_created'
+    or v_reason <> 'transaction_refunded'
+  then
+    raise exception 'refunded transaction created a new observation: %', v_refunded_response;
+  end if;
+
+  -- Marketplace line sellers are authoritative per line. The third line has
+  -- no seller and must remain source-only without rejecting the first two.
+  v_multi_seller_purchase := v_purchase - 'seller';
+  v_multi_seller_purchase := jsonb_set(
+    v_multi_seller_purchase,
+    '{order,order_reference}',
+    to_jsonb(('multi-seller-order-' || v_suffix)::text)
+  );
+  v_multi_line := jsonb_set(
+    v_purchase -> 'items' -> 0,
+    '{seller}',
+    jsonb_build_object(
+      'seller_name', '__v4-multi-seller-a-' || v_suffix,
+      'branch_name', null,
+      'source_namespace', 'marketplace-seller',
+      'source_code', 'multi-a-' || v_suffix,
+      'business_kind', 'retail'
+    ),
+    true
+  );
+  v_multi_line_b := jsonb_set(
+    jsonb_set(
+      v_purchase -> 'items' -> 0,
+      '{line_key}',
+      to_jsonb(('multi-line-b-' || v_suffix)::text)
+    ),
+    '{seller}',
+    jsonb_build_object(
+      'seller_name', '__v4-multi-seller-b-' || v_suffix,
+      'branch_name', null,
+      'source_namespace', 'marketplace-seller',
+      'source_code', 'multi-b-' || v_suffix,
+      'business_kind', 'retail'
+    ),
+    true
+  );
+  v_multi_line_b := jsonb_set(
+    v_multi_line_b,
+    '{product,merchant_sku}',
+    to_jsonb(('sku-multi-b-' || v_suffix)::text)
+  );
+  v_multi_line_missing := jsonb_set(
+    jsonb_set(
+      v_purchase -> 'items' -> 0,
+      '{line_key}',
+      to_jsonb(('multi-line-missing-' || v_suffix)::text)
+    ),
+    '{product,merchant_sku}',
+    to_jsonb(('sku-multi-missing-' || v_suffix)::text)
+  );
+  v_multi_seller_purchase := jsonb_set(
+    v_multi_seller_purchase,
+    '{items}',
+    jsonb_build_array(v_multi_line, v_multi_line_b, v_multi_line_missing),
+    true
+  );
+  v_multi_response := public.ingest_verified_purchase_price_observation_v1(
+    'v4-multi-seller-' || v_suffix,
+    v_multi_seller_purchase
+  );
+  v_multi_source_id := (v_multi_response ->> 'purchaseSourceId')::uuid;
+  select count(*) filter (where line.observation_status = 'created'),
+    count(*) filter (where line.observation_status = 'not_created'),
+    count(distinct line.line_seller_source_code),
+    min(line.observation_reason) filter (where line.observation_status = 'not_created')
+  into v_observation_count, v_line_count, v_source_count, v_reason
+  from public.purchase_price_source_lines as line
+  where line.user_id = v_user_id
+    and line.purchase_source_id = v_multi_source_id;
+  select source.seller_name, source.seller_status
+  into v_status, v_observation_kind
+  from public.purchase_price_sources as source
+  where source.user_id = v_user_id
+    and source.id = v_multi_source_id;
+  if v_multi_response ->> 'observationCreated' <> 'true'
+    or v_multi_response ->> 'sellerConfirmed' <> 'false'
+    or jsonb_array_length(v_multi_response -> 'lineResults') <> 3
+    or (v_multi_response -> 'lineResults' -> 0 ->> 'seller')
+      <> ('__v4-multi-seller-a-' || v_suffix)
+    or (v_multi_response -> 'lineResults' -> 1 ->> 'seller')
+      <> ('__v4-multi-seller-b-' || v_suffix)
+    or (v_multi_response -> 'lineResults' -> 2 ->> 'observationCreated') <> 'false'
+    or (v_multi_response -> 'lineResults' -> 2 ->> 'reason') <> 'seller_unknown'
+    or v_observation_count <> 2
+    or v_line_count <> 1
+    or v_source_count <> 2
+    or v_reason <> 'seller_unknown'
+    or v_status is not null
+    or v_observation_kind <> 'unknown'
+  then
+    raise exception 'multi-seller line isolation failed: %', v_multi_response;
+  end if;
+  select count(*) into v_store_count
+  from public.stores as store
+  where store.user_id = v_user_id
+    and store.merchant_name in (
+      '__v4-multi-seller-a-' || v_suffix,
+      '__v4-multi-seller-b-' || v_suffix
+    );
+  if v_store_count <> 2 then
+    raise exception 'multi-seller retail authorities were not created per seller';
+  end if;
+
+  -- Keep the first additive V4 draft readable while making purchase_kind
+  -- canonical: an old kind-only caller still resolves to the same semantics.
+  v_legacy_kind_purchase := (v_purchase - 'purchase_kind')
+    || jsonb_build_object('kind', 'retail_purchase');
+  v_legacy_kind_purchase := jsonb_set(
+    v_legacy_kind_purchase,
+    '{order,order_reference}',
+    to_jsonb(('legacy-kind-order-' || v_suffix)::text)
+  );
+  v_legacy_kind_response := public.ingest_verified_purchase_price_observation_v1(
+    'v4-legacy-kind-' || v_suffix,
+    v_legacy_kind_purchase
+  );
+  if v_legacy_kind_response ->> 'kind' <> 'retail_purchase'
+    or v_legacy_kind_response ->> 'purchaseKind' <> 'retail'
+    or v_legacy_kind_response ->> 'observationCreated' <> 'true'
+  then
+    raise exception 'legacy V4 kind compatibility failed: %', v_legacy_kind_response;
   end if;
 
   v_ambiguous_line := jsonb_set(
@@ -615,7 +1065,7 @@ begin
     'contract_version', 'purchase-price.v4',
     'source_app', 'pricetrace_ocr_app',
     'source_version', 'v4-test',
-    'kind', 'restaurant_purchase',
+    'purchase_kind', 'restaurant',
     'verification_basis', 'source_evidence',
     'transcription_status', 'user_verified',
     'platform', jsonb_build_object('name', '배달앱', 'code', 'delivery-app'),
@@ -662,6 +1112,7 @@ begin
   );
   v_delivery_source_id := (v_delivery_response ->> 'purchaseSourceId')::uuid;
   if v_delivery_response ->> 'kind' <> 'restaurant_purchase'
+    or v_delivery_response ->> 'purchaseKind' <> 'restaurant'
     or v_delivery_response ->> 'platform' <> '배달앱'
     or v_delivery_response ->> 'observationCreated' <> 'true'
   then
@@ -785,12 +1236,20 @@ begin
 
   if has_table_privilege('anon', 'public.purchase_price_sources', 'select')
     or has_table_privilege('anon', 'public.purchase_price_source_lines', 'select')
+    or has_table_privilege('anon', 'public.purchase_price_observation_ingestion_contents', 'select')
+    or has_table_privilege('anon', 'public.purchase_price_observation_ingestion_requests', 'select')
     or has_table_privilege('authenticated', 'public.purchase_price_sources', 'insert')
     or has_table_privilege('authenticated', 'public.purchase_price_sources', 'update')
     or has_table_privilege('authenticated', 'public.purchase_price_sources', 'delete')
     or has_table_privilege('authenticated', 'public.purchase_price_source_lines', 'insert')
     or has_table_privilege('authenticated', 'public.purchase_price_source_lines', 'update')
     or has_table_privilege('authenticated', 'public.purchase_price_source_lines', 'delete')
+    or has_table_privilege('authenticated', 'public.purchase_price_observation_ingestion_contents', 'insert')
+    or has_table_privilege('authenticated', 'public.purchase_price_observation_ingestion_contents', 'update')
+    or has_table_privilege('authenticated', 'public.purchase_price_observation_ingestion_contents', 'delete')
+    or has_table_privilege('authenticated', 'public.purchase_price_observation_ingestion_requests', 'insert')
+    or has_table_privilege('authenticated', 'public.purchase_price_observation_ingestion_requests', 'update')
+    or has_table_privilege('authenticated', 'public.purchase_price_observation_ingestion_requests', 'delete')
     or has_function_privilege(
       'anon',
       'public.ingest_verified_purchase_price_observation_v1(text,jsonb)',

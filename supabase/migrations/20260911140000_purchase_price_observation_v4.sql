@@ -17,8 +17,12 @@ create table public.purchase_price_sources (
     check (source_app = 'pricetrace_ocr_app'),
   source_version text
     check (source_version is null or length(btrim(source_version)) between 1 and 100),
+  -- `kind` keeps the legacy wire labels for callers that already adopted the
+  -- first V4 draft. `purchase_kind` is the canonical V4 semantic field.
   kind text not null
-    check (kind in ('retail_purchase', 'restaurant_purchase')),
+    check (kind in ('retail_purchase', 'restaurant_purchase', 'other', 'unknown')),
+  purchase_kind text not null
+    check (purchase_kind in ('retail', 'restaurant', 'other', 'unknown')),
   platform_name text not null
     check (length(btrim(platform_name)) between 1 and 100),
   platform_code text
@@ -26,11 +30,11 @@ create table public.purchase_price_sources (
   order_reference text
     check (order_reference is null or length(btrim(order_reference)) between 1 and 200),
   order_status text not null
-    check (order_status in ('ordered', 'paid', 'shipped', 'delivered', 'cancelled', 'refunded', 'unknown')),
+    check (order_status in ('ordered', 'pending', 'paid', 'shipped', 'delivered', 'cancelled', 'refunded', 'unknown')),
   ordered_on date,
   ordered_at_exact timestamptz,
   payment_status text not null
-    check (payment_status in ('pending', 'paid', 'refunded', 'unknown')),
+    check (payment_status in ('pending', 'paid', 'cancelled', 'refunded', 'unknown')),
   payment_method text not null
     check (payment_method in ('card', 'bank_transfer', 'mobile_payment', 'points', 'mixed', 'unknown')),
   paid_on date,
@@ -69,9 +73,18 @@ create table public.purchase_price_sources (
     check (source_fingerprint ~ '^[0-9a-f]{64}$'),
   source_payload jsonb not null
     check (jsonb_typeof(source_payload) = 'object'),
+  transaction_state text not null
+    check (transaction_state in ('settled', 'pending', 'cancelled', 'refunded', 'unknown')),
   created_at timestamptz not null default now(),
   unique (user_id, id),
   unique (user_id, source_fingerprint),
+  check (
+    (
+      (purchase_kind = 'retail' and kind = 'retail_purchase')
+      or (purchase_kind = 'restaurant' and kind = 'restaurant_purchase')
+      or (purchase_kind in ('other', 'unknown') and kind = purchase_kind)
+    )
+  ),
   check (
     (
       seller_status = 'confirmed'
@@ -93,12 +106,16 @@ comment on table public.purchase_price_sources is
   'Private sanitized v4 order/payment source. platform is evidence source metadata and is never a seller/store identity.';
 comment on column public.purchase_price_sources.platform_name is
   'Order source platform such as Coupang, Naver Shopping, or a delivery app. It must not be copied into seller_name.';
+comment on column public.purchase_price_sources.purchase_kind is
+  'Canonical purchase semantics. Only retail and restaurant can create observations; other and unknown preserve source facts only.';
 comment on column public.purchase_price_sources.seller_name is
   'Explicitly confirmed seller/merchant. NULL means seller was not established and cannot create a store observation.';
 comment on column public.purchase_price_sources.ordered_on is
   'Calendar date of ordering. It is independent from paid_on and remains NULL when unknown.';
 comment on column public.purchase_price_sources.paid_on is
   'Calendar date of payment. It is independent from ordered_on and remains NULL when unknown.';
+comment on column public.purchase_price_sources.transaction_state is
+  'Normalized settlement gate. Only settled transactions can create observations; cancelled, pending, refunded, and unknown remain source-only.';
 comment on column public.purchase_price_sources.source_payload is
   'Validated source facts only. Raw OCR, images, payment instrument details, and PriceTrace identity fields are rejected by the RPC.';
 
@@ -125,6 +142,22 @@ create table public.purchase_price_source_lines (
         and product_client_key !~* '^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$'
       )
     ),
+  line_seller_status text not null default 'unknown'
+    check (line_seller_status in ('confirmed', 'unknown')),
+  line_seller_name text
+    check (line_seller_name is null or length(btrim(line_seller_name)) between 1 and 500),
+  line_seller_branch_name text
+    check (line_seller_branch_name is null or length(btrim(line_seller_branch_name)) between 1 and 300),
+  line_seller_source_namespace text
+    check (line_seller_source_namespace is null or length(btrim(line_seller_source_namespace)) between 1 and 200),
+  line_seller_source_code text
+    check (line_seller_source_code is null or length(btrim(line_seller_source_code)) between 1 and 300),
+  line_seller_business_kind text
+    check (line_seller_business_kind is null or line_seller_business_kind in (
+      'retail', 'food_service', 'transport', 'accommodation', 'healthcare',
+      'professional_service', 'utility', 'government', 'financial',
+      'marketplace', 'other', 'unknown'
+    )),
   product_name text not null
     check (length(btrim(product_name)) between 1 and 500),
   option_text text
@@ -188,6 +221,9 @@ create table public.purchase_price_source_lines (
     (
       observation_status = 'created'
       and observation_reason is null
+      and line_seller_status = 'confirmed'
+      and line_seller_name is not null
+      and (line_seller_source_namespace is null) = (line_seller_source_code is null)
       and catalog_product_id is not null
       and standard_product_id is not null
       and (
@@ -214,6 +250,21 @@ create table public.purchase_price_source_lines (
       and catalog_product_id is null
       and standard_product_id is null
     )
+  ),
+  check (
+    (
+      line_seller_status = 'confirmed'
+      and line_seller_name is not null
+      and (line_seller_source_namespace is null) = (line_seller_source_code is null)
+    )
+    or (
+      line_seller_status = 'unknown'
+      and line_seller_name is null
+      and line_seller_branch_name is null
+      and line_seller_source_namespace is null
+      and line_seller_source_code is null
+      and line_seller_business_kind is null
+    )
   )
 );
 
@@ -221,6 +272,8 @@ comment on table public.purchase_price_source_lines is
   'Sanitized v4 order lines. Lines without an established seller, date, Product Candidate authority, or item price remain source evidence only.';
 comment on column public.purchase_price_source_lines.product_client_key is
   'Opaque OCR-App Product Candidate reference. It is not a merchant SKU or a PriceTrace UUID.';
+comment on column public.purchase_price_source_lines.line_seller_name is
+  'Effective seller for this line. It uses the line seller when explicitly supplied, otherwise the top-level seller; NULL means this line cannot create an observation.';
 comment on column public.purchase_price_source_lines.observation_status is
   'Only created lines are connected to a server-owned retail price observation or restaurant manual observation; payment-only and ambiguous lines are explicitly not observations.';
 
@@ -364,6 +417,9 @@ declare
   v_existing public.purchase_price_observation_ingestion_requests%rowtype;
   v_duplicate public.purchase_price_observation_ingestion_contents%rowtype;
   v_kind text;
+  v_purchase_kind text;
+  v_legacy_kind text;
+  v_transaction_state text;
   v_verification_basis text;
   v_source_version text;
   v_platform jsonb;
@@ -400,6 +456,14 @@ declare
   v_seller_source_namespace text;
   v_seller_source_code text;
   v_seller_business_kind text;
+  v_line_seller jsonb;
+  v_effective_seller jsonb;
+  v_effective_seller_status text;
+  v_effective_seller_name text;
+  v_effective_seller_branch_name text;
+  v_effective_seller_source_namespace text;
+  v_effective_seller_source_code text;
+  v_effective_seller_business_kind text;
   v_source_url text;
   v_note text;
   v_source_id uuid;
@@ -527,7 +591,7 @@ begin
     from pg_catalog.jsonb_object_keys(p_purchase) as field_name
     where field_name not in (
       'schema_version', 'contract_version', 'source_app', 'source_version',
-      'kind', 'verification_basis', 'transcription_status', 'platform',
+      'kind', 'purchase_kind', 'verification_basis', 'transcription_status', 'platform',
       'seller', 'order', 'payment', 'items', 'source_url', 'note'
     )
   ) then
@@ -538,7 +602,6 @@ begin
   if coalesce(p_purchase ->> 'schema_version', '') <> 'purchase-price-observation.v4'
     or coalesce(p_purchase ->> 'contract_version', '') <> 'purchase-price.v4'
     or coalesce(p_purchase ->> 'source_app', '') <> 'pricetrace_ocr_app'
-    or coalesce(p_purchase ->> 'kind', '') not in ('retail_purchase', 'restaurant_purchase')
     or coalesce(p_purchase ->> 'verification_basis', '') not in (
       'source_evidence', 'manual_canonical_review'
     )
@@ -548,7 +611,58 @@ begin
       using errcode = '22023';
   end if;
 
-  v_kind := p_purchase ->> 'kind';
+  if p_purchase ? 'purchase_kind'
+    and pg_catalog.jsonb_typeof(p_purchase -> 'purchase_kind') not in ('string', 'null')
+  then
+    raise exception 'purchase_kind must be a string or null' using errcode = '22023';
+  end if;
+  if p_purchase ? 'kind'
+    and pg_catalog.jsonb_typeof(p_purchase -> 'kind') not in ('string', 'null')
+  then
+    raise exception 'kind must be a string or null' using errcode = '22023';
+  end if;
+  v_purchase_kind := nullif(pg_catalog.btrim(p_purchase ->> 'purchase_kind'), '');
+  v_legacy_kind := nullif(pg_catalog.btrim(p_purchase ->> 'kind'), '');
+  if v_purchase_kind is not null
+    and v_purchase_kind not in ('retail', 'restaurant', 'other', 'unknown')
+  then
+    raise exception 'purchase_kind must be retail, restaurant, other, or unknown'
+      using errcode = '22023';
+  end if;
+  if v_legacy_kind is not null
+    and v_legacy_kind not in (
+      'retail_purchase', 'restaurant_purchase', 'other', 'unknown'
+    )
+  then
+    raise exception 'kind is not a supported purchase-price v4 compatibility value'
+      using errcode = '22023';
+  end if;
+  if v_purchase_kind is null then
+    v_purchase_kind := case v_legacy_kind
+      when 'retail_purchase' then 'retail'
+      when 'restaurant_purchase' then 'restaurant'
+      when 'other' then 'other'
+      when 'unknown' then 'unknown'
+      else null
+    end;
+  elsif v_legacy_kind is not null
+    and v_legacy_kind is distinct from case v_purchase_kind
+      when 'retail' then 'retail_purchase'
+      when 'restaurant' then 'restaurant_purchase'
+      else v_purchase_kind
+    end
+  then
+    raise exception 'purchase_kind and kind must describe the same purchase semantics'
+      using errcode = '22023';
+  end if;
+  if v_purchase_kind is null then
+    raise exception 'purchase_kind is required' using errcode = '22023';
+  end if;
+  v_kind := case v_purchase_kind
+    when 'retail' then 'retail_purchase'
+    when 'restaurant' then 'restaurant_purchase'
+    else v_purchase_kind
+  end;
   v_verification_basis := p_purchase ->> 'verification_basis';
   if p_purchase ? 'source_version'
     and pg_catalog.jsonb_typeof(p_purchase -> 'source_version') not in ('string', 'null')
@@ -623,7 +737,7 @@ begin
   if v_order_reference is not null and length(v_order_reference) > 200 then
     raise exception 'order_reference is too long' using errcode = '22023';
   end if;
-  if v_order_status not in ('ordered', 'paid', 'shipped', 'delivered', 'cancelled', 'refunded', 'unknown') then
+  if v_order_status not in ('ordered', 'pending', 'paid', 'shipped', 'delivered', 'cancelled', 'refunded', 'unknown') then
     raise exception 'order status is invalid' using errcode = '22023';
   end if;
   if v_currency is distinct from 'KRW' then
@@ -701,7 +815,7 @@ begin
   end if;
   v_payment_status := coalesce(nullif(pg_catalog.btrim(v_payment ->> 'status'), ''), 'unknown');
   v_payment_method := coalesce(nullif(pg_catalog.btrim(v_payment ->> 'method'), ''), 'unknown');
-  if v_payment_status not in ('pending', 'paid', 'refunded', 'unknown') then
+  if v_payment_status not in ('pending', 'paid', 'cancelled', 'refunded', 'unknown') then
     raise exception 'payment status is invalid' using errcode = '22023';
   end if;
   if v_payment_method not in ('card', 'bank_transfer', 'mobile_payment', 'points', 'mixed', 'unknown') then
@@ -796,6 +910,19 @@ begin
   v_payment_items_subtotal_int := case when v_payment_items_subtotal is null then null else v_payment_items_subtotal::integer end;
   v_payment_shipping_fee_int := case when v_payment_shipping_fee is null then null else v_payment_shipping_fee::integer end;
   v_payment_discount_int := case when v_payment_discount is null then null else v_payment_discount::integer end;
+
+  -- A terminal negative state wins over a positive payment signal. A paid
+  -- order/payment is the minimum settlement proof; ordered/pending and
+  -- unknown states remain source-only. Refunded input is deliberately not a
+  -- new normal price observation.
+  v_transaction_state := case
+    when v_order_status = 'refunded' or v_payment_status = 'refunded' then 'refunded'
+    when v_order_status = 'cancelled' or v_payment_status = 'cancelled' then 'cancelled'
+    when v_order_status in ('paid', 'shipped', 'delivered')
+      or v_payment_status = 'paid' then 'settled'
+    when v_order_status = 'unknown' or v_payment_status = 'unknown' then 'unknown'
+    else 'pending'
+  end;
 
   if p_purchase -> 'seller' is null
     or pg_catalog.jsonb_typeof(p_purchase -> 'seller') = 'null'
@@ -911,16 +1038,16 @@ begin
 
   insert into public.purchase_price_sources (
     user_id, schema_version, contract_version, source_app, source_version,
-    kind, platform_name, platform_code, order_reference, order_status,
+    kind, purchase_kind, platform_name, platform_code, order_reference, order_status,
     ordered_on, ordered_at_exact, payment_status, payment_method, paid_on,
     paid_at_exact, currency, payment_total_price_krw,
     payment_items_subtotal_krw, payment_shipping_fee_krw, payment_discount_krw,
     seller_status, seller_name, seller_branch_name, seller_source_namespace,
     seller_source_code, seller_business_kind, source_url, note,
-    source_fingerprint, source_payload, created_at
+    source_fingerprint, source_payload, transaction_state, created_at
   ) values (
     v_user_id, 'purchase-price-observation.v4', 'purchase-price.v4',
-    'pricetrace_ocr_app', v_source_version, v_kind, v_platform_name,
+    'pricetrace_ocr_app', v_source_version, v_kind, v_purchase_kind, v_platform_name,
     v_platform_code, v_order_reference, v_order_status, v_ordered_on,
     v_ordered_at_exact, v_payment_status, v_payment_method, v_paid_on,
     v_paid_at_exact, v_currency, v_payment_total_int,
@@ -928,7 +1055,7 @@ begin
     v_payment_discount_int, v_seller_status, v_seller_name,
     v_seller_branch_name, v_seller_source_namespace, v_seller_source_code,
     v_seller_business_kind, v_source_url, v_note, v_fingerprint, p_purchase,
-    v_now
+    v_transaction_state, v_now
   ) returning id into v_source_id;
 
   for v_line_entry in
@@ -945,7 +1072,7 @@ begin
       from pg_catalog.jsonb_object_keys(v_line) as field_name
       where field_name not in (
         'line_key', 'product', 'option_text', 'price_status', 'quantity',
-        'unit_price', 'gross_price', 'discount', 'net_price'
+        'unit_price', 'gross_price', 'discount', 'net_price', 'seller'
       )
     ) then
       raise exception 'purchase line contains unsupported fields'
@@ -969,6 +1096,122 @@ begin
     v_source_line_key := nullif(pg_catalog.btrim(v_line ->> 'line_key'), '');
     if v_source_line_key is null or length(v_source_line_key) > 200 then
       raise exception 'line_key is required' using errcode = '22023';
+    end if;
+
+    -- A marketplace may put the merchant on each order line. A line seller
+    -- overrides the top-level seller; an unknown line seller blocks only that
+    -- line and never rejects the rest of the purchase source.
+    v_line_seller := null;
+    v_effective_seller := v_seller;
+    v_effective_seller_status := v_seller_status;
+    v_effective_seller_name := v_seller_name;
+    v_effective_seller_branch_name := v_seller_branch_name;
+    v_effective_seller_source_namespace := v_seller_source_namespace;
+    v_effective_seller_source_code := v_seller_source_code;
+    v_effective_seller_business_kind := v_seller_business_kind;
+    if v_line ? 'seller' then
+      if pg_catalog.jsonb_typeof(v_line -> 'seller') not in ('object', 'null') then
+        raise exception 'line seller must be an object or null' using errcode = '22023';
+      end if;
+      if pg_catalog.jsonb_typeof(v_line -> 'seller') = 'null' then
+        v_effective_seller := null;
+        v_effective_seller_status := 'unknown';
+        v_effective_seller_name := null;
+        v_effective_seller_branch_name := null;
+        v_effective_seller_source_namespace := null;
+        v_effective_seller_source_code := null;
+        v_effective_seller_business_kind := null;
+      else
+        v_line_seller := v_line -> 'seller';
+        if exists (
+          select 1
+          from pg_catalog.jsonb_object_keys(v_line_seller) as field_name
+          where field_name not in (
+            'seller_name', 'branch_name', 'source_namespace', 'source_code',
+            'business_kind'
+          )
+        ) then
+          raise exception 'line seller facts contain unsupported fields'
+            using errcode = '22023';
+        end if;
+        if exists (
+          select 1
+          from pg_catalog.jsonb_object_keys(v_line_seller) as field_name
+          where pg_catalog.jsonb_typeof(v_line_seller -> field_name)
+            not in ('string', 'null')
+        ) then
+          raise exception 'line seller facts must contain strings or null'
+            using errcode = '22023';
+        end if;
+        v_effective_seller_name := nullif(
+          pg_catalog.btrim(v_line_seller ->> 'seller_name'), ''
+        );
+        v_effective_seller_branch_name := nullif(
+          pg_catalog.btrim(v_line_seller ->> 'branch_name'), ''
+        );
+        v_effective_seller_source_namespace := nullif(
+          pg_catalog.btrim(v_line_seller ->> 'source_namespace'), ''
+        );
+        v_effective_seller_source_code := nullif(
+          pg_catalog.btrim(v_line_seller ->> 'source_code'), ''
+        );
+        v_effective_seller_business_kind := nullif(
+          pg_catalog.btrim(v_line_seller ->> 'business_kind'), ''
+        );
+        if v_effective_seller_branch_name is not null
+            and length(v_effective_seller_branch_name) > 300
+          or v_effective_seller_source_namespace is not null
+            and length(v_effective_seller_source_namespace) > 200
+          or v_effective_seller_source_code is not null
+            and length(v_effective_seller_source_code) > 300
+          or v_effective_seller_name is not null
+            and length(v_effective_seller_name) > 500
+        then
+          raise exception 'line seller identity facts are too long' using errcode = '22023';
+        end if;
+        if v_effective_seller_business_kind is not null
+          and v_effective_seller_business_kind not in (
+            'retail', 'food_service', 'transport', 'accommodation', 'healthcare',
+            'professional_service', 'utility', 'government', 'financial',
+            'marketplace', 'other', 'unknown'
+          )
+        then
+          raise exception 'line seller business_kind is invalid' using errcode = '22023';
+        end if;
+        if (v_effective_seller_source_namespace is null)
+            <> (v_effective_seller_source_code is null)
+        then
+          -- A partial line seller is retained in line_payload but is not
+          -- allowed to become an authority identity.
+          v_effective_seller := null;
+          v_effective_seller_status := 'unknown';
+          v_effective_seller_name := null;
+          v_effective_seller_branch_name := null;
+          v_effective_seller_source_namespace := null;
+          v_effective_seller_source_code := null;
+          v_effective_seller_business_kind := null;
+        elsif v_effective_seller_name is null then
+          if v_effective_seller_branch_name is not null
+            or v_effective_seller_source_namespace is not null
+            or v_effective_seller_source_code is not null
+            or v_effective_seller_business_kind is not null
+          then
+            v_effective_seller := null;
+            v_effective_seller_status := 'unknown';
+            v_effective_seller_name := null;
+            v_effective_seller_branch_name := null;
+            v_effective_seller_source_namespace := null;
+            v_effective_seller_source_code := null;
+            v_effective_seller_business_kind := null;
+          else
+            v_effective_seller := null;
+            v_effective_seller_status := 'unknown';
+          end if;
+        else
+          v_effective_seller := v_line_seller;
+          v_effective_seller_status := 'confirmed';
+        end if;
+      end if;
     end if;
     if v_line -> 'product' is null
       or pg_catalog.jsonb_typeof(v_line -> 'product') <> 'object'
@@ -1118,6 +1361,7 @@ begin
     v_line_reason := null;
     v_projection_found := false;
     v_projection := null;
+    v_store_id := null;
     v_product_id := null;
     v_store_product_id := null;
     v_catalog_product_id := null;
@@ -1128,18 +1372,28 @@ begin
     v_restaurant_menu_id := null;
     v_restaurant_menu_manual_observation_id := null;
 
-    if not v_has_line_price then
+    if v_purchase_kind not in ('retail', 'restaurant') then
+      v_line_reason := 'purchase_kind_not_observable';
+    elsif v_transaction_state = 'refunded' then
+      v_line_reason := 'transaction_refunded';
+    elsif v_transaction_state = 'cancelled' then
+      v_line_reason := 'transaction_cancelled';
+    elsif v_transaction_state = 'pending' then
+      v_line_reason := 'transaction_pending';
+    elsif v_transaction_state = 'unknown' then
+      v_line_reason := 'transaction_unknown';
+    elsif not v_has_line_price then
       v_line_reason := 'product_price_unknown';
     elsif v_price_status <> 'itemized' then
       v_line_reason := 'product_price_ambiguous';
-    elsif v_seller_status <> 'confirmed' then
+    elsif v_effective_seller_status <> 'confirmed' then
       v_line_reason := 'seller_unknown';
     elsif v_effective_observed_on is null then
       v_line_reason := 'order_and_payment_date_unknown';
-    elsif v_kind = 'retail_purchase' and v_product_client_key is null then
+    elsif v_purchase_kind = 'retail' and v_product_client_key is null then
       v_line_reason := 'product_candidate_client_key_missing';
     else
-      if v_kind = 'retail_purchase' then
+      if v_purchase_kind = 'retail' then
         select projection.*
         into v_projection
         from public.product_candidate_authority_projections as projection
@@ -1189,7 +1443,9 @@ begin
         -- Delivery-app orders use the existing exact restaurant authority.
         -- An optional source client_key is retained as evidence only; it never
         -- becomes a restaurant/menu UUID or a name-only identity shortcut.
-        if v_seller_source_namespace is null or v_seller_source_code is null then
+        if v_effective_seller_source_namespace is null
+          or v_effective_seller_source_code is null
+        then
           v_line_reason := 'restaurant_source_identity_missing';
         else
           select count(*), min(location.id), min(location.restaurant_id)
@@ -1197,9 +1453,9 @@ begin
           from public.restaurant_locations as location
           inner join public.restaurants as restaurant
             on restaurant.id = location.restaurant_id
-          where location.source_namespace = v_seller_source_namespace
-            and location.source_location_code = v_seller_source_code
-            and restaurant.canonical_name = v_seller_name
+          where location.source_namespace = v_effective_seller_source_namespace
+            and location.source_location_code = v_effective_seller_source_code
+            and restaurant.canonical_name = v_effective_seller_name
             and restaurant.status = 'active'
             and restaurant.review_status = 'verified'
             and restaurant.verification_status = 'verified'
@@ -1247,14 +1503,16 @@ begin
     end if;
 
     if v_line_reason is null then
-      if v_kind = 'retail_purchase' then
+      if v_purchase_kind = 'retail' then
         if v_store_id is null then
           v_seller_identity_fingerprint := encode(
             extensions.digest(
               convert_to(
                 pg_catalog.concat_ws(
-                  '|', 'retail', v_seller_name, coalesce(v_seller_branch_name, ''),
-                  coalesce(v_seller_source_namespace, ''), coalesce(v_seller_source_code, '')
+                  '|', 'retail', v_effective_seller_name,
+                  coalesce(v_effective_seller_branch_name, ''),
+                  coalesce(v_effective_seller_source_namespace, ''),
+                  coalesce(v_effective_seller_source_code, '')
                 ),
                 'UTF8'
               ),
@@ -1272,10 +1530,10 @@ begin
           into v_match_count, v_store_id
           from public.stores as store
           where store.user_id = v_user_id
-            and coalesce(store.merchant_name, store.name) = v_seller_name
-            and coalesce(store.branch_name, '') = coalesce(v_seller_branch_name, '')
-            and coalesce(store.catalog_namespace, '') = coalesce(v_seller_source_namespace, '')
-            and coalesce(store.merchant_id, '') = coalesce(v_seller_source_code, '');
+            and coalesce(store.merchant_name, store.name) = v_effective_seller_name
+            and coalesce(store.branch_name, '') = coalesce(v_effective_seller_branch_name, '')
+            and coalesce(store.catalog_namespace, '') = coalesce(v_effective_seller_source_namespace, '')
+            and coalesce(store.merchant_id, '') = coalesce(v_effective_seller_source_code, '');
           if v_match_count > 1 then
             raise exception 'seller store identity is ambiguous' using errcode = 'P0003';
           elsif v_match_count = 0 then
@@ -1284,12 +1542,12 @@ begin
               merchant_id, catalog_namespace, identity_fingerprint
             ) values (
               v_user_id,
-              v_seller_name || case when v_seller_branch_name is null then '' else ' - ' || v_seller_branch_name end,
-              v_seller_name,
-              v_seller_branch_name,
-              coalesce(v_seller_business_kind, 'unknown'),
-              v_seller_source_code,
-              v_seller_source_namespace,
+              v_effective_seller_name || case when v_effective_seller_branch_name is null then '' else ' - ' || v_effective_seller_branch_name end,
+              v_effective_seller_name,
+              v_effective_seller_branch_name,
+              coalesce(v_effective_seller_business_kind, 'unknown'),
+              v_effective_seller_source_code,
+              v_effective_seller_source_namespace,
               v_seller_identity_fingerprint
             ) returning id into v_store_id;
           end if;
@@ -1337,11 +1595,11 @@ begin
       ) values (
         v_user_id, v_store_product_id, null, v_effective_observed_on,
         v_unit_price_int, v_quantity_int, v_catalog_product_id, null,
-        v_seller_branch_name,
+        v_effective_seller_branch_name,
         jsonb_build_object(
           'schemaVersion', 'purchase-price-observation.v4',
           'platform', v_platform,
-          'seller', v_seller,
+          'seller', v_effective_seller,
           'order', v_order,
           'payment', v_payment,
           'purchaseSourceId', v_source_id,
@@ -1369,7 +1627,7 @@ begin
           jsonb_build_object(
             'schemaVersion', 'purchase-price-observation.v4',
             'platform', v_platform,
-            'seller', v_seller,
+            'seller', v_effective_seller,
             'order', v_order,
             'payment', v_payment,
             'line', v_line,
@@ -1391,6 +1649,9 @@ begin
     if v_line_reason is null then
       insert into public.purchase_price_source_lines (
         user_id, purchase_source_id, line_ordinal, source_line_key,
+        line_seller_status, line_seller_name, line_seller_branch_name,
+        line_seller_source_namespace, line_seller_source_code,
+        line_seller_business_kind,
         product_client_key, product_name, option_text, merchant_sku,
         price_status, quantity, unit_price_krw, gross_price_krw,
         discount_price_krw, net_price_krw, product_id, store_product_id,
@@ -1399,6 +1660,9 @@ begin
         observation_status, observation_reason, line_payload, created_at
       ) values (
         v_user_id, v_source_id, v_line_ordinal, v_source_line_key,
+        v_effective_seller_status, v_effective_seller_name,
+        v_effective_seller_branch_name, v_effective_seller_source_namespace,
+        v_effective_seller_source_code, v_effective_seller_business_kind,
         v_product_client_key, v_product_name, v_option_text, v_merchant_sku,
         v_price_status, v_quantity_int, v_unit_price_int, v_gross_price_int,
         v_discount_price_int, v_net_price_int, v_product_id,
@@ -1409,22 +1673,30 @@ begin
       v_line_results := v_line_results || jsonb_build_array(jsonb_build_object(
         'lineOrdinal', v_line_ordinal,
         'lineKey', v_source_line_key,
+        'seller', v_effective_seller_name,
+        'sellerConfirmed', v_effective_seller_status = 'confirmed',
         'observationCreated', true,
         'observationId', coalesce(v_price_observation_id, v_restaurant_menu_manual_observation_id),
         'observationType', case
-          when v_kind = 'retail_purchase' then 'price_observation'
+          when v_purchase_kind = 'retail' then 'price_observation'
           else 'restaurant_menu_manual_observation'
         end
       ));
     else
       insert into public.purchase_price_source_lines (
         user_id, purchase_source_id, line_ordinal, source_line_key,
+        line_seller_status, line_seller_name, line_seller_branch_name,
+        line_seller_source_namespace, line_seller_source_code,
+        line_seller_business_kind,
         product_client_key, product_name, option_text, merchant_sku,
         price_status, quantity, unit_price_krw, gross_price_krw,
         discount_price_krw, net_price_krw, observation_status,
         observation_reason, line_payload, created_at
       ) values (
         v_user_id, v_source_id, v_line_ordinal, v_source_line_key,
+        v_effective_seller_status, v_effective_seller_name,
+        v_effective_seller_branch_name, v_effective_seller_source_namespace,
+        v_effective_seller_source_code, v_effective_seller_business_kind,
         v_product_client_key, v_product_name, v_option_text, v_merchant_sku,
         v_price_status, v_quantity_int, v_unit_price_int, v_gross_price_int,
         v_discount_price_int, v_net_price_int, 'not_created', v_line_reason,
@@ -1433,6 +1705,8 @@ begin
       v_line_results := v_line_results || jsonb_build_array(jsonb_build_object(
         'lineOrdinal', v_line_ordinal,
         'lineKey', v_source_line_key,
+        'seller', v_effective_seller_name,
+        'sellerConfirmed', v_effective_seller_status = 'confirmed',
         'observationCreated', false,
         'reason', v_line_reason
       ));
@@ -1443,6 +1717,8 @@ begin
     'schemaVersion', 'purchase-price-observation.v4',
     'contractVersion', 'purchase-price.v4',
     'kind', v_kind,
+    'purchaseKind', v_purchase_kind,
+    'transactionState', v_transaction_state,
     'purchaseSourceId', v_source_id,
     'platform', v_platform_name,
     'seller', v_seller_name,

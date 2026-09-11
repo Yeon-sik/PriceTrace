@@ -10,6 +10,10 @@ const ingestionFunction = migration.slice(
   migration.indexOf("create or replace function public.ingest_verified_purchase_price_observation_v1"),
   migration.indexOf("comment on function public.ingest_verified_purchase_price_observation_v1"),
 );
+const productCandidateOrderHistoryMigration = readFileSync(
+  new URL("../../supabase/migrations/20260911150000_product_candidate_order_history_allowlist.sql", import.meta.url),
+  "utf8",
+).replace(/\r\n/g, "\n");
 
 describe("purchase price observation v4 migration contract", () => {
   it("adds isolated source, line, and replay records", () => {
@@ -29,7 +33,7 @@ describe("purchase price observation v4 migration contract", () => {
     expect(ingestionFunction).toContain("v_platform_name := nullif");
     expect(ingestionFunction).toContain("v_seller_name := nullif");
     expect(ingestionFunction).toContain("'platform', v_platform");
-    expect(ingestionFunction).toContain("'seller', v_seller");
+    expect(ingestionFunction).toContain("'seller', v_effective_seller");
     expect(ingestionFunction).not.toContain("v_seller_name := v_platform_name");
     expect(ingestionFunction).not.toContain("merchant_name, v_platform_name");
     expect(ingestionFunction).not.toContain("v_seller_name := v_platform");
@@ -41,9 +45,35 @@ describe("purchase price observation v4 migration contract", () => {
     expect(ingestionFunction).toContain("product_client_key must be an opaque local reference");
     expect(ingestionFunction).toContain("product_candidate_authority_projections");
     expect(ingestionFunction).toContain("merchant_sku cannot reuse product_client_key");
-    expect(ingestionFunction).toContain("v_kind = 'retail_purchase' and v_product_client_key is null");
+    expect(ingestionFunction).toContain("v_purchase_kind = 'retail' and v_product_client_key is null");
     expect(ingestionFunction).not.toContain("p_purchase ->> 'catalog_product_id'");
     expect(ingestionFunction).not.toContain("p_purchase ->> 'store_id'");
+  });
+
+  it("keeps order-history candidate evidence sanitized and scoped to product facts", () => {
+    expect(productCandidateOrderHistoryMigration).toContain("source_type' = 'order_history'");
+    expect(productCandidateOrderHistoryMigration).toContain("order_history evidence must contain one observed product source fact");
+    expect(productCandidateOrderHistoryMigration).toContain("'product_name', 'option_text', 'merchant_sku'");
+    expect(productCandidateOrderHistoryMigration).toContain("jsonb_set(");
+    expect(productCandidateOrderHistoryMigration).toContain("to_jsonb('ocr'::text)");
+    expect(productCandidateOrderHistoryMigration).toContain("evidence = p_candidate -> 'evidence'");
+    expect(productCandidateOrderHistoryMigration).toContain("client_key must be an opaque local reference, not a PriceTrace UUID");
+    expect(productCandidateOrderHistoryMigration).toContain("submit_product_candidate_v1_legacy");
+  });
+
+  it("adds explicit purchase semantics, settlement gating, and line-level sellers", () => {
+    expect(migration).toContain("purchase_kind in ('retail', 'restaurant', 'other', 'unknown')");
+    expect(ingestionFunction).toContain("purchase_kind and kind must describe the same purchase semantics");
+    expect(ingestionFunction).toContain("v_purchase_kind not in ('retail', 'restaurant')");
+    expect(ingestionFunction).toContain("v_transaction_state = 'refunded'");
+    expect(ingestionFunction).toContain("v_transaction_state = 'cancelled'");
+    expect(ingestionFunction).toContain("v_transaction_state = 'pending'");
+    expect(ingestionFunction).toContain("v_transaction_state = 'unknown'");
+    expect(migration).toContain("'seller'\n      )");
+    expect(migration).toContain("line_seller_status");
+    expect(ingestionFunction).toContain("A marketplace may put the merchant on each order line");
+    expect(ingestionFunction).toContain("'purchaseKind', v_purchase_kind");
+    expect(ingestionFunction).toContain("'transactionState', v_transaction_state");
   });
 
   it("preserves independent dates and nullable price facts", () => {
