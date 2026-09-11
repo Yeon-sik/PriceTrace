@@ -19,6 +19,7 @@ declare
   v_restaurant_menu_count integer;
   v_public_standard_count integer;
   v_public_catalog_count integer;
+  v_projection_count integer;
 begin
   select id into v_user_id from auth.users order by created_at limit 1;
   if v_user_id is null then
@@ -113,8 +114,10 @@ begin
       'source_app', 'pricetrace_ocr_app',
       'source_version', 'test',
       'candidate_type', 'retail_product',
+      'client_key', 'product-existing-' || v_suffix,
       'product_name', '__candidate_probe_variant_' || v_suffix,
       'brand', '__candidate_probe_brand_' || v_suffix,
+      'sub_brand', '__candidate_probe_sub_brand_' || v_suffix,
       'manufacturer', '__candidate_probe_manufacturer_' || v_suffix,
       'specification', '500g',
       'content_amount', 500,
@@ -149,11 +152,26 @@ begin
     or (v_existing ->> 'catalogProductId')::uuid <> v_catalog_product_id
     or (v_existing ->> 'standardProductId')::uuid <> v_standard_product_id
     or v_existing ->> 'candidateId' is not null
+    or v_existing ->> 'clientKey' <> ('product-existing-' || v_suffix)
+    or v_existing ->> 'productClientKey' <> ('product-existing-' || v_suffix)
     or (v_existing ->> 'restaurantMenuCandidateCreated')::boolean is not false
     or v_existing #>> '{nutritionHandoff,status}' <> 'ready_for_existing_proposal_flow'
     or v_existing #>> '{nutritionHandoff,nutritionFoodId}' <> ('fitness-food-' || v_suffix)
   then
     raise exception 'verified exact catalog identity was not safely reused: %', v_existing;
+  end if;
+
+  select count(*) into v_projection_count
+  from public.product_candidate_authority_projections as projection
+  where projection.user_id = v_user_id
+    and projection.client_key = 'product-existing-' || v_suffix
+    and projection.resolution_status = 'catalog_product_reused'
+    and projection.catalog_product_id = v_catalog_product_id
+    and projection.standard_product_id = v_standard_product_id
+    and projection.source_payload ->> 'sub_brand' =
+      '__candidate_probe_sub_brand_' || v_suffix;
+  if v_projection_count <> 1 then
+    raise exception 'catalog authority projection did not preserve client_key/sub_brand';
   end if;
 
   begin
@@ -165,6 +183,16 @@ begin
   exception
     when unique_violation then
       null;
+  end;
+
+  begin
+    perform public.submit_product_candidate_v1(
+      'candidate-uuid-client-key-' || v_suffix,
+      jsonb_set(v_candidate, '{client_key}', to_jsonb(gen_random_uuid()::text))
+    );
+    raise exception 'UUID-shaped local client_key was accepted as a PriceTrace identity';
+  exception
+    when sqlstate '22023' then null;
   end;
 end;
 $$;
@@ -199,8 +227,10 @@ begin
       'contract_version', 'product-candidate.v1',
       'source_app', 'pricetrace_ocr_app',
       'candidate_type', 'retail_product',
+      'client_key', 'product-new-' || v_suffix,
       'product_name', '__candidate_new_' || v_suffix,
       'brand', '__candidate_new_brand_' || v_suffix,
+      'sub_brand', '__candidate_new_sub_brand_' || v_suffix,
       'manufacturer', null,
       'specification', null,
       'content_amount', null,
@@ -225,6 +255,8 @@ begin
     or (v_new ->> 'candidateId') is null
     or v_new ->> 'catalogProductId' is not null
     or v_new ->> 'standardProductId' is not null
+    or v_new ->> 'clientKey' is distinct from ('product-new-' || v_suffix)
+    or v_new ->> 'productClientKey' is distinct from ('product-new-' || v_suffix)
     or v_new ->> 'verificationStatus' <> 'unverified'
     or v_new ->> 'reviewStatus' <> 'pending'
     or (v_new ->> 'restaurantMenuCandidateCreated')::boolean is not false
@@ -244,6 +276,28 @@ begin
     raise exception 'private unverified candidate row was not persisted';
   end if;
 
+  select count(*) into v_candidate_count
+  from public.product_identity_candidates
+  where id = v_candidate_id
+    and user_id = v_user_id
+    and client_key = 'product-new-' || v_suffix
+    and sub_brand = '__candidate_new_sub_brand_' || v_suffix
+    and request_payload ->> 'client_key' = 'product-new-' || v_suffix
+    and request_payload ->> 'sub_brand' = '__candidate_new_sub_brand_' || v_suffix;
+  if v_candidate_count <> 1 then
+    raise exception 'private candidate did not round-trip client_key/sub_brand source facts';
+  end if;
+
+  select count(*) into v_candidate_count
+  from public.product_candidate_authority_projections as projection
+  where projection.user_id = v_user_id
+    and projection.client_key = 'product-new-' || v_suffix
+    and projection.candidate_id = v_candidate_id
+    and projection.resolution_status = 'private_unverified_candidate_created';
+  if v_candidate_count <> 1 then
+    raise exception 'unresolved candidate authority projection was not private/review-only';
+  end if;
+
   select count(*) into v_standard_count
   from public.standard_products
   where canonical_name = '__candidate_new_' || v_suffix;
@@ -261,8 +315,10 @@ begin
       'contract_version', 'product-candidate.v1',
       'source_app', 'pricetrace_ocr_app',
       'candidate_type', 'retail_product',
+      'client_key', 'product-new-' || v_suffix,
       'product_name', '__candidate_new_' || v_suffix,
       'brand', '__candidate_new_brand_' || v_suffix,
+      'sub_brand', '__candidate_new_sub_brand_' || v_suffix,
       'manufacturer', null,
       'specification', null,
       'content_amount', null,
@@ -296,8 +352,10 @@ begin
       'contract_version', 'product-candidate.v1',
       'source_app', 'pricetrace_ocr_app',
       'candidate_type', 'retail_product',
+      'client_key', 'product-new-' || v_suffix,
       'product_name', '__candidate_new_' || v_suffix,
       'brand', '__candidate_new_brand_' || v_suffix,
+      'sub_brand', '__candidate_new_sub_brand_' || v_suffix,
       'manufacturer', null,
       'specification', null,
       'content_amount', null,
