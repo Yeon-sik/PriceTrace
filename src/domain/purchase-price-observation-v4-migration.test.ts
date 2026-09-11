@@ -14,6 +14,10 @@ const productCandidateOrderHistoryMigration = readFileSync(
   new URL("../../supabase/migrations/20260911150000_product_candidate_order_history_allowlist.sql", import.meta.url),
   "utf8",
 ).replace(/\r\n/g, "\n");
+const productCandidateOrderHistoryVocabularyFollowUpMigration = readFileSync(
+  new URL("../../supabase/migrations/20260911160000_product_candidate_order_history_ocr_fields.sql", import.meta.url),
+  "utf8",
+).replace(/\r\n/g, "\n");
 
 describe("purchase price observation v4 migration contract", () => {
   it("adds isolated source, line, and replay records", () => {
@@ -59,6 +63,28 @@ describe("purchase price observation v4 migration contract", () => {
     expect(productCandidateOrderHistoryMigration).toContain("evidence = p_candidate -> 'evidence'");
     expect(productCandidateOrderHistoryMigration).toContain("client_key must be an opaque local reference, not a PriceTrace UUID");
     expect(productCandidateOrderHistoryMigration).toContain("submit_product_candidate_v1_legacy");
+  });
+
+  it("extends the applied order-history allowlist with the OCR vocabulary", () => {
+    expect(productCandidateOrderHistoryVocabularyFollowUpMigration).toContain("20260911150000");
+    for (const field of [
+      "product_name",
+      "brand",
+      "manufacturer",
+      "variant",
+      "specification",
+      "content_amount",
+      "content_unit",
+      "package_count",
+      "option_text",
+      "merchant_sku",
+      "sub_brand",
+    ]) {
+      expect(productCandidateOrderHistoryVocabularyFollowUpMigration).toContain(`'${field}'`);
+    }
+    expect(productCandidateOrderHistoryVocabularyFollowUpMigration).not.toContain("'barcode'");
+    expect(productCandidateOrderHistoryVocabularyFollowUpMigration).toContain("pg_get_functiondef");
+    expect(productCandidateOrderHistoryVocabularyFollowUpMigration).toContain("regexp_replace");
   });
 
   it("adds explicit purchase semantics, settlement gating, and line-level sellers", () => {

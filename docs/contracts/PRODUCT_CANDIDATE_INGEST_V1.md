@@ -98,17 +98,21 @@ source fact.
 
 `evidence[].source_type` also accepts `order_history` for facts actually
 observed in a marketplace or delivery-app order history. For this source the
-`field` must describe a product fact such as `product_name`, `option_text`,
-`merchant_sku`, `variant`, `brand`, `manufacturer`, `specification`, or
-content/package measurements, and `observed_value` must be a non-empty string
-for that fact. Platform, seller, store, payment, authority, and other identity
-fields are not Product Candidate facts. The evidence keeps only the sanitized
-reference/fact value; raw screenshots, raw OCR, image paths/binary,
-authentication material, and PriceTrace UUIDs remain forbidden.
+`field` vocabulary is limited to `product_name`, `brand`, `manufacturer`,
+`variant`, `specification`, `content_amount`, `content_unit`, `package_count`,
+`option_text`, and `merchant_sku`. `sub_brand` is also accepted when the OCR
+payload observes that canonical product fact. `observed_value` must be a
+non-empty string, including when a numeric measurement is represented in OCR.
+Platform, seller, store, payment, authority, and other identity fields are not
+Product Candidate facts. Barcodes use the `identifiers` array; `barcode` is not
+an evidence field. The evidence keeps only the sanitized reference/fact value;
+raw screenshots, raw OCR, image paths/binary, authentication material, and
+PriceTrace UUIDs remain forbidden.
 
 `client_key` must not be copied into `merchant_sku`. A Product Candidate does
-not accept `merchant_sku`; a real printed/listed merchant SKU belongs only in
-the later standalone observation, and only when it was actually observed.
+not accept `merchant_sku` as a top-level identity field; a real printed/listed
+merchant SKU may appear as an `order_history` evidence fact and belongs in the
+later standalone observation only when it was actually observed.
 
 Evidence references are opaque source references, not local file paths or
 binary data. The request rejects raw OCR text, image paths/URIs/base64,

@@ -1,5 +1,6 @@
--- Run after 20260911140000_purchase_price_observation_v4.sql and
--- 20260911150000_product_candidate_order_history_allowlist.sql in a linked
+-- Run after 20260911140000_purchase_price_observation_v4.sql,
+-- 20260911150000_product_candidate_order_history_allowlist.sql, and
+-- 20260911160000_product_candidate_order_history_ocr_fields.sql in a linked
 -- SQL editor or local Supabase database. Fixture writes are rolled back.
 
 begin;
@@ -22,6 +23,11 @@ declare
   v_unresolved_candidate jsonb;
   v_unresolved_client_key text;
   v_unresolved_product_name text;
+  v_order_history_brand text;
+  v_order_history_manufacturer text;
+  v_order_history_sub_brand text;
+  v_order_history_variant text;
+  v_order_history_specification text;
   v_other_purchase jsonb;
   v_unknown_kind_purchase jsonb;
   v_cancelled_purchase jsonb;
@@ -479,6 +485,11 @@ begin
   -- private source evidence, but it must not unlock a purchase observation.
   v_unresolved_client_key := 'v4-unresolved-product-' || v_suffix;
   v_unresolved_product_name := '__v4-unresolved-product-' || v_suffix;
+  v_order_history_brand := '__v4-order-history-brand-' || v_suffix;
+  v_order_history_manufacturer := '__v4-order-history-manufacturer-' || v_suffix;
+  v_order_history_sub_brand := '__v4-order-history-sub-brand-' || v_suffix;
+  v_order_history_variant := '__v4-order-history-variant-' || v_suffix;
+  v_order_history_specification := '500g';
   v_unresolved_candidate := jsonb_build_object(
       'schema_version', 'PRICETRACE_PRODUCT_CANDIDATE',
       'contract_version', 'product-candidate.v1',
@@ -487,23 +498,56 @@ begin
       'candidate_type', 'retail_product',
       'client_key', v_unresolved_client_key,
       'product_name', v_unresolved_product_name,
-      'brand', null,
-      'manufacturer', null,
-      'specification', null,
+      'brand', v_order_history_brand,
+      'sub_brand', v_order_history_sub_brand,
+      'manufacturer', v_order_history_manufacturer,
+      'specification', v_order_history_specification,
       'content_amount', null,
       'content_unit', null,
       'package_count', null,
-      'variant', null,
+      'variant', v_order_history_variant,
       'identifiers', '[]'::jsonb,
-      'evidence', jsonb_build_array(jsonb_build_object(
-        'source_type', 'order_history',
-        'source_ref', 'order-history:unresolved-' || v_suffix,
-        'field', 'product_name',
-        'observed_value', v_unresolved_product_name
-      )),
+      'evidence', jsonb_build_array(
+        jsonb_build_object(
+          'source_type', 'order_history',
+          'source_ref', 'order-history:ocr-payload-' || v_suffix,
+          'field', 'product_name',
+          'observed_value', v_unresolved_product_name
+        ),
+        jsonb_build_object(
+          'source_type', 'order_history',
+          'source_ref', 'order-history:ocr-payload-' || v_suffix,
+          'field', 'brand',
+          'observed_value', v_order_history_brand
+        ),
+        jsonb_build_object(
+          'source_type', 'order_history',
+          'source_ref', 'order-history:ocr-payload-' || v_suffix,
+          'field', 'manufacturer',
+          'observed_value', v_order_history_manufacturer
+        ),
+        jsonb_build_object(
+          'source_type', 'order_history',
+          'source_ref', 'order-history:ocr-payload-' || v_suffix,
+          'field', 'variant',
+          'observed_value', v_order_history_variant
+        ),
+        jsonb_build_object(
+          'source_type', 'order_history',
+          'source_ref', 'order-history:ocr-payload-' || v_suffix,
+          'field', 'specification',
+          'observed_value', v_order_history_specification
+        ),
+        jsonb_build_object(
+          'source_type', 'order_history',
+          'source_ref', 'order-history:ocr-payload-' || v_suffix,
+          'field', 'sub_brand',
+          'observed_value', v_order_history_sub_brand
+        )
+      ),
       'provenance', jsonb_build_object(
-        'extraction_method', 'manual',
-        'source_revision', 'v4-unresolved-test'
+        'extraction_method', 'gpt_vision',
+        'source_revision', 'v4-ocr-payload-test'
       )
   );
   v_candidate_response := public.submit_product_candidate_v1(
@@ -553,11 +597,38 @@ begin
   from public.product_identity_candidates as candidate
   where candidate.user_id = v_user_id
     and candidate.id = (v_candidate_response ->> 'candidateId')::uuid
-    and candidate.evidence @> jsonb_build_array(jsonb_build_object(
-      'source_type', 'order_history',
-      'field', 'product_name',
-      'observed_value', v_unresolved_product_name
-    ));
+    and candidate.evidence @> jsonb_build_array(
+      jsonb_build_object(
+        'source_type', 'order_history',
+        'field', 'product_name',
+        'observed_value', v_unresolved_product_name
+      ),
+      jsonb_build_object(
+        'source_type', 'order_history',
+        'field', 'brand',
+        'observed_value', v_order_history_brand
+      ),
+      jsonb_build_object(
+        'source_type', 'order_history',
+        'field', 'manufacturer',
+        'observed_value', v_order_history_manufacturer
+      ),
+      jsonb_build_object(
+        'source_type', 'order_history',
+        'field', 'variant',
+        'observed_value', v_order_history_variant
+      ),
+      jsonb_build_object(
+        'source_type', 'order_history',
+        'field', 'specification',
+        'observed_value', v_order_history_specification
+      ),
+      jsonb_build_object(
+        'source_type', 'order_history',
+        'field', 'sub_brand',
+        'observed_value', v_order_history_sub_brand
+      )
+    );
   if v_source_count <> 1 then
     raise exception 'order_history evidence was not preserved on the candidate source: %', v_candidate_response;
   end if;
