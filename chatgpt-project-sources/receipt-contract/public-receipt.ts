@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { auditReceipt, mapReceipt, ReceiptJsonSchema, type ReceiptJson } from "./receipt";
+import { auditReceipt, FoodServiceBenefitKindSchema, mapReceipt, ReceiptJsonSchema, type ReceiptJson } from "./receipt";
 import type { Receipt } from "./types";
 
 const minorAmountSchema = z.number().int();
@@ -37,6 +37,7 @@ const publicReceiptLineItemSchema = z.object({
   foodService: z.object({
     role: z.enum(["main", "option", "side"]),
     appliesToLineId: publicLineIdSchema.nullable(),
+    benefitKind: FoodServiceBenefitKindSchema.nullable().default(null),
   }).strict().nullable().optional(),
 }).strict();
 
@@ -273,6 +274,7 @@ function toPublicReceipt({ receiptId, source: input }: PublicReceiptSource): Pub
       foodService: line.food_service === null ? null : {
         role: line.food_service.role,
         appliesToLineId: line.food_service.applies_to_line_id === null ? null : publicLineId(parsedReceiptId, line.food_service.applies_to_line_id),
+        benefitKind: line.food_service.benefit_kind,
       },
     })),
     totals: {
@@ -364,6 +366,9 @@ export function publicReceiptFilesToReceipts(inputs: unknown[]): Receipt[] {
           quantityValue: line.quantity.value,
           totalPriceKrw: line.netAmountMinor,
           confidence: line.confidence,
+          foodServiceRole: line.foodService?.role,
+          foodServiceBenefitKind: line.foodService?.benefitKind ?? null,
+          optionParentReceiptItemId: line.foodService?.appliesToLineId ?? null,
         }];
       }),
     };

@@ -1,3 +1,4 @@
+import { isPriceObservationEligibleLine } from "./receipt";
 import type { Receipt, ReceiptItem } from "./types";
 import type { OfficialProductRecord } from "./official-product";
 
@@ -279,7 +280,7 @@ export function availableProductCategories(productNames: Iterable<string>): Excl
 }
 
 export function listingsFromReceipts(receipts: Receipt[]): ProductObservationListing[] {
-  return receipts.flatMap((receipt) => receipt.items.map((item) => ({
+  return receipts.flatMap((receipt) => receipt.items.filter(isPriceObservationEligibleLine).map((item) => ({
     id: `${receipt.id}:${item.id}`,
     item,
     storeLabel: receipt.storeLabel,

@@ -175,12 +175,12 @@ describe("public receipt files", () => {
   it("projects a restaurant option parent with public line IDs while keeping sides separate", () => {
     const source = createPrivateSource();
     source.merchant.business_kind = "food_service";
-    source.line_items[0].food_service = { role: "main", applies_to_line_id: null };
+    source.line_items[0].food_service = { role: "main", applies_to_line_id: null, benefit_kind: null };
     source.line_items.push({
-      id: "line-option", type: "product", description: "면추가", source_line_references: ["2"], identifiers: [], quantity: { value: 1, unit: "each" }, unit_price_amount_minor: 0, gross_amount_minor: 0, discount_amount_minor: 0, tax_amount_minor: 0, net_amount_minor: 0, confidence: "high", tax_rate_percent: null, food_service: { role: "option", applies_to_line_id: "line-1" },
+      id: "line-option", type: "product", description: "면추가", source_line_references: ["2"], identifiers: [], quantity: { value: 1, unit: "each" }, unit_price_amount_minor: 0, gross_amount_minor: 0, discount_amount_minor: 0, tax_amount_minor: 0, net_amount_minor: 0, confidence: "high", tax_rate_percent: null, food_service: { role: "option", applies_to_line_id: "line-1", benefit_kind: null },
     });
     source.line_items.push({
-      id: "line-side", type: "product", description: "교자", source_line_references: ["3"], identifiers: [], quantity: { value: 1, unit: "each" }, unit_price_amount_minor: 0, gross_amount_minor: 0, discount_amount_minor: 0, tax_amount_minor: 0, net_amount_minor: 0, confidence: "high", tax_rate_percent: null, food_service: { role: "side", applies_to_line_id: null },
+      id: "line-side", type: "product", description: "교자", source_line_references: ["3"], identifiers: [], quantity: { value: 1, unit: "each" }, unit_price_amount_minor: 0, gross_amount_minor: 0, discount_amount_minor: 0, tax_amount_minor: 0, net_amount_minor: 0, confidence: "high", tax_rate_percent: null, food_service: { role: "side", applies_to_line_id: null, benefit_kind: "included" },
     });
 
     const receipt = buildPublicReceiptFiles([{ receiptId: "2026-07-22_005", source }])[0];

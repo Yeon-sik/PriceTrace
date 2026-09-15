@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { FoodServiceBenefitKindSchema } from "./receipt";
 
 export const PRIVATE_IDENTITY_READ_SCHEMA_VERSION = "private-identity-read.v1" as const;
 export const PRIVATE_IDENTITY_READ_NAMESPACE = "pricetrace" as const;
@@ -96,6 +97,7 @@ const identityFields = {
 export const PrivateIdentitySourceLineSchema = z.object({
   sourceLineId: z.string().trim().min(1),
   lineOrdinal: z.number().int().positive().nullable(),
+  benefitKind: FoodServiceBenefitKindSchema.nullable().optional().default(null),
   type: z.string().trim().min(1),
   description: z.string().trim().min(1).nullable(),
   sourceLineReferences: z.array(z.string().trim().min(1)),

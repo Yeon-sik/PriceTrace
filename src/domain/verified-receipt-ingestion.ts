@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { MerchantProfileV1MerchantSchema } from "./merchant-profile";
-import { ReceiptJsonSchema, type ReceiptJson } from "./receipt";
+import { FoodServiceBenefitKindSchema, ReceiptJsonSchema, type ReceiptJson } from "./receipt";
 
 export const VerifiedReceiptIngestionRequestSchema = z.object({
   schema_version: z.literal("verified-receipt-ingestion.v2"),
@@ -36,6 +36,7 @@ const nullableUuidSchema = z.string().uuid().nullable();
 export const VerifiedReceiptIngestionLineSchema = z.object({
   sourceLineId: z.string().trim().min(1),
   lineOrdinal: z.number().int().positive(),
+  benefitKind: FoodServiceBenefitKindSchema.nullable().optional().default(null),
   receiptItemId: z.string().trim().min(1).nullable(),
   observationId: nullableUuidSchema,
   restaurantObservationId: nullableUuidSchema,

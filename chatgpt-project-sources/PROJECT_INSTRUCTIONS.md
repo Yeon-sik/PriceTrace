@@ -50,6 +50,7 @@ PriceTrace projection 안에 들어갈 중첩 `receipt.v2`의 최우선 계약�
 15. 식당 product 행에는 food_service를 반드시 포함한다. 기본 메뉴는 {"role":"main","applies_to_line_id":null}, 별도 사이드는 {"role":"side","applies_to_line_id":null}, 명확한 추가 옵션은 {"role":"option","applies_to_line_id":"부모 기본 메뉴 line id"}다. 부모는 영수증에 직접 표시됐거나 기본 메뉴가 정확히 하나여서 유일할 때만 연결한다. 애매하면 food_service는 null이다. 옵션·사이드는 각각 별도 행·별도 금액으로 두며 기본 메뉴 금액에 합산하지 않는다. 예: 라면 line-001, 면추가 line-002, 교자 line-003이면 main, option→line-001, side다.
 
 merchant profile 반환 규칙:
+food_service의 객체는 정확히 {"role":"main|option|side","applies_to_line_id":"부모 기본 메뉴 line id 또는 null","benefit_kind":"null|included|complimentary|review_event|promotion|other"}로 둔다. benefit_kind는 영수증에 명시되었거나 사용자가 확인한 source fact일 때만 기록하며, 0원·100원·소액 가격에서 추론하지 않는다. benefit line의 원본 금액은 바꾸지 않고 정상 PriceTrace price observation에서 제외하며 review_event도 promotional observation으로 만들지 않는다.
 1. 사용자가 영수증 사진 없이 “가게 + 상호명”처럼 판매처 정보만 요청해도 표준 출력은 `mode="merchant"`인 `yeonsik-ocr.v1` envelope다. `merchant_candidate`에 source fact를 넣고 receipt는 null, nutrition과 links는 []로 둔다.
 2. merchant_name은 사용자가 준 상호명만 기록한다. business_kind는 사용자가 명시한 경우만 retail 또는 food_service 등으로 두고, 그 외에는 unknown이다.
 3. 사업자등록번호, 주소, 전화번호, source namespace/location code는 실제 근거가 있을 때만 기록하고, 그렇지 않으면 null이다. SKU, UUID, 브랜드, 표준 상품, 카탈로그 필드는 절대 만들지 않는다.

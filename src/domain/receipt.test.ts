@@ -14,7 +14,7 @@ describe("receipt mapper", () => {
     const template = ReceiptJsonSchema.parse(receiptTemplate);
     expect(template.document.id).toBeNull();
     expect(template.document.currency).toBe("KRW");
-    expect(template.merchant.name).toBe("예시마트");
+    expect(template.merchant.name).toBe("예시식당");
     expect(template.line_items).toHaveLength(3);
     expect(template.line_items.every((line) => line.quantity === null || (line.quantity.unit === "each" && Number.isInteger(line.quantity.value)))).toBe(true);
     expect(template.document.fulfillment).toEqual({ type: "unknown", evidence: "unknown" });
@@ -43,9 +43,9 @@ describe("receipt mapper", () => {
     const source = createUniversalReceipt("라면집", "2026-08-26", "FOOD-1", 11_000);
     source.merchant.business_kind = "food_service";
     source.line_items = [
-      { id: "line-001", type: "product", description: "라면", source_line_references: ["1"], identifiers: [], quantity: { value: 1, unit: "each" }, unit_price_amount_minor: 7_000, gross_amount_minor: 7_000, discount_amount_minor: 0, tax_amount_minor: 0, net_amount_minor: 7_000, confidence: "high", tax_rate_percent: null, food_service: { role: "main", applies_to_line_id: null } },
-      { id: "line-002", type: "product", description: "면추가", source_line_references: ["2"], identifiers: [], quantity: { value: 1, unit: "each" }, unit_price_amount_minor: 1_000, gross_amount_minor: 1_000, discount_amount_minor: 0, tax_amount_minor: 0, net_amount_minor: 1_000, confidence: "high", tax_rate_percent: null, food_service: { role: "option", applies_to_line_id: "line-001" } },
-      { id: "line-003", type: "product", description: "교자", source_line_references: ["3"], identifiers: [], quantity: { value: 1, unit: "each" }, unit_price_amount_minor: 3_000, gross_amount_minor: 3_000, discount_amount_minor: 0, tax_amount_minor: 0, net_amount_minor: 3_000, confidence: "high", tax_rate_percent: null, food_service: { role: "side", applies_to_line_id: null } },
+      { id: "line-001", type: "product", description: "라면", source_line_references: ["1"], identifiers: [], quantity: { value: 1, unit: "each" }, unit_price_amount_minor: 7_000, gross_amount_minor: 7_000, discount_amount_minor: 0, tax_amount_minor: 0, net_amount_minor: 7_000, confidence: "high", tax_rate_percent: null, food_service: { role: "main", applies_to_line_id: null, benefit_kind: null } },
+      { id: "line-002", type: "product", description: "면추가", source_line_references: ["2"], identifiers: [], quantity: { value: 1, unit: "each" }, unit_price_amount_minor: 1_000, gross_amount_minor: 1_000, discount_amount_minor: 0, tax_amount_minor: 0, net_amount_minor: 1_000, confidence: "high", tax_rate_percent: null, food_service: { role: "option", applies_to_line_id: "line-001", benefit_kind: null } },
+      { id: "line-003", type: "product", description: "교자", source_line_references: ["3"], identifiers: [], quantity: { value: 1, unit: "each" }, unit_price_amount_minor: 3_000, gross_amount_minor: 3_000, discount_amount_minor: 0, tax_amount_minor: 0, net_amount_minor: 3_000, confidence: "high", tax_rate_percent: null, food_service: { role: "side", applies_to_line_id: null, benefit_kind: null } },
     ];
     source.totals.items_gross_amount_minor = 11_000;
     source.totals.grand_total_amount_minor = 11_000;
@@ -57,10 +57,49 @@ describe("receipt mapper", () => {
       { productName: "교자", foodServiceRole: "side", optionParentReceiptItemId: null },
     ]);
   });
+  it.each(["included", "complimentary", "review_event", "promotion", "other"] as const)("round-trips food-service benefit kind %s", (benefitKind) => {
+    const source = createUniversalReceipt("식당", "2026-08-26", `BENEFIT-${benefitKind}`, 1_000);
+    source.merchant.business_kind = "food_service";
+    source.line_items[0].food_service = { role: "main", applies_to_line_id: null, benefit_kind: benefitKind };
+
+    expect(ReceiptJsonSchema.parse(source).line_items[0].food_service?.benefit_kind).toBe(benefitKind);
+  });
+  it("normalizes a legacy food-service payload and rejects unknown benefit keys", () => {
+    const source = createUniversalReceipt("식당", "2026-08-26", "LEGACY-BENEFIT", 1_000);
+    source.merchant.business_kind = "food_service";
+    source.line_items[0].food_service = { role: "main", applies_to_line_id: null, benefit_kind: null };
+    const legacy = structuredClone(source) as unknown as { line_items: Array<{ food_service: Record<string, unknown> }> };
+    delete legacy.line_items[0].food_service.benefit_kind;
+    expect(ReceiptJsonSchema.parse(legacy).line_items[0].food_service?.benefit_kind).toBeNull();
+
+    const invalidKey = structuredClone(source);
+    (invalidKey.line_items[0].food_service as Record<string, unknown>).unexpected = true;
+    expect(() => ReceiptJsonSchema.parse(invalidKey)).toThrow();
+    const invalidValue = structuredClone(source);
+    (invalidValue.line_items[0].food_service as Record<string, unknown>).benefit_kind = "not-a-benefit";
+    expect(() => ReceiptJsonSchema.parse(invalidValue)).toThrow();
+  });
+  it("preserves benefit monetary source facts without turning zero or nominal amounts into inferred semantics", () => {
+    const source = createUniversalReceipt("식당", "2026-08-26", "BENEFIT-AMOUNTS", 200);
+    source.merchant.business_kind = "food_service";
+    source.line_items = [
+      { ...source.line_items[0], id: "line-main", description: "정상 메뉴", unit_price_amount_minor: 200, gross_amount_minor: 200, net_amount_minor: 200, food_service: { role: "main", applies_to_line_id: null, benefit_kind: null } },
+      { ...source.line_items[0], id: "line-review", description: "리뷰 이벤트", source_line_references: ["2"], unit_price_amount_minor: 100, gross_amount_minor: 100, net_amount_minor: 100, food_service: { role: "side", applies_to_line_id: null, benefit_kind: "review_event" } },
+      { ...source.line_items[0], id: "line-included", description: "포함 반찬", source_line_references: ["3"], unit_price_amount_minor: 0, gross_amount_minor: 0, net_amount_minor: 0, food_service: { role: "side", applies_to_line_id: null, benefit_kind: "included" } },
+    ];
+    source.totals.items_gross_amount_minor = 300;
+    source.totals.grand_total_amount_minor = 300;
+
+    expect(mapReceipt(source).items).toMatchObject([
+      { productName: "정상 메뉴", unitPriceKrw: 200, totalPriceKrw: 200, foodServiceBenefitKind: null },
+      { productName: "리뷰 이벤트", unitPriceKrw: 100, totalPriceKrw: 100, foodServiceBenefitKind: "review_event" },
+      { productName: "포함 반찬", unitPriceKrw: 0, totalPriceKrw: 0, foodServiceBenefitKind: "included" },
+    ]);
+  });
   it("rejects a food-service option that points to a side or a non-food-service receipt", () => {
     const source = createUniversalReceipt();
-    source.line_items[0].food_service = { role: "option", applies_to_line_id: "line-2" };
-    source.line_items.push({ id: "line-2", type: "product", description: "Side", source_line_references: ["2"], identifiers: [], quantity: { value: 1, unit: "each" }, unit_price_amount_minor: 0, gross_amount_minor: 0, discount_amount_minor: 0, tax_amount_minor: 0, net_amount_minor: 0, confidence: "high", tax_rate_percent: null, food_service: { role: "side", applies_to_line_id: null } });
+    source.line_items[0].food_service = { role: "option", applies_to_line_id: "line-2", benefit_kind: null };
+    source.line_items.push({ id: "line-2", type: "product", description: "Side", source_line_references: ["2"], identifiers: [], quantity: { value: 1, unit: "each" }, unit_price_amount_minor: 0, gross_amount_minor: 0, discount_amount_minor: 0, tax_amount_minor: 0, net_amount_minor: 0, confidence: "high", tax_rate_percent: null, food_service: { role: "side", applies_to_line_id: null, benefit_kind: null } });
     expect(() => ReceiptJsonSchema.parse(source)).toThrow(/food_service|main/);
   });
   it("preserves a missing merchant SKU as null instead of inventing an identity", () => {
