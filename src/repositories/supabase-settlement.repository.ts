@@ -1,7 +1,7 @@
 import type { Receipt, SettlementState } from "@/domain/types";
 import type { SettlementBackup } from "./settlement.repository";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
-import { nullableSourceProductCode, purchaseTypeForReceipt } from "@/domain/receipt";
+import { isPriceObservationEligibleLine, nullableSourceProductCode, purchaseTypeForReceipt } from "@/domain/receipt";
 
 type RemoteRecipient = { id:string; name:string; created_at:string };
 type RemoteAllocation = { id:string; receipt_item_id:string; recipient_id:string; quantity:number; memo:string; created_at:string; updated_at:string };
@@ -140,20 +140,22 @@ export class SupabaseSettlementRepository {
         catalogProductId = mapping?.catalog_product_id ?? null;
       }
 
-      const { error: observationError } = await client.from("price_observations").upsert({
-        user_id: user.id,
-        store_product_id: storeProductId,
-        receipt_item_id: item.id,
-        catalog_product_id: catalogProductId,
-        observed_at: receipt.purchasedAt,
-        unit_price_krw: item.unitPriceKrw,
-        quantity: item.quantityValue,
-        measurement_unit: "each",
-        location_label: receipt.storeLabel,
-        verification_status: "verified",
-        verified_at: new Date().toISOString(),
-      }, { onConflict: "user_id,receipt_item_id" });
-      if (observationError) throw observationError;
+      if (isPriceObservationEligibleLine(item)) {
+        const { error: observationError } = await client.from("price_observations").upsert({
+          user_id: user.id,
+          store_product_id: storeProductId,
+          receipt_item_id: item.id,
+          catalog_product_id: catalogProductId,
+          observed_at: receipt.purchasedAt,
+          unit_price_krw: item.unitPriceKrw,
+          quantity: item.quantityValue,
+          measurement_unit: "each",
+          location_label: receipt.storeLabel,
+          verification_status: "verified",
+          verified_at: new Date().toISOString(),
+        }, { onConflict: "user_id,receipt_item_id" });
+        if (observationError) throw observationError;
+      }
     }
 
     const optionSources = receipt.items.flatMap((item) => (

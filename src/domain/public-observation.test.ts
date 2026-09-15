@@ -50,6 +50,32 @@ describe("public receipt observation links", () => {
     expect(() => assertPublicReceiptObservationLinks(receiptIndex, receiptFiles, observations)).not.toThrow();
   });
 
+  it("preserves public benefit source lines without publishing their price observations", () => {
+    const source = createUniversalReceipt("식당", "2026-08-26", "PUBLIC-BENEFIT", 3_000, "MENU-1");
+    source.merchant.business_kind = "food_service";
+    source.line_items[0].food_service = { role: "main", applies_to_line_id: null, benefit_kind: null };
+    source.line_items.push({
+      ...source.line_items[0],
+      id: "included-line",
+      description: "포함 반찬",
+      source_line_references: ["2"],
+      unit_price_amount_minor: 0,
+      gross_amount_minor: 0,
+      net_amount_minor: 0,
+      food_service: { role: "side", applies_to_line_id: null, benefit_kind: "included" },
+    });
+    const receiptFiles = buildPublicReceiptFiles([{ receiptId: "2026-08-26_001", source }]);
+    const receiptIndex = buildPublicReceiptIndex(receiptFiles);
+    const receipts = publicReceiptFilesToReceipts(receiptFiles);
+    const observations = buildPublicObservationBundle(receipts, receiptIndex.revision);
+
+    expect(receipts[0].items).toHaveLength(2);
+    expect(receipts[0].items[1]).toMatchObject({ foodServiceBenefitKind: "included", totalPriceKrw: 0 });
+    expect(observations.observations).toHaveLength(1);
+    expect(observations.observations[0].productName).toBe("Test product");
+    expect(() => assertPublicReceiptObservationLinks(receiptIndex, receiptFiles, observations)).not.toThrow();
+  });
+
   it("remains deterministic and converts linked observations to product listings", () => {
     const first = createPublicData();
     const second = createPublicData();

@@ -1,16 +1,19 @@
 import { z } from "zod";
-import type { PurchaseType, Receipt } from "./types";
+import type { PurchaseType, Receipt, ReceiptItem } from "./types";
 
 const minorAmount = z.number().int();
 const nonNegativeMinorAmount = minorAmount.nonnegative();
 const identifierSchema = z.object({ scheme: z.string().min(1), value: z.string().min(1) });
 const lineTypeSchema = z.enum(["product", "service", "discount", "fee", "tax", "tip", "refund", "rounding", "other"]);
 export const MerchantBusinessKindSchema = z.enum(["retail", "food_service", "transport", "accommodation", "healthcare", "professional_service", "utility", "government", "financial", "marketplace", "other", "unknown"]);
+export const FoodServiceBenefitKindSchema = z.enum(["included", "complimentary", "review_event", "promotion", "other"]);
 const foodServiceLineSchema = z.object({
   /** A separately priced restaurant item; its amount is never folded into its parent. */
   role: z.enum(["main", "option", "side"]),
   /** Source line ID of the exact main menu only when the receipt makes it unambiguous. */
   applies_to_line_id: z.string().min(1).nullable(),
+  /** Source fact only; never inferred from a zero or nominal amount. */
+  benefit_kind: FoodServiceBenefitKindSchema.nullable().default(null),
 }).strict();
 export const ReceiptFulfillmentTypeSchema = z.enum(["delivery", "takeout", "dine_in", "unknown"]);
 export const ReceiptFulfillmentEvidenceSchema = z.enum(["printed", "user_confirmed", "unknown"]);
@@ -139,7 +142,7 @@ export function mapReceipt(input: unknown): Receipt {
   const receiptId = data.document.id ?? `${data.merchant.name}:${purchasedAt}:${data.document.source.original_document_id ?? "unknown"}`;
   const items = data.line_items.flatMap((line) => {
     if (line.type !== "product" || line.description === null || line.quantity?.unit !== "each" || !Number.isInteger(line.quantity.value) || line.quantity.value <= 0 || line.net_amount_minor === null || line.net_amount_minor < 0 || line.net_amount_minor % line.quantity.value !== 0) return [];
-    return [{ id: receiptItemId(receiptId, line.id), receiptId, sourceLineReferences: line.source_line_references, productName: line.description, sourceProductCode: sourceProductCode(line), unitPriceKrw: line.net_amount_minor / line.quantity.value, quantityValue: line.quantity.value, totalPriceKrw: line.net_amount_minor, confidence: line.confidence, foodServiceRole: line.food_service?.role, optionParentReceiptItemId: line.food_service?.applies_to_line_id ? receiptItemId(receiptId, line.food_service.applies_to_line_id) : null }];
+    return [{ id: receiptItemId(receiptId, line.id), receiptId, sourceLineReferences: line.source_line_references, productName: line.description, sourceProductCode: sourceProductCode(line), unitPriceKrw: line.net_amount_minor / line.quantity.value, quantityValue: line.quantity.value, totalPriceKrw: line.net_amount_minor, confidence: line.confidence, foodServiceRole: line.food_service?.role, foodServiceBenefitKind: line.food_service?.benefit_kind ?? null, optionParentReceiptItemId: line.food_service?.applies_to_line_id ? receiptItemId(receiptId, line.food_service.applies_to_line_id) : null }];
   });
   const receipt = {
     id: receiptId,
@@ -183,4 +186,8 @@ export function auditReceipt(receipt: Receipt, source?: ReceiptJson) {
   const references = receipt.items.flatMap((item) => item.sourceLineReferences);
   if (new Set(references).size !== references.length) throw new Error("원본 품목 참조가 중복되었습니다.");
   return { itemCount: receipt.items.length, quantity: receipt.items.reduce((sum, item) => sum + item.quantityValue, 0), totalKrw: receipt.totalPriceKrw, sourceLineReferenceCount: references.length };
+}
+
+export function isPriceObservationEligibleLine(line: Pick<ReceiptItem, "foodServiceBenefitKind">) {
+  return line.foodServiceBenefitKind == null;
 }

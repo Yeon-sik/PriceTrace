@@ -7,6 +7,7 @@ import {
   publicReceiptFilesToReceipts,
   type PublicReceiptIndex,
 } from "./public-receipt";
+import { isPriceObservationEligibleLine } from "./receipt";
 import type { Confidence, Receipt } from "./types";
 
 const confidenceSchema = z.enum(["high", "medium", "low", "user_verified"]);
@@ -104,7 +105,7 @@ export function buildPublicObservationBundle(receipts: Receipt[], receiptIndexRe
 
   for (const receipt of receipts) {
     if (!receipt.storeId) throw new Error(`공개 영수증에 판매처 ID가 없습니다: ${receipt.id}`);
-    for (const item of receipt.items) {
+    for (const item of receipt.items.filter(isPriceObservationEligibleLine)) {
       const identity = JSON.stringify({
         receiptId: receipt.id,
         receiptItemId: item.id,
@@ -181,7 +182,7 @@ export function assertPublicReceiptObservationLinks(
 
   const expected = new Map<string, Omit<PublicProductObservation, "id">>();
   for (const receipt of publicReceiptFilesToReceipts(collection.receipts)) {
-    for (const item of receipt.items) {
+    for (const item of receipt.items.filter(isPriceObservationEligibleLine)) {
       expected.set(`${receipt.id}:${item.id}`, {
         receiptId: receipt.id,
         receiptItemId: item.id,

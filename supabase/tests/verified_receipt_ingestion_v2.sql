@@ -12,6 +12,7 @@ declare
   v_restaurant jsonb;
   v_refund jsonb;
   v_tampered jsonb;
+  v_invalid jsonb;
   v_first jsonb;
   v_replayed jsonb;
   v_deduplicated jsonb;
@@ -183,14 +184,32 @@ begin
       'discount_amount_minor', 0, 'tax_amount_minor', 0, 'net_amount_minor', 100,
       'confidence', 'user_verified', 'tax_rate_percent', 0,
       'food_service', jsonb_build_object('role', 'option', 'applies_to_line_id', 'main-1')
+    ),
+    jsonb_build_object(
+      'id', 'included-1', 'type', 'product', 'description', 'Included side',
+      'source_line_references', jsonb_build_array('line:3'), 'identifiers', jsonb_build_array(),
+      'quantity', jsonb_build_object('value', 1, 'unit', 'each'),
+      'unit_price_amount_minor', 0, 'gross_amount_minor', 0,
+      'discount_amount_minor', 0, 'tax_amount_minor', 0, 'net_amount_minor', 0,
+      'confidence', 'user_verified', 'tax_rate_percent', 0,
+      'food_service', jsonb_build_object('role', 'side', 'applies_to_line_id', null, 'benefit_kind', 'included')
+    ),
+    jsonb_build_object(
+      'id', 'review-1', 'type', 'product', 'description', 'Review event',
+      'source_line_references', jsonb_build_array('line:4'), 'identifiers', jsonb_build_array(),
+      'quantity', jsonb_build_object('value', 1, 'unit', 'each'),
+      'unit_price_amount_minor', 100, 'gross_amount_minor', 100,
+      'discount_amount_minor', 0, 'tax_amount_minor', 0, 'net_amount_minor', 100,
+      'confidence', 'user_verified', 'tax_rate_percent', 0,
+      'food_service', jsonb_build_object('role', 'side', 'applies_to_line_id', null, 'benefit_kind', 'review_event')
     )
   ));
   v_restaurant := jsonb_set(v_restaurant, '{totals}', jsonb_build_object(
-    'items_gross_amount_minor', 900, 'discount_amount_minor', 0,
+    'items_gross_amount_minor', 1000, 'discount_amount_minor', 0,
     'tax_amount_minor', 0, 'fee_amount_minor', 0, 'tip_amount_minor', 0,
-    'rounding_amount_minor', 0, 'grand_total_amount_minor', 900
+    'rounding_amount_minor', 0, 'grand_total_amount_minor', 1000
   ));
-  v_restaurant := jsonb_set(v_restaurant, '{payments,0,amount_minor}', '900'::jsonb);
+  v_restaurant := jsonb_set(v_restaurant, '{payments,0,amount_minor}', '1000'::jsonb);
   v_first := public.submit_verified_receipt_v2('integration-restaurant-key-' || v_suffix, v_restaurant);
   if (v_first ->> 'restaurantId') <> v_restaurant_id::text
     or (v_first ->> 'restaurantLocationId') <> v_location_id::text
@@ -206,18 +225,50 @@ begin
     or ((v_first -> 'lines' -> 1) ->> 'lineOrdinal') <> '2'
     or ((v_first -> 'lines' -> 1) ->> 'productId') is null
     or ((v_first -> 'lines' -> 1) ->> 'storeProductId') is null
+    or ((v_first -> 'lines' -> 2) ->> 'benefitKind') <> 'included'
+    or ((v_first -> 'lines' -> 2) ->> 'productId') is null
+    or ((v_first -> 'lines' -> 2) ->> 'storeProductId') is null
+    or ((v_first -> 'lines' -> 2) ->> 'observationId') is not null
+    or ((v_first -> 'lines' -> 3) ->> 'benefitKind') <> 'review_event'
+    or ((v_first -> 'lines' -> 3) ->> 'productId') is null
+    or ((v_first -> 'lines' -> 3) ->> 'storeProductId') is null
+    or ((v_first -> 'lines' -> 3) ->> 'observationId') is not null
   then
     raise exception 'verified restaurant menu identity was not returned';
   end if;
   v_receipt_id := (v_first ->> 'receiptId')::uuid;
+  select count(*) into v_restaurant_count
+  from public.verified_receipt_source_lines
+  where receipt_id = v_receipt_id
+    and (
+      (source_line_id = 'included-1' and benefit_kind = 'included' and gross_amount_minor = 0 and net_amount_minor = 0)
+      or (source_line_id = 'review-1' and benefit_kind = 'review_event' and gross_amount_minor = 100 and net_amount_minor = 100)
+    );
+  if v_restaurant_count <> 2 then
+    raise exception 'benefit source facts or monetary values were not preserved';
+  end if;
+  select count(*) into v_request_count
+  from public.price_observations as observation
+  inner join public.receipt_items as item
+    on item.user_id = observation.user_id and item.id = observation.receipt_item_id
+  where item.user_id = v_user_id and item.receipt_id = v_receipt_id;
+  if v_request_count <> 2 then
+    raise exception 'benefit lines changed the normal price observation count';
+  end if;
   v_private := public.get_authenticated_identity_detail_v1(
     p_store_id => (v_first ->> 'storeId')::uuid
   );
   if (v_private -> 'selector' ->> 'type') <> 'store'
     or (v_private -> 'selector' ->> 'id') <> (v_first ->> 'storeId')
     or jsonb_array_length(v_private -> 'receipts') = 0
+    or not exists (
+      select 1
+      from jsonb_array_elements(coalesce((v_private -> 'receipts' -> 0) -> 'sourceLines', '[]'::jsonb)) as source_line
+      where source_line ->> 'sourceLineId' = 'included-1'
+        and source_line ->> 'benefitKind' = 'included'
+    )
   then
-    raise exception 'authenticated private store read did not return the linked receipt';
+    raise exception 'authenticated private store read did not return the linked receipt and benefit source line';
   end if;
   select option_receipt_item_id, parent_receipt_item_id
     into v_option_receipt_item_id, v_parent_receipt_item_id
@@ -226,6 +277,28 @@ begin
   if v_option_receipt_item_id is null or v_parent_receipt_item_id is null then
     raise exception 'restaurant option parent source link was not preserved';
   end if;
+
+  v_invalid := jsonb_set(
+    jsonb_set(v_restaurant, '{document,source,original_document_id}', to_jsonb(('integration-invalid-benefit-' || v_suffix)::text)),
+    '{line_items,2,food_service,benefit_kind}', to_jsonb('invalid'::text)
+  );
+  begin
+    perform public.submit_verified_receipt_v2('integration-invalid-benefit-key-' || v_suffix, v_invalid);
+    raise exception 'invalid benefit_kind was accepted';
+  exception when invalid_parameter_value then
+    null;
+  end;
+
+  v_invalid := jsonb_set(
+    jsonb_set(v_restaurant, '{document,source,original_document_id}', to_jsonb(('integration-unknown-benefit-key-' || v_suffix)::text)),
+    '{line_items,2,food_service,unsupported}', 'true'::jsonb
+  );
+  begin
+    perform public.submit_verified_receipt_v2('integration-unknown-benefit-key-' || v_suffix, v_invalid);
+    raise exception 'unknown food_service key was accepted';
+  exception when invalid_parameter_value then
+    null;
+  end;
 
   v_refund := jsonb_set(
     jsonb_set(v_retail, '{document,source,original_document_id}', to_jsonb(('integration-refund-' || v_suffix)::text)),

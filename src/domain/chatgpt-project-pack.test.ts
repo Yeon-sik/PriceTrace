@@ -171,11 +171,11 @@ describe("ChatGPT Project source pack", () => {
     const ingestionContract = readFileSync(path.join(repositoryRoot, "docs/contracts/VERIFIED_RECEIPT_INGESTION_V2.md"), "utf8");
     const merchantContract = readFileSync(path.join(repositoryRoot, "docs/contracts/MERCHANT_PROFILE_V1.md"), "utf8");
 
-    for (const marker of ["yeonsik-ocr.v1", "receipt.v2.document.id", "localDocumentId", "source_images", "raw_text", "submit_verified_receipt_v2", "user_verified", "projection_targets", "merchant-profile.v1"]) {
+    for (const marker of ["yeonsik-ocr.v1", "receipt.v2.document.id", "localDocumentId", "source_images", "raw_text", "submit_verified_receipt_v2", "user_verified", "projection_targets", "merchant-profile.v1", "benefit_kind"]) {
       expect(instructions, `PROJECT_INSTRUCTIONS.md: ${marker}`).toContain(marker);
       expect(settings, `PASTE_TO_PROJECT_SETTINGS.md: ${marker}`).toContain(marker);
     }
-    for (const marker of ["source-document fact", "server-owned", "submit_merchant_identity_candidate_v1", "idempotency", "merchant_sku"]) {
+    for (const marker of ["source-document fact", "server-owned", "submit_merchant_identity_candidate_v1", "idempotency", "merchant_sku", "benefit_kind", "review_event"]) {
       expect(ingestionContract, `VERIFIED_RECEIPT_INGESTION_V2.md: ${marker}`).toContain(marker);
     }
     for (const marker of ["검증 전 판매처 source fact 초안", "merchant-profile.v1", "submit_merchant_identity_candidate_v1", "PriceTrace UUID", "SKU", "브랜드"]) {

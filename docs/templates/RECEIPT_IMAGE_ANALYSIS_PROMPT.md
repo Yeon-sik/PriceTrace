@@ -49,7 +49,7 @@
 17. `projection_targets`는 routing hint일 뿐 source fact·검증·PriceTrace identity의 authority가 아니다. PriceTrace의 productId, storeProductId, catalogProductId, restaurantMenuId, storeId, receiptId는 RPC 응답만 사용한다.
 18. 음식점 영수증의 document.fulfillment.type은 영수증에 배달·포장·매장(홀) 이용이 직접 인쇄된 경우에만 각각 delivery, takeout, dine_in으로 쓴다. 배달료·포장 할인·메뉴명만으로 이용 방식을 추정하지 않는다. 확인할 수 없으면 unknown이다.
 19. 이용 방식이 영수증에 직접 인쇄돼 확인되면 evidence는 printed다. 사용자가 이미지와 함께 이용 방식을 명시한 경우에만 user_confirmed다. 둘 다 아니면 type과 evidence 모두 unknown이다.
-20. 식당 영수증의 product 행은 메뉴 역할을 직접 확인할 수 있을 때만 food_service를 기록한다. 기본 메뉴는 {"role":"main","applies_to_line_id":null}, 별도 사이드는 {"role":"side","applies_to_line_id":null}이다. “면 추가”, “토핑 추가”처럼 추가 옵션으로 명확한 행은 {"role":"option","applies_to_line_id":"기본메뉴 line id"}로 쓴다. 부모 메뉴는 영수증에 직접 표시됐거나 같은 영수증에 기본 메뉴가 정확히 하나여서 유일하게 결정될 때만 연결한다. 그 외, 또는 일반 소매 영수증은 food_service를 null로 둔다.
+20. 식당 영수증의 product 행은 메뉴 역할을 직접 확인할 수 있을 때만 food_service를 기록한다. 구조는 {"role":"main|option|side","applies_to_line_id":"부모 기본 메뉴 line id 또는 null","benefit_kind":"null|included|complimentary|review_event|promotion|other"}다. 기본 메뉴는 {"role":"main","applies_to_line_id":null,"benefit_kind":null}, 별도 사이드는 {"role":"side","applies_to_line_id":null,"benefit_kind":null}이다. “면 추가”, “토핑 추가”처럼 추가 옵션으로 명확한 행은 {"role":"option","applies_to_line_id":"기본메뉴 line id","benefit_kind":null}로 쓴다. `included`, `complimentary`, `review_event`, `promotion`, `other`는 영수증에 명시되었거나 사용자가 명시적으로 확인한 benefit source fact일 때만 기록하며, 가격이 0원·100원·소액이라는 이유로 만들거나 추론하지 않는다. benefit line의 unit/gross/discount/tax/net 금액은 원본 그대로 보존한다. benefit_kind가 null이 아닌 line은 source/menu identity resolution에는 남지만 정상 PriceTrace price observation 대상이 아니며, `review_event`도 promotional observation으로 만들지 않는다. 부모 메뉴는 영수증에 직접 표시됐거나 같은 영수증에 기본 메뉴가 정확히 하나여서 유일하게 결정될 때만 연결한다. 그 외, 또는 일반 소매 영수증은 food_service를 null로 둔다.
 21. 옵션과 사이드는 항상 별도 product 행과 자체 금액으로 보존한다. 옵션 금액을 기본 메뉴의 금액에 더하거나, 사이드를 옵션으로 연결하지 않는다. 예: 라면 line-001, 면추가 line-002, 교자 line-003이면 line-001은 main, line-002는 option → line-001, line-003은 side다.
 반환 전 자체 점검:
 - line_items의 모든 행에 필수 키가 있는가?
@@ -60,6 +60,8 @@
 - 확실하지 않은 값을 추정하지 않았는가?
 - fulfillment.type과 fulfillment.evidence가 영수증 또는 사용자 명시 근거와 일치하는가?
 - 식당 옵션이 유일하게 확인되는 기본 메뉴에만 연결됐고, 옵션·사이드 금액이 별도 행으로 남아 있는가?
+- food_service.benefit_kind가 명시된 source fact일 때만 기록됐고, 0원·100원·소액 가격에서 추론하지 않았는가?
+- benefit line의 원본 금액을 바꾸지 않았고, 같은 영수증의 일반 line만 정상 가격 관측 대상으로 남겼는가?
 ```
 
 ## 추출 후 검증

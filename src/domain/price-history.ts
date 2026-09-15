@@ -1,13 +1,14 @@
+import { isPriceObservationEligibleLine } from "./receipt";
 import type { PriceObservation, Product, Receipt } from "./types";
 
 export function productsFromReceipts(receipts:Receipt[]):Product[] {
   const products = new Map<string, Product>();
-  receipts.flatMap(r=>r.items).forEach(item=>products.set(item.sourceProductCode, {sourceProductCode:item.sourceProductCode, productName:item.productName}));
+  receipts.flatMap(r=>r.items.filter(isPriceObservationEligibleLine)).forEach(item=>products.set(item.sourceProductCode, {sourceProductCode:item.sourceProductCode, productName:item.productName}));
   return [...products.values()].sort((a,b)=>a.productName.localeCompare(b.productName));
 }
 
 export function observationsForProduct(receipts:Receipt[], code:string):PriceObservation[] {
-  return receipts.flatMap(receipt=>receipt.items.filter(item=>item.sourceProductCode===code).map(item=>({receiptId:receipt.id,sourceProductCode:code,productName:item.productName,storeLabel:receipt.storeLabel,observedAt:receipt.purchasedAt,unitPriceKrw:item.unitPriceKrw,quantity:item.quantityValue,confidence:item.confidence}))).sort((a,b)=>b.observedAt.localeCompare(a.observedAt));
+  return receipts.flatMap(receipt=>receipt.items.filter(item=>isPriceObservationEligibleLine(item)&&item.sourceProductCode===code).map(item=>({receiptId:receipt.id,sourceProductCode:code,productName:item.productName,storeLabel:receipt.storeLabel,observedAt:receipt.purchasedAt,unitPriceKrw:item.unitPriceKrw,quantity:item.quantityValue,confidence:item.confidence}))).sort((a,b)=>b.observedAt.localeCompare(a.observedAt));
 }
 
 export function priceSummary(observations:PriceObservation[]) {

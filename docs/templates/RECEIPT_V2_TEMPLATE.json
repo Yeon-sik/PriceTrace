@@ -21,10 +21,10 @@
     }
   },
   "merchant": {
-    "name": "예시마트",
+    "name": "예시식당",
     "branch_name": "예시점",
-    "business_kind": "retail",
-    "retail_channel": "regular",
+    "business_kind": "food_service",
+    "retail_channel": "unknown",
     "catalog_namespace": null,
     "merchant_id": null,
     "business_registration_number": null,
@@ -35,7 +35,7 @@
     {
       "id": "line-001",
       "type": "product",
-      "description": "예시 상품 A",
+      "description": "예시 메뉴 A",
       "source_line_references": [
         "line-001"
       ],
@@ -46,22 +46,26 @@
         }
       ],
       "quantity": {
-        "value": 2,
+        "value": 1,
         "unit": "each"
       },
-      "unit_price_amount_minor": 3000,
+      "unit_price_amount_minor": 6000,
       "gross_amount_minor": 6000,
       "discount_amount_minor": 0,
       "tax_amount_minor": 0,
       "net_amount_minor": 6000,
       "confidence": "high",
       "tax_rate_percent": null,
-      "food_service": null
+      "food_service": {
+        "role": "main",
+        "applies_to_line_id": null,
+        "benefit_kind": null
+      }
     },
     {
       "id": "line-002",
       "type": "product",
-      "description": "예시 상품 B",
+      "description": "기본 제공 반찬",
       "source_line_references": [
         "line-002"
       ],
@@ -70,14 +74,18 @@
         "value": 1,
         "unit": "each"
       },
-      "unit_price_amount_minor": 2500,
-      "gross_amount_minor": 2500,
+      "unit_price_amount_minor": 0,
+      "gross_amount_minor": 0,
       "discount_amount_minor": 0,
       "tax_amount_minor": 0,
-      "net_amount_minor": 2500,
+      "net_amount_minor": 0,
       "confidence": "medium",
       "tax_rate_percent": null,
-      "food_service": null
+      "food_service": {
+        "role": "side",
+        "applies_to_line_id": null,
+        "benefit_kind": "included"
+      }
     },
     {
       "id": "line-003",
@@ -99,18 +107,18 @@
     }
   ],
   "totals": {
-    "items_gross_amount_minor": 8500,
+    "items_gross_amount_minor": 6000,
     "discount_amount_minor": 500,
     "tax_amount_minor": 0,
     "fee_amount_minor": 0,
     "tip_amount_minor": 0,
     "rounding_amount_minor": 0,
-    "grand_total_amount_minor": 8000
+    "grand_total_amount_minor": 5500
   },
   "payments": [
     {
       "method": "card",
-      "amount_minor": 8000,
+      "amount_minor": 5500,
       "status": "paid",
       "reference": null
     }
