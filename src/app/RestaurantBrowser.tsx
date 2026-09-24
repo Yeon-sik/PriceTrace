@@ -16,6 +16,7 @@ import {
 import { formatKrw } from "@/domain/settlement";
 import { useRestaurantMenuCatalog } from "@/features/restaurant-menu/use-restaurant-menu-catalog";
 import { PrivateIdentityDetail } from "./PrivateIdentityDetail";
+import { MyPendingMerchantCandidates } from "./MyPendingMerchantCandidates";
 import { StandardProductNutritionModal } from "./StandardProductNutritionModal";
 import styles from "./page.module.css";
 
@@ -148,6 +149,8 @@ export function RestaurantBrowser({ selectedRestaurant, selectedRestaurantMenuId
         <strong>음식점 상세 구조</strong>
         <span>목록은 식당 identity를 찾는 공간이고, 상세 화면은 메뉴·식당 정보·지점 및 출처를 분리해 보여줍니다. 가격은 현재가가 아닌 관측 시점이 있는 기록입니다.</span>
       </div>
+
+      <MyPendingMerchantCandidates />
 
       {configured && !loading && !error && entries.length > 0 && <div className={styles.restaurantDirectorySummary} aria-live="polite">
         <span><b>{entries.length}</b>개 식당</span>

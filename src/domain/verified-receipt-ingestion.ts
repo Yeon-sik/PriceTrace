@@ -7,6 +7,9 @@ export const VerifiedReceiptIngestionRequestSchema = z.object({
   idempotency_key: z.string().trim().min(1).max(200),
   receipt: ReceiptJsonSchema,
 }).strict().superRefine(({ receipt }, context) => {
+  if (receipt.totals.grand_total_amount_minor === null) {
+    context.addIssue({ code: z.ZodIssueCode.custom, path: ["receipt", "totals", "grand_total_amount_minor"], message: "확정 총액은 verified receipt ingestion에 필요합니다." });
+  }
   if (receipt.document.source.transcription_status !== "user_verified") {
     context.addIssue({ code: z.ZodIssueCode.custom, path: ["receipt", "document", "source", "transcription_status"], message: "사용자 검증이 완료된 receipt.v2만 등록할 수 있습니다." });
   }
@@ -39,6 +42,8 @@ export const VerifiedReceiptIngestionLineSchema = z.object({
   benefitKind: FoodServiceBenefitKindSchema.nullable().optional().default(null),
   receiptItemId: z.string().trim().min(1).nullable(),
   observationId: nullableUuidSchema,
+  observationCreated: z.boolean(),
+  observationStatus: z.enum(["created", "insufficient_source_facts", "benefit_source_only", "semantic_only"]),
   restaurantObservationId: nullableUuidSchema,
   productId: nullableUuidSchema,
   storeProductId: nullableUuidSchema,
