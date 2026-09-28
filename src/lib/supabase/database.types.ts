@@ -616,6 +616,14 @@ export interface Database {
         Args: { p_resolution_id:string; p_merchant:Json; p_user_verified:boolean; };
         Returns: Json;
       };
+      resolve_ocr_receipt_menu_identity_v1: {
+        Args: { p_resolution_id:string; p_menu_facts:Json; p_user_verified:boolean; };
+        Returns: Json;
+      };
+      resolve_ocr_standalone_restaurant_menu_v1: {
+        Args: { p_resolution_id:string; p_merchant:Json; p_item:Json; p_user_verified:boolean; };
+        Returns: Json;
+      };
       get_authenticated_identity_detail_v1: {
         Args: { p_store_id:string|null; p_store_product_id:string|null; p_restaurant_menu_id:string|null; p_catalog_product_id:string|null; };
         Returns: Json;

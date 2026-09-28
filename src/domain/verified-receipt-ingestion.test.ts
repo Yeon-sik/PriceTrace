@@ -97,6 +97,44 @@ describe("verified receipt ingestion contract", () => {
     expect(() => VerifiedReceiptIngestionResponseSchema.parse({ ...response, merchantResolutionStatus: "needs_user_selection" })).toThrow();
   });
 
+  it("requires Restaurant Menu and Catalog authority before an exact restaurant line is resolved", () => {
+    const response = {
+      schemaVersion: "verified-receipt-ingestion.v2",
+      replayed: false,
+      deduplicated: false,
+      receiptId: "11111111-1111-4111-8111-111111111111",
+      storeId: "22222222-2222-4222-8222-222222222222",
+      restaurantId: "33333333-3333-4333-8333-333333333333",
+      restaurantLocationId: "44444444-4444-4444-8444-444444444444",
+      merchantResolutionStatus: "exact",
+      merchantCandidateId: null,
+      ocrResolution: null,
+      observationIds: [],
+      lines: [{
+        sourceLineId: "line-001",
+        lineOrdinal: 1,
+        benefitKind: null,
+        receiptItemId: "receipt-item-1",
+        observationId: null,
+        restaurantObservationId: null,
+        productId: "55555555-5555-4555-8555-555555555555",
+        storeProductId: "66666666-6666-4666-8666-666666666666",
+        catalogProductId: null,
+        restaurantMenuId: null,
+        resolutionStatus: "resolved",
+      }],
+    };
+    expect(() => VerifiedReceiptIngestionResponseSchema.parse(response)).toThrow();
+    expect(() => VerifiedReceiptIngestionResponseSchema.parse({
+      ...response,
+      lines: [{
+        ...response.lines[0],
+        catalogProductId: "77777777-7777-4777-8777-777777777777",
+        restaurantMenuId: "88888888-8888-4888-8888-888888888888",
+      }],
+    })).not.toThrow();
+  });
+
   it("keeps OCR resolution authenticated and separate from administrator candidate review", () => {
     const migration = readFileSync(path.join(process.cwd(), "supabase/migrations/20260927090000_ocr_v5_identity_authority.sql"), "utf8");
     expect(migration).toContain("review_status in ('pending', 'accepted', 'rejected', 'needs_ocr_resolution')");

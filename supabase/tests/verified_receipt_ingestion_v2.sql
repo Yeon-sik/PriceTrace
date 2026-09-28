@@ -1,6 +1,6 @@
--- Executes the PriceTrace RPC against an already migrated Supabase/Postgres database.
--- Run this file in the Supabase SQL editor or with `supabase db query --linked`.
--- All fixture writes are rolled back at the end.
+-- Executes the PriceTrace RPC against the fully migrated local Supabase stack.
+-- Run with `supabase db query --local --file supabase/tests/verified_receipt_ingestion_v2.sql`.
+-- No linked/remote database is used; all fixture writes are rolled back at the end.
 
 begin;
 
@@ -26,6 +26,9 @@ declare
   v_new_branch_result jsonb;
   v_ambiguous_result jsonb;
   v_resolved_result jsonb;
+  v_menu_ambiguous_source jsonb;
+  v_menu_ambiguous_result jsonb;
+  v_menu_resolved_result jsonb;
   v_private jsonb;
   v_receipt_id uuid;
   v_option_receipt_item_id text;
@@ -36,10 +39,18 @@ declare
   v_catalog_product_id uuid;
   v_menu_id uuid;
   v_candidate_id uuid;
+  v_menu_resolution_id uuid;
+  v_duplicate_standard_id uuid;
+  v_duplicate_catalog_id uuid;
+  v_duplicate_menu_id uuid;
   v_new_restaurant_id uuid;
   v_new_location_id uuid;
+  v_new_menu_id uuid;
+  v_new_catalog_id uuid;
   v_other_restaurant_id uuid;
   v_other_location_id uuid;
+  v_other_menu_id uuid;
+  v_other_catalog_id uuid;
   v_ambiguous_restaurant_a uuid;
   v_ambiguous_restaurant_b uuid;
   v_ambiguous_location_a uuid;
@@ -48,11 +59,18 @@ declare
   v_request_count integer;
   v_content_count integer;
   v_owner_denied boolean := false;
+  v_menu_owner_denied boolean := false;
 begin
-  select id into v_user_id from auth.users order by created_at limit 1;
-  if v_user_id is null then
-    raise exception 'verified receipt integration test requires one auth.users fixture';
-  end if;
+  v_user_id := gen_random_uuid();
+  v_other_user_id := gen_random_uuid();
+  insert into auth.users (
+    id, aud, role, email, encrypted_password, raw_app_meta_data,
+    raw_user_meta_data, created_at, updated_at
+  ) values
+    (v_user_id, 'authenticated', 'authenticated', 'ocr-v5-receipt-' || v_suffix || '@example.invalid', '',
+      '{"provider":"email","providers":["email"]}'::jsonb, '{}'::jsonb, now(), now()),
+    (v_other_user_id, 'authenticated', 'authenticated', 'ocr-v5-receipt-other-' || v_suffix || '@example.invalid', '',
+      '{"provider":"email","providers":["email"]}'::jsonb, '{}'::jsonb, now(), now());
 
   perform set_config(
     'request.jwt.claims',
@@ -248,10 +266,16 @@ begin
     or ((v_first -> 'lines' -> 2) ->> 'productId') is null
     or ((v_first -> 'lines' -> 2) ->> 'storeProductId') is null
     or ((v_first -> 'lines' -> 2) ->> 'observationId') is not null
+    or ((v_first -> 'lines' -> 2) ->> 'resolutionStatus') <> 'semantic_only'
+    or ((v_first -> 'lines' -> 2) ->> 'restaurantMenuId') is not null
+    or ((v_first -> 'lines' -> 2) ->> 'catalogProductId') is not null
     or ((v_first -> 'lines' -> 3) ->> 'benefitKind') <> 'review_event'
     or ((v_first -> 'lines' -> 3) ->> 'productId') is null
     or ((v_first -> 'lines' -> 3) ->> 'storeProductId') is null
     or ((v_first -> 'lines' -> 3) ->> 'observationId') is not null
+    or ((v_first -> 'lines' -> 3) ->> 'resolutionStatus') <> 'semantic_only'
+    or ((v_first -> 'lines' -> 3) ->> 'restaurantMenuId') is not null
+    or ((v_first -> 'lines' -> 3) ->> 'catalogProductId') is not null
   then
     raise exception 'verified restaurant menu identity was not returned';
   end if;
@@ -320,12 +344,17 @@ begin
   );
   v_new_restaurant_id := (v_new_source_result ->> 'restaurantId')::uuid;
   v_new_location_id := (v_new_source_result ->> 'restaurantLocationId')::uuid;
+  v_new_menu_id := ((v_new_source_result -> 'lines' -> 0) ->> 'restaurantMenuId')::uuid;
+  v_new_catalog_id := ((v_new_source_result -> 'lines' -> 0) ->> 'catalogProductId')::uuid;
   if v_new_restaurant_id is null or v_new_location_id is null
+    or v_new_menu_id is null or v_new_catalog_id is null
     or v_new_source_result ->> 'merchantResolutionStatus' <> 'exact'
     or (v_new_source_result ->> 'merchantCandidateId') is not null
-    or ((v_new_source_result -> 'lines' -> 0) ->> 'restaurantMenuId') is not null
+    or ((v_new_source_result -> 'lines' -> 0) ->> 'resolutionStatus') <> 'resolved'
+    or ((v_new_source_result -> 'lines' -> 0) ->> 'restaurantMenuId') is null
+    or ((v_new_source_result -> 'lines' -> 0) ->> 'catalogProductId') is null
   then
-    raise exception 'a uniquely sourced OCR restaurant was not created as one exact identity';
+    raise exception 'one OCR-reviewed receipt did not resolve Restaurant/Location/Menu/Catalog authority: %', v_new_source_result;
   end if;
   if not exists (
     select 1 from public.restaurants as restaurant
@@ -338,8 +367,18 @@ begin
       and restaurant.verification_status = 'verified'
       and location.review_status = 'verified'
       and location.verification_status = 'verified'
+      and exists (
+        select 1 from public.restaurant_menus as menu
+        inner join public.catalog_products as catalog on catalog.id = menu.catalog_product_id
+        inner join public.standard_products as standard on standard.id = catalog.standard_product_id
+        where menu.id = v_new_menu_id and menu.restaurant_id = restaurant.id
+          and catalog.id = v_new_catalog_id
+          and menu.status = 'active' and menu.review_status = 'verified' and menu.verification_status = 'verified'
+          and catalog.status = 'active' and catalog.purchase_type = 'menu_item' and catalog.verification_status = 'verified'
+          and standard.status = 'active' and standard.purchase_type = 'menu_item' and standard.verification_status = 'verified'
+      )
   ) then
-    raise exception 'new OCR restaurant/location did not retain its verified source identity';
+    raise exception 'new OCR Restaurant/Location/Menu/Catalog did not retain verified source identity';
   end if;
 
   -- Same display name with a different branch source identity must not merge.
@@ -355,11 +394,16 @@ begin
   );
   v_other_restaurant_id := (v_new_branch_result ->> 'restaurantId')::uuid;
   v_other_location_id := (v_new_branch_result ->> 'restaurantLocationId')::uuid;
+  v_other_menu_id := ((v_new_branch_result -> 'lines' -> 0) ->> 'restaurantMenuId')::uuid;
+  v_other_catalog_id := ((v_new_branch_result -> 'lines' -> 0) ->> 'catalogProductId')::uuid;
   if v_other_restaurant_id is null or v_other_location_id is null
+    or v_other_menu_id is null or v_other_catalog_id is null
     or v_other_restaurant_id = v_new_restaurant_id
     or v_other_location_id = v_new_location_id
+    or v_other_menu_id = v_new_menu_id
+    or v_other_catalog_id = v_new_catalog_id
   then
-    raise exception 'same-name restaurants with distinct branch source identities were merged';
+    raise exception 'same-name restaurant/location/menu source identities were merged';
   end if;
 
   v_new_source_replay := public.submit_verified_receipt_v2(
@@ -367,9 +411,11 @@ begin
   );
   if (v_new_source_replay ->> 'restaurantId')::uuid <> v_new_restaurant_id
     or (v_new_source_replay ->> 'restaurantLocationId')::uuid <> v_new_location_id
+    or ((v_new_source_replay -> 'lines' -> 0) ->> 'restaurantMenuId')::uuid <> v_new_menu_id
+    or ((v_new_source_replay -> 'lines' -> 0) ->> 'catalogProductId')::uuid <> v_new_catalog_id
     or (v_new_source_replay ->> 'replayed')::boolean is not true
   then
-    raise exception 'same request retry did not reuse the authoritative restaurant identity';
+    raise exception 'same request retry did not reuse all four authoritative restaurant/menu identities';
   end if;
   select count(*) into v_restaurant_count
   from public.restaurant_locations
@@ -377,6 +423,100 @@ begin
     and source_location_code = 'new-location-' || v_suffix;
   if v_restaurant_count <> 1 then
     raise exception 'same request retry created a duplicate restaurant location';
+  end if;
+
+  -- Two exact name variants inside one Restaurant are ambiguous until the
+  -- OCR-App supplies a reviewed serving fact. The line must carry no guessed
+  -- Menu/Catalog IDs, and only this receipt owner may resolve it.
+  insert into public.standard_products (
+    purchase_type, canonical_name, status, created_by, verification_status
+  ) values (
+    'menu_item', 'Integration main menu', 'active', v_user_id, 'verified'
+  ) returning id into v_duplicate_standard_id;
+  insert into public.catalog_products (
+    standard_product_id, purchase_type, canonical_name, brand, specification,
+    specification_status, content_amount, content_unit, package_count,
+    reference_unit, attributes, status, created_by, verification_status
+  ) values (
+    v_duplicate_standard_id, 'menu_item', 'Integration main menu', 'Same Name Restaurant ' || v_suffix,
+    '2인분', 'placeholder', 1, 'each', 1, 100,
+    jsonb_build_object('restaurantId', v_new_restaurant_id), 'active', v_user_id, 'verified'
+  ) returning id into v_duplicate_catalog_id;
+  insert into public.restaurant_menus (
+    restaurant_id, catalog_product_id, canonical_name, category_label,
+    serving_label, review_status, status, verification_status,
+    created_by, reviewed_by, reviewed_at
+  ) values (
+    v_new_restaurant_id, v_duplicate_catalog_id, 'Integration main menu', '식사',
+    '2인분', 'verified', 'active', 'verified', v_user_id, v_user_id, now()
+  ) returning id into v_duplicate_menu_id;
+
+  v_menu_ambiguous_source := jsonb_set(
+    v_new_source,
+    '{document,source,original_document_id}',
+    to_jsonb(('integration-menu-ambiguous-' || v_suffix)::text)
+  );
+  v_menu_ambiguous_result := public.submit_verified_receipt_v2(
+    'integration-menu-ambiguous-key-' || v_suffix, v_menu_ambiguous_source
+  );
+  v_menu_resolution_id := (((v_menu_ambiguous_result -> 'lines' -> 0) -> 'ocrResolution') ->> 'resolutionId')::uuid;
+  if v_menu_ambiguous_result ->> 'merchantResolutionStatus' <> 'exact'
+    or ((v_menu_ambiguous_result -> 'lines' -> 0) ->> 'resolutionStatus') <> 'needs_ocr_resolution'
+    or ((v_menu_ambiguous_result -> 'lines' -> 0) ->> 'restaurantMenuId') is not null
+    or ((v_menu_ambiguous_result -> 'lines' -> 0) ->> 'catalogProductId') is not null
+    or v_menu_ambiguous_result -> 'lines' -> 0 -> 'ocrResolution' ->> 'status' <> 'needs_ocr_resolution'
+    or v_menu_resolution_id is null
+  then
+    raise exception 'ambiguous same-name restaurant menus exposed a guessed identity: %', v_menu_ambiguous_result;
+  end if;
+
+  perform set_config(
+    'request.jwt.claims',
+    jsonb_build_object('sub', gen_random_uuid(), 'role', 'authenticated', 'app_metadata', jsonb_build_object('role', 'user'))::text,
+    true
+  );
+  begin
+    perform public.resolve_ocr_receipt_menu_identity_v1(
+      v_menu_resolution_id,
+      jsonb_build_object('item_name', 'Integration main menu', 'serving_label', '2인분'),
+      true
+    );
+    raise exception 'another user resolved an OCR menu candidate they do not own';
+  exception when insufficient_privilege then
+    v_menu_owner_denied := true;
+  end;
+  if not v_menu_owner_denied then
+    raise exception 'OCR menu resolution did not enforce receipt ownership';
+  end if;
+  perform set_config(
+    'request.jwt.claims',
+    jsonb_build_object('sub', v_user_id, 'role', 'authenticated', 'app_metadata', jsonb_build_object('role', 'user'))::text,
+    true
+  );
+  v_menu_resolved_result := public.resolve_ocr_receipt_menu_identity_v1(
+    v_menu_resolution_id,
+    jsonb_build_object('item_name', 'Integration main menu', 'serving_label', '2인분', 'category_label', '식사'),
+    true
+  );
+  if ((v_menu_resolved_result -> 'lines' -> 0) ->> 'resolutionStatus') <> 'resolved'
+    or ((v_menu_resolved_result -> 'lines' -> 0) ->> 'restaurantMenuId') <> v_duplicate_menu_id::text
+    or ((v_menu_resolved_result -> 'lines' -> 0) ->> 'catalogProductId') <> v_duplicate_catalog_id::text
+  then
+    raise exception 'OCR menu source resolution did not return the uniquely selected authoritative identity: %', v_menu_resolved_result;
+  end if;
+  if not has_function_privilege('authenticated', 'public.resolve_ocr_receipt_menu_identity_v1(uuid,jsonb,boolean)', 'execute')
+    or has_function_privilege('anon', 'public.resolve_ocr_receipt_menu_identity_v1(uuid,jsonb,boolean)', 'execute')
+  then
+    raise exception 'OCR receipt menu resolution grants do not enforce the authenticated boundary';
+  end if;
+  v_menu_ambiguous_result := public.submit_verified_receipt_v2(
+    'integration-menu-ambiguous-key-' || v_suffix, v_menu_ambiguous_source
+  );
+  if v_menu_ambiguous_result ->> 'replayed' <> 'true'
+    or ((v_menu_ambiguous_result -> 'lines' -> 0) ->> 'restaurantMenuId') <> v_duplicate_menu_id::text
+    or ((v_menu_ambiguous_result -> 'lines' -> 0) ->> 'catalogProductId') <> v_duplicate_catalog_id::text
+  then
+    raise exception 'resolved receipt menu identity did not survive idempotent replay';
   end if;
 
   -- Conflicting business-number matches are returned to OCR-App. The row is
@@ -453,7 +593,6 @@ begin
   then
     raise exception 'OCR resolution RPC execute grants do not enforce the authenticated boundary';
   end if;
-  select id into v_other_user_id from auth.users where id <> v_user_id order by created_at limit 1;
   if v_other_user_id is not null then
     perform set_config(
       'request.jwt.claims',

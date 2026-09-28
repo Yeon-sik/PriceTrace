@@ -1,5 +1,5 @@
--- Run after 20260911120000_align_yeonsik_ocr_v3_identity_precision.sql in a linked
--- SQL editor or local Supabase database. Fixture writes are rolled back.
+-- Run after the full local migration stack with `supabase db query --local -f`.
+-- Fixture writes are rolled back; the linked/remote database is not used.
 
 begin;
 
@@ -18,6 +18,18 @@ declare
   v_nullable_price jsonb;
   v_final_payment_only jsonb;
   v_restaurant jsonb;
+  v_name_only jsonb;
+  v_name_only_result jsonb;
+  v_name_only_retry jsonb;
+  v_name_only_resolved jsonb;
+  v_strong_merchant jsonb;
+  v_item_facts jsonb;
+  v_same_name_branch jsonb;
+  v_same_name_result jsonb;
+  v_exact_reuse_request jsonb;
+  v_exact_reuse_result jsonb;
+  v_duplicate_menu_result jsonb;
+  v_duplicate_resolution_result jsonb;
   v_observation jsonb;
   v_sku_observation jsonb;
   v_nullable_observation jsonb;
@@ -26,6 +38,20 @@ declare
   v_sku_observation_id uuid;
   v_nullable_observation_id uuid;
   v_final_payment_observation_id uuid;
+  v_resolution_id uuid;
+  v_other_user_id uuid;
+  v_first_restaurant_id uuid;
+  v_first_location_id uuid;
+  v_first_menu_id uuid;
+  v_first_catalog_id uuid;
+  v_second_restaurant_id uuid;
+  v_second_location_id uuid;
+  v_second_menu_id uuid;
+  v_second_catalog_id uuid;
+  v_duplicate_standard_id uuid;
+  v_duplicate_catalog_id uuid;
+  v_duplicate_menu_id uuid;
+  v_owner_denied boolean := false;
   v_receipt_id uuid;
   v_receipt_item_id text;
   v_receipt_observation_kind text;
@@ -34,10 +60,14 @@ declare
   v_observed_at_exact timestamptz;
   v_count integer;
 begin
-  select id into v_user_id from auth.users order by created_at limit 1;
-  if v_user_id is null then
-    raise exception 'standalone observation integration test requires one auth.users fixture';
-  end if;
+  v_user_id := gen_random_uuid();
+  insert into auth.users (
+    id, aud, role, email, encrypted_password, raw_app_meta_data,
+    raw_user_meta_data, created_at, updated_at
+  ) values (
+    v_user_id, 'authenticated', 'authenticated', 'ocr-v5-standalone-' || v_suffix || '@example.invalid', '',
+    '{"provider":"email","providers":["email"]}'::jsonb, '{}'::jsonb, now(), now()
+  );
 
   perform set_config(
     'request.jwt.claims',
@@ -456,12 +486,21 @@ begin
   );
   v_manual_id := (v_observation ->> 'observationId')::uuid;
   if v_observation ->> 'kind' <> 'restaurant_purchase'
+    or v_observation ->> 'authorityStatus' <> 'exact'
+    or v_observation ->> 'merchantResolutionStatus' <> 'exact'
+    or v_observation ->> 'menuResolutionStatus' <> 'exact'
     or (v_observation #>> '{authoritativeIds,restaurantId}') is null
     or (v_observation #>> '{authoritativeIds,restaurantLocationId}') is null
     or (v_observation #>> '{authoritativeIds,restaurantMenuId}') is null
+    or (v_observation #>> '{authoritativeIds,catalogProductId}') is null
+    or (v_observation #>> '{authoritativeIds,standardProductId}') is null
   then
     raise exception 'restaurant standalone observation response is incomplete: %', v_observation;
   end if;
+  v_first_restaurant_id := (v_observation #>> '{authoritativeIds,restaurantId}')::uuid;
+  v_first_location_id := (v_observation #>> '{authoritativeIds,restaurantLocationId}')::uuid;
+  v_first_menu_id := (v_observation #>> '{authoritativeIds,restaurantMenuId}')::uuid;
+  v_first_catalog_id := (v_observation #>> '{authoritativeIds,catalogProductId}')::uuid;
   select count(*) into v_count
   from public.restaurant_menu_manual_observations as manual_observation
   where manual_observation.id = v_manual_id
@@ -474,6 +513,229 @@ begin
     and manual_observation.net_price_krw = 9000;
   if v_count <> 1 then
     raise exception 'restaurant standalone observation was not persisted independently';
+  end if;
+
+  if not exists (
+    select 1
+    from public.restaurants as restaurant
+    inner join public.restaurant_locations as location on location.restaurant_id = restaurant.id
+    inner join public.restaurant_menus as menu on menu.restaurant_id = restaurant.id
+    inner join public.catalog_products as catalog on catalog.id = menu.catalog_product_id
+    inner join public.standard_products as standard on standard.id = catalog.standard_product_id
+    where restaurant.id = v_first_restaurant_id
+      and location.id = v_first_location_id
+      and menu.id = v_first_menu_id
+      and catalog.id = v_first_catalog_id
+      and standard.id = (v_observation #>> '{authoritativeIds,standardProductId}')::uuid
+      and restaurant.review_status = 'verified' and restaurant.verification_status = 'verified'
+      and location.review_status = 'verified' and location.verification_status = 'verified'
+      and menu.review_status = 'verified' and menu.verification_status = 'verified'
+      and catalog.verification_status = 'verified' and standard.verification_status = 'verified'
+  ) then
+    raise exception 'standalone exact response IDs are not an active verified Restaurant/Location/Menu/Catalog chain';
+  end if;
+
+  v_observation := public.ingest_verified_standalone_price_observation_v1(
+    'standalone-restaurant-' || v_suffix,
+    v_restaurant
+  );
+  if v_observation ->> 'authorityStatus' <> 'exact'
+    or (v_observation ->> 'observationId')::uuid <> v_manual_id
+    or (v_observation #>> '{authoritativeIds,restaurantId}')::uuid <> v_first_restaurant_id
+    or (v_observation #>> '{authoritativeIds,restaurantLocationId}')::uuid <> v_first_location_id
+    or (v_observation #>> '{authoritativeIds,restaurantMenuId}')::uuid <> v_first_menu_id
+    or (v_observation #>> '{authoritativeIds,catalogProductId}')::uuid <> v_first_catalog_id
+    or v_observation ->> 'replayed' <> 'true'
+  then
+    raise exception 'standalone exact retry did not reuse the same four authoritative IDs';
+  end if;
+
+  v_exact_reuse_request := jsonb_set(
+    v_restaurant,
+    '{document,source,original_document_id}',
+    to_jsonb(('standalone-exact-reuse-' || v_suffix)::text)
+  );
+  v_exact_reuse_result := public.ingest_verified_standalone_price_observation_v1(
+    'standalone-exact-reuse-key-' || v_suffix,
+    v_exact_reuse_request
+  );
+  if v_exact_reuse_result ->> 'authorityStatus' <> 'exact'
+    or (v_exact_reuse_result #>> '{authoritativeIds,restaurantId}')::uuid <> v_first_restaurant_id
+    or (v_exact_reuse_result #>> '{authoritativeIds,restaurantLocationId}')::uuid <> v_first_location_id
+    or (v_exact_reuse_result #>> '{authoritativeIds,restaurantMenuId}')::uuid <> v_first_menu_id
+    or (v_exact_reuse_result #>> '{authoritativeIds,catalogProductId}')::uuid <> v_first_catalog_id
+  then
+    raise exception 'a separate request with the same exact source did not reuse the existing four identities';
+  end if;
+  select count(*) into v_count
+  from public.restaurant_locations
+  where source_namespace = 'test-restaurant' and source_location_code = 'location-' || v_suffix;
+  if v_count <> 1 then
+    raise exception 'exact source reuse created a duplicate Location row';
+  end if;
+
+  v_name_only := jsonb_set(v_restaurant, '{document,source,original_document_id}', to_jsonb(('standalone-name-only-' || v_suffix)::text));
+  v_name_only := jsonb_set(v_name_only, '{merchant}', jsonb_build_object(
+    'merchant_name', '__standalone-name-only-' || v_suffix,
+    'branch_name', '서초',
+    'source_namespace', null,
+    'source_location_code', null,
+    'business_registration_number', null,
+    'address', null,
+    'phone', null
+  ));
+  v_name_only_result := public.ingest_verified_standalone_price_observation_v1(
+    'standalone-name-only-key-' || v_suffix,
+    v_name_only
+  );
+  if v_name_only_result ->> 'authorityStatus' <> 'needs_ocr_resolution'
+    or v_name_only_result ->> 'merchantResolutionStatus' <> 'needs_ocr_resolution'
+    or v_name_only_result ->> 'menuResolutionStatus' <> 'needs_ocr_resolution'
+    or v_name_only_result ->> 'observationId' is not null
+    or (v_name_only_result #>> '{authoritativeIds,restaurantId}') is not null
+    or (v_name_only_result #>> '{authoritativeIds,restaurantLocationId}') is not null
+    or (v_name_only_result #>> '{authoritativeIds,restaurantMenuId}') is not null
+    or (v_name_only_result #>> '{authoritativeIds,catalogProductId}') is not null
+    or v_name_only_result #>> '{ocrResolution,status}' <> 'needs_ocr_resolution'
+    or v_name_only_result #>> '{ocrResolution,resolutionId}' is null
+  then
+    raise exception 'name-only restaurant source was incorrectly treated as exact: %', v_name_only_result;
+  end if;
+  v_resolution_id := (v_name_only_result #>> '{ocrResolution,resolutionId}')::uuid;
+  if exists (
+    select 1 from public.restaurants
+    where canonical_name = '__standalone-name-only-' || v_suffix
+  ) then
+    raise exception 'name-only restaurant source created a global Restaurant identity';
+  end if;
+
+  v_other_user_id := gen_random_uuid();
+  perform set_config(
+    'request.jwt.claims',
+    jsonb_build_object('sub', v_other_user_id, 'role', 'authenticated', 'app_metadata', jsonb_build_object('role', 'user'))::text,
+    true
+  );
+  begin
+    perform public.resolve_ocr_standalone_restaurant_menu_v1(
+      v_resolution_id,
+      jsonb_build_object('merchant_name', '__standalone-name-only-' || v_suffix, 'branch_name', '서초', 'source_namespace', 'test-restaurant', 'source_location_code', 'resolved-' || v_suffix),
+      v_name_only -> 'item',
+      true
+    );
+    raise exception 'a different user resolved a standalone OCR identity candidate';
+  exception when insufficient_privilege then
+    v_owner_denied := true;
+  end;
+  if not v_owner_denied then
+    raise exception 'standalone OCR resolution did not enforce candidate ownership';
+  end if;
+  perform set_config(
+    'request.jwt.claims',
+    jsonb_build_object('sub', v_user_id, 'role', 'authenticated', 'app_metadata', jsonb_build_object('role', 'user'))::text,
+    true
+  );
+
+  v_strong_merchant := jsonb_build_object(
+    'merchant_name', '__standalone-name-only-' || v_suffix,
+    'branch_name', '서초',
+    'source_namespace', 'test-restaurant',
+    'source_location_code', 'resolved-' || v_suffix
+  );
+  v_item_facts := v_name_only -> 'item';
+  v_name_only_resolved := public.resolve_ocr_standalone_restaurant_menu_v1(
+    v_resolution_id, v_strong_merchant, v_item_facts, true
+  );
+  if v_name_only_resolved ->> 'authorityStatus' <> 'exact'
+    or v_name_only_resolved ->> 'merchantResolutionStatus' <> 'exact'
+    or v_name_only_resolved ->> 'menuResolutionStatus' <> 'exact'
+    or (v_name_only_resolved #>> '{authoritativeIds,restaurantId}') is null
+    or (v_name_only_resolved #>> '{authoritativeIds,restaurantLocationId}') is null
+    or (v_name_only_resolved #>> '{authoritativeIds,restaurantMenuId}') is null
+    or (v_name_only_resolved #>> '{authoritativeIds,catalogProductId}') is null
+    or (v_name_only_resolved ->> 'observationId') is null
+  then
+    raise exception 'owner-authenticated standalone source resolution did not return exact authority: %', v_name_only_resolved;
+  end if;
+  v_name_only_retry := public.ingest_verified_standalone_price_observation_v1(
+    'standalone-name-only-key-' || v_suffix,
+    v_name_only
+  );
+  if v_name_only_retry ->> 'authorityStatus' <> 'exact'
+    or v_name_only_retry ->> 'replayed' <> 'true'
+    or v_name_only_retry ->> 'observationId' <> v_name_only_resolved ->> 'observationId'
+    or v_name_only_retry #>> '{authoritativeIds,restaurantId}' <> v_name_only_resolved #>> '{authoritativeIds,restaurantId}'
+    or v_name_only_retry #>> '{authoritativeIds,restaurantLocationId}' <> v_name_only_resolved #>> '{authoritativeIds,restaurantLocationId}'
+    or v_name_only_retry #>> '{authoritativeIds,restaurantMenuId}' <> v_name_only_resolved #>> '{authoritativeIds,restaurantMenuId}'
+    or v_name_only_retry #>> '{authoritativeIds,catalogProductId}' <> v_name_only_resolved #>> '{authoritativeIds,catalogProductId}'
+  then
+    raise exception 'resolved standalone retry changed the authoritative identities';
+  end if;
+
+  v_same_name_branch := jsonb_set(v_restaurant, '{document,source,original_document_id}', to_jsonb(('standalone-same-name-branch-' || v_suffix)::text));
+  v_same_name_branch := jsonb_set(v_same_name_branch, '{merchant,source_location_code}', to_jsonb(('location-other-' || v_suffix)::text));
+  v_same_name_result := public.ingest_verified_standalone_price_observation_v1(
+    'standalone-same-name-branch-key-' || v_suffix,
+    v_same_name_branch
+  );
+  v_second_restaurant_id := (v_same_name_result #>> '{authoritativeIds,restaurantId}')::uuid;
+  v_second_location_id := (v_same_name_result #>> '{authoritativeIds,restaurantLocationId}')::uuid;
+  v_second_menu_id := (v_same_name_result #>> '{authoritativeIds,restaurantMenuId}')::uuid;
+  v_second_catalog_id := (v_same_name_result #>> '{authoritativeIds,catalogProductId}')::uuid;
+  if v_same_name_result ->> 'authorityStatus' <> 'exact'
+    or v_second_restaurant_id is null or v_second_location_id is null
+    or v_second_menu_id is null or v_second_catalog_id is null
+    or v_second_restaurant_id = v_first_restaurant_id
+    or v_second_location_id = v_first_location_id
+    or v_second_menu_id = v_first_menu_id
+    or v_second_catalog_id = v_first_catalog_id
+  then
+    raise exception 'same-name Restaurant/Location/Menu source identities were merged';
+  end if;
+
+  insert into public.standard_products (
+    purchase_type, canonical_name, status, created_by, verification_status
+  ) values ('menu_item', '__standalone-name-only-' || v_suffix, 'active', v_user_id, 'verified')
+  returning id into v_duplicate_standard_id;
+  insert into public.catalog_products (
+    standard_product_id, purchase_type, canonical_name, specification,
+    specification_status, content_amount, content_unit, package_count,
+    reference_unit, attributes, status, created_by, verification_status
+  ) values (
+    v_duplicate_standard_id, 'menu_item', '__standalone-menu-' || v_suffix,
+    '1인분', 'placeholder', 1, 'each', 1, 100,
+    jsonb_build_object('restaurantId', v_first_restaurant_id), 'active', v_user_id, 'verified'
+  ) returning id into v_duplicate_catalog_id;
+  insert into public.restaurant_menus (
+    restaurant_id, catalog_product_id, canonical_name, category_label,
+    serving_label, review_status, status, verification_status,
+    created_by, reviewed_by, reviewed_at
+  ) values (
+    v_first_restaurant_id, v_duplicate_catalog_id, '__standalone-menu-' || v_suffix,
+    '식사', '1인분', 'verified', 'active', 'verified', v_user_id, v_user_id, now()
+  ) returning id into v_duplicate_menu_id;
+
+  v_duplicate_menu_result := public.ingest_verified_standalone_price_observation_v1(
+    'standalone-duplicate-menu-' || v_suffix,
+    v_restaurant
+  );
+  if v_duplicate_menu_result ->> 'authorityStatus' <> 'needs_ocr_resolution'
+    or v_duplicate_menu_result #>> '{ocrResolution,reasonCode}' <> 'menu_identity_ambiguous'
+    or (v_duplicate_menu_result ->> 'observationId') is not null
+    or (v_duplicate_menu_result #>> '{authoritativeIds,restaurantMenuId}') is not null
+    or (v_duplicate_menu_result #>> '{authoritativeIds,catalogProductId}') is not null
+  then
+    raise exception 'duplicate RestaurantMenu candidates were guessed instead of returned to OCR-App: %', v_duplicate_menu_result;
+  end if;
+  v_duplicate_resolution_result := public.resolve_ocr_standalone_restaurant_menu_v1(
+    (v_duplicate_menu_result #>> '{ocrResolution,resolutionId}')::uuid,
+    v_restaurant -> 'merchant',
+    v_restaurant -> 'item',
+    true
+  );
+  if v_duplicate_resolution_result ->> 'authorityStatus' = 'exact'
+    or v_duplicate_resolution_result #>> '{ocrResolution,status}' <> 'needs_ocr_resolution'
+  then
+    raise exception 'duplicate exact Menu facts were incorrectly resolved by OCR source review';
   end if;
 
   select receipt_id into v_receipt_id
@@ -506,8 +768,18 @@ begin
       'public.ingest_verified_standalone_price_observation_v1(text,jsonb)',
       'execute'
     )
+    or not has_function_privilege(
+      'authenticated',
+      'public.resolve_ocr_standalone_restaurant_menu_v1(uuid,jsonb,jsonb,boolean)',
+      'execute'
+    )
+    or has_function_privilege(
+      'anon',
+      'public.resolve_ocr_standalone_restaurant_menu_v1(uuid,jsonb,jsonb,boolean)',
+      'execute'
+    )
   then
-    raise exception 'standalone ingestion auth/RLS grants are too broad';
+    raise exception 'standalone ingestion/resolution auth/RLS grants are invalid';
   end if;
 end;
 $$;

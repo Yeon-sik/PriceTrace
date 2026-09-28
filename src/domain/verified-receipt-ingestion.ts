@@ -53,6 +53,7 @@ export const VerifiedReceiptIngestionLineSchema = z.object({
   catalogProductId: nullableUuidSchema,
   restaurantMenuId: nullableUuidSchema,
   resolutionStatus: z.enum(["resolved", "unresolved_catalog", "needs_ocr_resolution", "semantic_only"]),
+  ocrResolution: OcrResolutionSchema.nullable().optional(),
 }).strict();
 
 export const VerifiedReceiptIngestionResponseSchema = z.object({
@@ -68,7 +69,19 @@ export const VerifiedReceiptIngestionResponseSchema = z.object({
   ocrResolution: OcrResolutionSchema.nullable().optional(),
   observationIds: z.array(z.string().uuid()),
   lines: z.array(VerifiedReceiptIngestionLineSchema),
-}).strict();
+}).strict().superRefine((response, context) => {
+  if (response.merchantResolutionStatus !== "exact") return;
+  response.lines.forEach((line, index) => {
+    if (line.resolutionStatus === "resolved"
+      && (line.restaurantMenuId === null || line.catalogProductId === null)) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["lines", index],
+        message: "음식점 메뉴가 resolved이면 PriceTrace의 Restaurant Menu와 Catalog ID가 모두 필요합니다.",
+      });
+    }
+  });
+});
 
 export type VerifiedReceiptIngestionRequest = z.infer<typeof VerifiedReceiptIngestionRequestSchema>;
 export type MerchantOnlyCandidateRequest = z.infer<typeof MerchantOnlyCandidateRequestSchema>;
