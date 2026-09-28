@@ -2,6 +2,8 @@
 
 PriceTrace owns the canonical receipt source contract and all catalog UUIDs. ChatGPT first returns a `yeonsik-ocr.v1` canonical envelope. The envelope's nested `receipt` is an unverified `receipt.v2` draft; the OCR App compares it with the original image, owns the user-verification gate, extracts and sanitizes the internal PriceTrace `receipt.v2` projection, sets `document.source.transcription_status` to `user_verified`, and only then calls the RPC.
 
+**Human source review is owned by OCR-App. PriceTrace remains the downstream domain validation and identity authority; OCR-reviewed ingestion does not require a second human approval for the same source evidence.** PriceTrace continues to reject invalid facts, resolve only exact verified identities, prevent duplicates, and issue or reuse authoritative UUIDs.
+
 `receipt.v2.document.id` is a nullable source-document fact, not a required PriceTrace identity. A nested receipt with `document.id: null` is valid. The OCR App may create a `localDocumentId` for its own device storage and review workflow, but that local ID is outside `receipt.v2`, is never submitted as a PriceTrace UUID, and is not used as a catalog identity. The server creates `receiptId` only after verified ingestion.
 
 `receipt.v2` retains only observed receipt facts inside the envelope. The ChatGPT stage does not normalize products, infer brands, create catalog links, or emit PriceTrace IDs. A printed and readable merchant name, branch name, business registration number, address, or phone may remain as merchant source fact in the envelope; none may be inferred. Payment identifiers, raw OCR text, and source image/path/binary are removed before the PriceTrace projection. `projection_targets` is only a routing hint and never authority over source facts or verification. Restaurant `main` / `option` / `side` and fulfillment are recorded only when the source or an explicit user statement supplies the required evidence; otherwise those fields remain `null` or `unknown`.
@@ -35,7 +37,7 @@ Discount, fee, tax, tip, refund, and rounding rows are kept as their original li
 
 ## Resolution and response
 
-The response is a JSON object with `schemaVersion: "verified-receipt-ingestion.v2"`, `receiptId`, **always-present `storeId`**, optional `restaurantId` and `restaurantLocationId`, `merchantResolutionStatus`, optional `merchantCandidateId`, `observationIds`, and a `lines` array. Each line is returned in the original source order with a one-based server-assigned `lineOrdinal`. For `product` and `service` lines, the line reports every available PriceTrace identity: `productId`, `storeProductId`, `catalogProductId`, and `restaurantMenuId`, plus `receiptItemId`, `observationId`, `restaurantObservationId`, `benefitKind`, and `resolutionStatus`. Unavailable semantic identities remain `null`. These IDs and the ordinal are server-owned outputs; OCR and ChatGPT never create or trust them.
+The response is a JSON object with `schemaVersion: "verified-receipt-ingestion.v2"`, `receiptId`, **always-present `storeId`**, nullable `restaurantId` and `restaurantLocationId`, `merchantResolutionStatus`, nullable `merchantCandidateId`, nullable `ocrResolution`, `observationIds`, and a `lines` array. Each line is returned in the original source order with a one-based server-assigned `lineOrdinal`. For `product` and `service` lines, the line reports every available PriceTrace identity: `productId`, `storeProductId`, `catalogProductId`, and `restaurantMenuId`, plus `receiptItemId`, `observationId`, `restaurantObservationId`, `benefitKind`, and `resolutionStatus`. Unavailable identities remain `null`. These IDs and the ordinal are server-owned outputs; OCR and ChatGPT never create them.
 
 ## Identity deep links and authenticated reads
 
@@ -50,13 +52,17 @@ The application accepts stable exact-identity links while preserving the existin
 
 `storeId` opens the authenticated seller detail. `storeProductId`, `catalogProductId`, and `restaurantMenuId` open the corresponding exact identity screen. After login, that screen calls the authenticated, owner-scoped `get_authenticated_identity_detail_v1` RPC with exactly one selector and shows the related private receipt, source-line, product, seller-product, and price-observation rows. Shared catalog/menu metadata is returned only from active verified rows. A private read never broadens ownership by trusting a UUID from OCR or by matching a name alone.
 
-Restaurant identity resolves only from one exact verified active location: source namespace + source location code, normalized business registration number, or exact merchant/branch plus supplied contact facts. A same-name different-branch receipt is not merged. Exact existing menu resolution uses a verified restaurant menu mapping or one exact canonical menu name within the resolved restaurant. Similar names and ambiguous options are left unresolved. Exact menu observations use the existing `restaurant_menu_receipt_observations` chain and `receipt_item_menu_option_sources` / `restaurant_menu_option_links` flow.
+Restaurant identity resolves only from one exact verified active location: source namespace + source location code, normalized business registration number, or an exact merchant/branch/address/phone match. When no identity exists, PriceTrace may create a verified Restaurant/Location only from a source namespace/location code, a business registration number, or a complete exact branch/address/phone identity; it never creates or merges one from a name alone. Server-generated namespace/code keys make those source facts idempotent. Same-name branches with different source identities remain separate.
+
+Exact existing menu resolution reuses a verified restaurant menu mapping or one exact canonical menu name within the resolved restaurant. Similar names and ambiguous options are left unresolved; menu and catalog UUIDs are never inferred from fuzzy names. An unresolved food-service merchant returns `merchantResolutionStatus: "needs_ocr_resolution"` and an `ocrResolution` object with `status`, server-issued `resolutionId`, `reasonCode`, and required source facts. The OCR App may complete that review with the authenticated `resolve_ocr_merchant_identity_v1` RPC by sending the server-issued resolution ID, newly user-verified merchant source facts, and no PriceTrace Restaurant/Location UUID. The RPC verifies ownership and returns the authoritative IDs. A resolved restaurant with an unknown menu keeps those line IDs null and reports `unresolved_catalog`; this is catalog identity state, not a PriceTrace human approval queue.
+
+Exact menu observations use the existing `restaurant_menu_receipt_observations` chain and `receipt_item_menu_option_sources` / `restaurant_menu_option_links` flow.
 
 Retries with the same user and idempotency key return the original response. The same canonical payload sent under another key is content-deduplicated but still creates a separate per-key binding, so every caller key is recorded. Reusing a key for another payload fails. Content fingerprints and idempotency keys are separate server-owned records.
 
 ## Merchant-only workflow
 
-For a verified merchant fact set without a receipt, call:
+The receipt-free `submit_merchant_identity_candidate_v1` workflow remains available for its existing administrator/manual review path. It is not used by OCR-reviewed receipt ingestion. For a verified merchant fact set without a receipt, call:
 
 ```text
 submit_merchant_identity_candidate_v1(

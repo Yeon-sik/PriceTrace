@@ -7,15 +7,25 @@ begin;
 do $$
 declare
   v_user_id uuid;
+  v_other_user_id uuid;
   v_suffix text := replace(gen_random_uuid()::text, '-', '');
   v_retail jsonb;
   v_restaurant jsonb;
   v_refund jsonb;
   v_tampered jsonb;
   v_invalid jsonb;
+  v_injected jsonb;
+  v_new_source jsonb;
+  v_new_branch jsonb;
+  v_ambiguous_source jsonb;
   v_first jsonb;
   v_replayed jsonb;
   v_deduplicated jsonb;
+  v_new_source_result jsonb;
+  v_new_source_replay jsonb;
+  v_new_branch_result jsonb;
+  v_ambiguous_result jsonb;
+  v_resolved_result jsonb;
   v_private jsonb;
   v_receipt_id uuid;
   v_option_receipt_item_id text;
@@ -26,9 +36,18 @@ declare
   v_catalog_product_id uuid;
   v_menu_id uuid;
   v_candidate_id uuid;
+  v_new_restaurant_id uuid;
+  v_new_location_id uuid;
+  v_other_restaurant_id uuid;
+  v_other_location_id uuid;
+  v_ambiguous_restaurant_a uuid;
+  v_ambiguous_restaurant_b uuid;
+  v_ambiguous_location_a uuid;
+  v_ambiguous_location_b uuid;
   v_restaurant_count integer;
   v_request_count integer;
   v_content_count integer;
+  v_owner_denied boolean := false;
 begin
   select id into v_user_id from auth.users order by created_at limit 1;
   if v_user_id is null then
@@ -277,6 +296,246 @@ begin
   if v_option_receipt_item_id is null or v_parent_receipt_item_id is null then
     raise exception 'restaurant option parent source link was not preserved';
   end if;
+
+  -- OCR-reviewed source namespace/location code is sufficient to create one
+  -- authoritative Restaurant/Location pair without a second PT approval.
+  v_new_source := jsonb_set(
+    v_restaurant,
+    '{document,source,original_document_id}',
+    to_jsonb(('integration-new-source-' || v_suffix)::text)
+  );
+  v_new_source := jsonb_set(v_new_source, '{merchant}', jsonb_build_object(
+    'name', 'Same Name Restaurant ' || v_suffix,
+    'branch_name', 'North',
+    'business_kind', 'food_service',
+    'retail_channel', 'unknown',
+    'catalog_namespace', 'integration-test',
+    'merchant_id', 'new-location-' || v_suffix,
+    'business_registration_number', null,
+    'address', null,
+    'phone', null
+  ));
+  v_new_source_result := public.submit_verified_receipt_v2(
+    'integration-new-source-key-' || v_suffix, v_new_source
+  );
+  v_new_restaurant_id := (v_new_source_result ->> 'restaurantId')::uuid;
+  v_new_location_id := (v_new_source_result ->> 'restaurantLocationId')::uuid;
+  if v_new_restaurant_id is null or v_new_location_id is null
+    or v_new_source_result ->> 'merchantResolutionStatus' <> 'exact'
+    or (v_new_source_result ->> 'merchantCandidateId') is not null
+    or ((v_new_source_result -> 'lines' -> 0) ->> 'restaurantMenuId') is not null
+  then
+    raise exception 'a uniquely sourced OCR restaurant was not created as one exact identity';
+  end if;
+  if not exists (
+    select 1 from public.restaurants as restaurant
+    inner join public.restaurant_locations as location on location.restaurant_id = restaurant.id
+    where restaurant.id = v_new_restaurant_id
+      and location.id = v_new_location_id
+      and location.source_namespace = 'integration-test'
+      and location.source_location_code = 'new-location-' || v_suffix
+      and restaurant.review_status = 'verified'
+      and restaurant.verification_status = 'verified'
+      and location.review_status = 'verified'
+      and location.verification_status = 'verified'
+  ) then
+    raise exception 'new OCR restaurant/location did not retain its verified source identity';
+  end if;
+
+  -- Same display name with a different branch source identity must not merge.
+  v_new_branch := jsonb_set(
+    v_new_source,
+    '{document,source,original_document_id}',
+    to_jsonb(('integration-new-branch-' || v_suffix)::text)
+  );
+  v_new_branch := jsonb_set(v_new_branch, '{merchant,branch_name}', to_jsonb('South'::text));
+  v_new_branch := jsonb_set(v_new_branch, '{merchant,merchant_id}', to_jsonb(('new-location-south-' || v_suffix)::text));
+  v_new_branch_result := public.submit_verified_receipt_v2(
+    'integration-new-branch-key-' || v_suffix, v_new_branch
+  );
+  v_other_restaurant_id := (v_new_branch_result ->> 'restaurantId')::uuid;
+  v_other_location_id := (v_new_branch_result ->> 'restaurantLocationId')::uuid;
+  if v_other_restaurant_id is null or v_other_location_id is null
+    or v_other_restaurant_id = v_new_restaurant_id
+    or v_other_location_id = v_new_location_id
+  then
+    raise exception 'same-name restaurants with distinct branch source identities were merged';
+  end if;
+
+  v_new_source_replay := public.submit_verified_receipt_v2(
+    'integration-new-source-key-' || v_suffix, v_new_source
+  );
+  if (v_new_source_replay ->> 'restaurantId')::uuid <> v_new_restaurant_id
+    or (v_new_source_replay ->> 'restaurantLocationId')::uuid <> v_new_location_id
+    or (v_new_source_replay ->> 'replayed')::boolean is not true
+  then
+    raise exception 'same request retry did not reuse the authoritative restaurant identity';
+  end if;
+  select count(*) into v_restaurant_count
+  from public.restaurant_locations
+  where source_namespace = 'integration-test'
+    and source_location_code = 'new-location-' || v_suffix;
+  if v_restaurant_count <> 1 then
+    raise exception 'same request retry created a duplicate restaurant location';
+  end if;
+
+  -- Conflicting business-number matches are returned to OCR-App. The row is
+  -- excluded from the administrator pending queue and uses no client UUID.
+  insert into public.restaurants(
+    canonical_name, review_status, status, created_by, reviewed_by, reviewed_at
+  ) values (
+    'Ambiguous Restaurant A ' || v_suffix, 'verified', 'active', v_user_id, v_user_id, now()
+  ) returning id into v_ambiguous_restaurant_a;
+  insert into public.restaurant_locations(
+    restaurant_id, source_namespace, source_location_code, location_label,
+    business_registration_number, review_status, created_by, reviewed_by, reviewed_at
+  ) values (
+    v_ambiguous_restaurant_a, 'integration-test', 'ambiguous-a-' || v_suffix,
+    'North', '1234567890', 'verified', v_user_id, v_user_id, now()
+  ) returning id into v_ambiguous_location_a;
+  insert into public.restaurants(
+    canonical_name, review_status, status, created_by, reviewed_by, reviewed_at
+  ) values (
+    'Ambiguous Restaurant B ' || v_suffix, 'verified', 'active', v_user_id, v_user_id, now()
+  ) returning id into v_ambiguous_restaurant_b;
+  insert into public.restaurant_locations(
+    restaurant_id, source_namespace, source_location_code, location_label,
+    business_registration_number, review_status, created_by, reviewed_by, reviewed_at
+  ) values (
+    v_ambiguous_restaurant_b, 'integration-test', 'ambiguous-b-' || v_suffix,
+    'South', '1234567890', 'verified', v_user_id, v_user_id, now()
+  ) returning id into v_ambiguous_location_b;
+
+  v_ambiguous_source := jsonb_set(
+    v_restaurant,
+    '{document,source,original_document_id}',
+    to_jsonb(('integration-ambiguous-source-' || v_suffix)::text)
+  );
+  v_ambiguous_source := jsonb_set(v_ambiguous_source, '{merchant}', jsonb_build_object(
+    'name', 'Ambiguous Restaurant ' || v_suffix,
+    'branch_name', null,
+    'business_kind', 'food_service',
+    'retail_channel', 'unknown',
+    'catalog_namespace', 'integration-test',
+    'merchant_id', 'ambiguous-new-' || v_suffix,
+    'business_registration_number', '12-34567890',
+    'address', null,
+    'phone', null
+  ));
+  v_ambiguous_result := public.submit_verified_receipt_v2(
+    'integration-ambiguous-source-key-' || v_suffix, v_ambiguous_source
+  );
+  v_candidate_id := (v_ambiguous_result ->> 'merchantCandidateId')::uuid;
+  if v_candidate_id is null
+    or v_ambiguous_result ->> 'merchantResolutionStatus' <> 'needs_ocr_resolution'
+    or v_ambiguous_result -> 'ocrResolution' ->> 'status' <> 'needs_ocr_resolution'
+    or v_ambiguous_result -> 'ocrResolution' ->> 'resolutionId' <> v_candidate_id::text
+    or ((v_ambiguous_result -> 'lines' -> 0) ->> 'resolutionStatus') <> 'needs_ocr_resolution'
+    or (v_ambiguous_result ->> 'restaurantId') is not null
+  then
+    raise exception 'ambiguous restaurant source did not return an OCR-owned resolution state';
+  end if;
+  if (select review_status from public.merchant_identity_candidates where id = v_candidate_id) <> 'needs_ocr_resolution'
+    or (select receipt_id from public.merchant_identity_candidates where id = v_candidate_id) <> (v_ambiguous_result ->> 'receiptId')::uuid
+  then
+    raise exception 'ambiguous receipt candidate remained in the administrator pending state';
+  end if;
+  if exists (
+    select 1 from public.restaurant_locations
+    where source_namespace = 'integration-test'
+      and source_location_code = 'ambiguous-new-' || v_suffix
+  ) then
+    raise exception 'ambiguous business number created a guessed restaurant identity';
+  end if;
+
+  if not has_function_privilege('authenticated', 'public.resolve_ocr_merchant_identity_v1(uuid,jsonb,boolean)', 'EXECUTE')
+    or has_function_privilege('anon', 'public.resolve_ocr_merchant_identity_v1(uuid,jsonb,boolean)', 'EXECUTE')
+  then
+    raise exception 'OCR resolution RPC execute grants do not enforce the authenticated boundary';
+  end if;
+  select id into v_other_user_id from auth.users where id <> v_user_id order by created_at limit 1;
+  if v_other_user_id is not null then
+    perform set_config(
+      'request.jwt.claims',
+      jsonb_build_object(
+        'sub', v_other_user_id,
+        'role', 'authenticated',
+        'app_metadata', jsonb_build_object('role', 'user')
+      )::text,
+      true
+    );
+    begin
+      perform public.resolve_ocr_merchant_identity_v1(
+        v_candidate_id,
+        jsonb_build_object(
+          'merchant_name', 'Ambiguous Restaurant ' || v_suffix,
+          'branch_name', 'Verified Branch',
+          'business_kind', 'food_service',
+          'source_namespace', 'integration-ocr-resolution',
+          'source_location_code', 'resolved-' || v_suffix,
+          'business_registration_number', null,
+          'address', null,
+          'phone', null
+        ),
+        true
+      );
+      raise exception 'another user resolved an OCR candidate they do not own';
+    exception when insufficient_privilege then
+      v_owner_denied := true;
+    end;
+    if not v_owner_denied then
+      raise exception 'OCR merchant resolution did not enforce candidate ownership';
+    end if;
+    perform set_config(
+      'request.jwt.claims',
+      jsonb_build_object(
+        'sub', v_user_id,
+        'role', 'authenticated',
+        'app_metadata', jsonb_build_object('role', 'user')
+      )::text,
+      true
+    );
+  end if;
+
+  v_resolved_result := public.resolve_ocr_merchant_identity_v1(
+    v_candidate_id,
+    jsonb_build_object(
+      'merchant_name', 'Ambiguous Restaurant ' || v_suffix,
+      'branch_name', 'Verified Branch',
+      'business_kind', 'food_service',
+      'source_namespace', 'integration-ocr-resolution',
+      'source_location_code', 'resolved-' || v_suffix,
+      'business_registration_number', null,
+      'address', null,
+      'phone', null
+    ),
+    true
+  );
+  if v_resolved_result ->> 'merchantResolutionStatus' <> 'exact'
+    or (v_resolved_result ->> 'restaurantId') is null
+    or (v_resolved_result ->> 'restaurantLocationId') is null
+    or v_resolved_result -> 'ocrResolution' ->> 'status' <> 'resolved'
+    or (select review_status from public.merchant_identity_candidates where id = v_candidate_id) <> 'accepted'
+  then
+    raise exception 'authenticated OCR source resolution did not return authoritative IDs';
+  end if;
+  v_new_source_replay := public.submit_verified_receipt_v2(
+    'integration-ambiguous-source-key-' || v_suffix, v_ambiguous_source
+  );
+  if v_new_source_replay ->> 'merchantResolutionStatus' <> 'exact'
+    or v_new_source_replay ->> 'restaurantId' <> v_resolved_result ->> 'restaurantId'
+    or v_new_source_replay ->> 'restaurantLocationId' <> v_resolved_result ->> 'restaurantLocationId'
+  then
+    raise exception 'receipt retry did not replay the OCR-resolved identity response';
+  end if;
+
+  v_injected := jsonb_set(v_new_source, '{merchant,restaurant_id}', to_jsonb('11111111-1111-4111-8111-111111111111'::text), true);
+  begin
+    perform public.submit_verified_receipt_v2('integration-injected-identity-key-' || v_suffix, v_injected);
+    raise exception 'client-created restaurant UUID was accepted';
+  exception when invalid_parameter_value then
+    null;
+  end;
 
   v_invalid := jsonb_set(
     jsonb_set(v_restaurant, '{document,source,original_document_id}', to_jsonb(('integration-invalid-benefit-' || v_suffix)::text)),
