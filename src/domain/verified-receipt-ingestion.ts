@@ -33,6 +33,14 @@ export const MerchantOnlyCandidateRequestSchema = z.object({
 
 const nullableUuidSchema = z.string().uuid().nullable();
 
+export const OcrResolutionSchema = z.object({
+  schemaVersion: z.literal("ocr-resolution.v1"),
+  status: z.enum(["needs_ocr_resolution", "resolved"]),
+  resolutionId: z.string().uuid(),
+  reasonCode: z.string().min(1).nullable(),
+  requiredSourceFacts: z.array(z.string().min(1)),
+}).strict();
+
 export const VerifiedReceiptIngestionLineSchema = z.object({
   sourceLineId: z.string().trim().min(1),
   lineOrdinal: z.number().int().positive(),
@@ -44,7 +52,8 @@ export const VerifiedReceiptIngestionLineSchema = z.object({
   storeProductId: nullableUuidSchema,
   catalogProductId: nullableUuidSchema,
   restaurantMenuId: nullableUuidSchema,
-  resolutionStatus: z.enum(["resolved", "unresolved_catalog", "semantic_only"]),
+  resolutionStatus: z.enum(["resolved", "unresolved_catalog", "needs_ocr_resolution", "semantic_only"]),
+  ocrResolution: OcrResolutionSchema.nullable().optional(),
 }).strict();
 
 export const VerifiedReceiptIngestionResponseSchema = z.object({
@@ -55,11 +64,24 @@ export const VerifiedReceiptIngestionResponseSchema = z.object({
   storeId: z.string().uuid(),
   restaurantId: nullableUuidSchema,
   restaurantLocationId: nullableUuidSchema,
-  merchantResolutionStatus: z.enum(["exact", "needs_user_selection", "not_applicable"]),
+  merchantResolutionStatus: z.enum(["exact", "needs_ocr_resolution", "not_applicable"]),
   merchantCandidateId: nullableUuidSchema,
+  ocrResolution: OcrResolutionSchema.nullable().optional(),
   observationIds: z.array(z.string().uuid()),
   lines: z.array(VerifiedReceiptIngestionLineSchema),
-}).strict();
+}).strict().superRefine((response, context) => {
+  if (response.merchantResolutionStatus !== "exact") return;
+  response.lines.forEach((line, index) => {
+    if (line.resolutionStatus === "resolved"
+      && (line.restaurantMenuId === null || line.catalogProductId === null)) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["lines", index],
+        message: "음식점 메뉴가 resolved이면 PriceTrace의 Restaurant Menu와 Catalog ID가 모두 필요합니다.",
+      });
+    }
+  });
+});
 
 export type VerifiedReceiptIngestionRequest = z.infer<typeof VerifiedReceiptIngestionRequestSchema>;
 export type MerchantOnlyCandidateRequest = z.infer<typeof MerchantOnlyCandidateRequestSchema>;

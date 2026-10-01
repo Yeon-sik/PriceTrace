@@ -38,6 +38,7 @@ describe("verified receipt ingestion contract", () => {
       restaurantLocationId: null,
       merchantResolutionStatus: "not_applicable",
       merchantCandidateId: null,
+      ocrResolution: null,
       observationIds: [],
       lines: [{
         sourceLineId: "line-001",
@@ -57,6 +58,91 @@ describe("verified receipt ingestion contract", () => {
     expect(response.lines[0].lineOrdinal).toBe(1);
     expect(response.lines[0].benefitKind).toBeNull();
     expect(() => VerifiedReceiptIngestionResponseSchema.parse({ ...response, storeId: undefined })).toThrow();
+  });
+
+  it("returns OCR-owned resolution state with a server-issued resolution identity", () => {
+    const response = VerifiedReceiptIngestionResponseSchema.parse({
+      schemaVersion: "verified-receipt-ingestion.v2",
+      replayed: false,
+      deduplicated: false,
+      receiptId: "11111111-1111-4111-8111-111111111111",
+      storeId: "22222222-2222-4222-8222-222222222222",
+      restaurantId: null,
+      restaurantLocationId: null,
+      merchantResolutionStatus: "needs_ocr_resolution",
+      merchantCandidateId: "55555555-5555-4555-8555-555555555555",
+      ocrResolution: {
+        schemaVersion: "ocr-resolution.v1",
+        status: "needs_ocr_resolution",
+        resolutionId: "55555555-5555-4555-8555-555555555555",
+        reasonCode: "source_identity_ambiguous",
+        requiredSourceFacts: ["source_namespace_and_source_location_code"],
+      },
+      observationIds: [],
+      lines: [{
+        sourceLineId: "line-001",
+        lineOrdinal: 1,
+        receiptItemId: null,
+        observationId: null,
+        restaurantObservationId: null,
+        productId: null,
+        storeProductId: null,
+        catalogProductId: null,
+        restaurantMenuId: null,
+        resolutionStatus: "needs_ocr_resolution",
+      }],
+    });
+
+    expect(response.ocrResolution?.resolutionId).toBe(response.merchantCandidateId);
+    expect(() => VerifiedReceiptIngestionResponseSchema.parse({ ...response, merchantResolutionStatus: "needs_user_selection" })).toThrow();
+  });
+
+  it("requires Restaurant Menu and Catalog authority before an exact restaurant line is resolved", () => {
+    const response = {
+      schemaVersion: "verified-receipt-ingestion.v2",
+      replayed: false,
+      deduplicated: false,
+      receiptId: "11111111-1111-4111-8111-111111111111",
+      storeId: "22222222-2222-4222-8222-222222222222",
+      restaurantId: "33333333-3333-4333-8333-333333333333",
+      restaurantLocationId: "44444444-4444-4444-8444-444444444444",
+      merchantResolutionStatus: "exact",
+      merchantCandidateId: null,
+      ocrResolution: null,
+      observationIds: [],
+      lines: [{
+        sourceLineId: "line-001",
+        lineOrdinal: 1,
+        benefitKind: null,
+        receiptItemId: "receipt-item-1",
+        observationId: null,
+        restaurantObservationId: null,
+        productId: "55555555-5555-4555-8555-555555555555",
+        storeProductId: "66666666-6666-4666-8666-666666666666",
+        catalogProductId: null,
+        restaurantMenuId: null,
+        resolutionStatus: "resolved",
+      }],
+    };
+    expect(() => VerifiedReceiptIngestionResponseSchema.parse(response)).toThrow();
+    expect(() => VerifiedReceiptIngestionResponseSchema.parse({
+      ...response,
+      lines: [{
+        ...response.lines[0],
+        catalogProductId: "77777777-7777-4777-8777-777777777777",
+        restaurantMenuId: "88888888-8888-4888-8888-888888888888",
+      }],
+    })).not.toThrow();
+  });
+
+  it("keeps OCR resolution authenticated and separate from administrator candidate review", () => {
+    const migration = readFileSync(path.join(process.cwd(), "supabase/migrations/20260927090000_ocr_v5_identity_authority.sql"), "utf8");
+    expect(migration).toContain("review_status in ('pending', 'accepted', 'rejected', 'needs_ocr_resolution')");
+    expect(migration).toContain("create or replace function public.resolve_ocr_merchant_identity_v1(");
+    expect(migration).toContain("grant execute on function public.resolve_ocr_merchant_identity_v1(uuid, jsonb, boolean)");
+    expect(migration).toContain("to authenticated;");
+    expect(migration).toContain("candidate.user_id = v_user_id");
+    expect(migration).toContain("source_namespace_and_source_location_code");
   });
 
   it.each([
@@ -164,6 +250,9 @@ describe("verified receipt ingestion contract", () => {
     expect(ingestionContract).toContain("`receipt.v2.document.id` is a nullable source-document fact");
     expect(ingestionContract).toContain("localDocumentId");
     expect(ingestionContract).toContain("does not normalize products, infer brands, create catalog links");
+    expect(ingestionContract).toContain("Human source review is owned by OCR-App");
+    expect(ingestionContract).toContain("resolve_ocr_merchant_identity_v1");
+    expect(ingestionContract).toContain("needs_ocr_resolution");
     expect(imagePrompt).toContain('"scheme":"merchant_sku"');
     expect(imagePrompt).toContain("source_images는 항상 []");
   });

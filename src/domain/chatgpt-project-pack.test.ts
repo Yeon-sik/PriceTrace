@@ -175,7 +175,7 @@ describe("ChatGPT Project source pack", () => {
       expect(instructions, `PROJECT_INSTRUCTIONS.md: ${marker}`).toContain(marker);
       expect(settings, `PASTE_TO_PROJECT_SETTINGS.md: ${marker}`).toContain(marker);
     }
-    for (const marker of ["source-document fact", "server-owned", "submit_merchant_identity_candidate_v1", "idempotency", "merchant_sku", "benefit_kind", "review_event"]) {
+    for (const marker of ["source-document fact", "server-owned", "Human source review is owned by OCR-App", "needs_ocr_resolution", "resolve_ocr_merchant_identity_v1", "submit_merchant_identity_candidate_v1", "idempotency", "merchant_sku", "benefit_kind", "review_event"]) {
       expect(ingestionContract, `VERIFIED_RECEIPT_INGESTION_V2.md: ${marker}`).toContain(marker);
     }
     for (const marker of ["검증 전 판매처 source fact 초안", "merchant-profile.v1", "submit_merchant_identity_candidate_v1", "PriceTrace UUID", "SKU", "브랜드"]) {
