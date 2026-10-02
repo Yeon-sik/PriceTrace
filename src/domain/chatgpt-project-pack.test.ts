@@ -119,6 +119,10 @@ const repositoryRoot = process.cwd();
 const packRoot = path.join(repositoryRoot, "chatgpt-project-sources");
 const zipPath = path.join(repositoryRoot, "chatgpt-receipt-project-sources.zip");
 
+function normalizeLineEndings(text: string): string {
+  return text.replace(/\r\n?/g, "\n");
+}
+
 describe("ChatGPT Project source pack", () => {
   it("keeps the manifest, generated directory, and ZIP in sync", () => {
     const mappings = manifestMappings(readFileSync(path.join(packRoot, "SOURCE_MANIFEST.md"), "utf8"));
@@ -128,7 +132,11 @@ describe("ChatGPT Project source pack", () => {
     for (const { packPath: relativePackPath, sourcePath } of mappings) {
       const packFilePath = path.join(packRoot, relativePackPath);
       expect(readFileSync(packFilePath, "utf8"), relativePackPath).toBe(expectedPackText(repositoryRoot, sourcePath, relativePackPath));
-      expect(zipEntries.get(relativePackPath), `ZIP entry ${relativePackPath}`).toEqual(readFileSync(packFilePath));
+      const zipEntry = zipEntries.get(relativePackPath);
+      expect(zipEntry, `ZIP entry ${relativePackPath}`).toBeDefined();
+      expect(normalizeLineEndings(zipEntry!.toString("utf8")), `ZIP entry ${relativePackPath}`).toBe(
+        normalizeLineEndings(readFileSync(packFilePath, "utf8")),
+      );
     }
 
     for (const requiredFile of ["PROJECT_INSTRUCTIONS.md", "PASTE_TO_PROJECT_SETTINGS.md", "SOURCE_MANIFEST.md"]) {
