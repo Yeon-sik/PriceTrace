@@ -10,6 +10,18 @@ const standaloneMigration = readFileSync(
   path.join(process.cwd(), "supabase/migrations/20260928041336_ocr_v5_standalone_and_menu_authority.sql"),
   "utf8",
 ).replace(/\r\n/g, "\n");
+const standaloneUuidAggregateMigration = readFileSync(
+  path.join(process.cwd(), "supabase/migrations/20261002090000_fix_standalone_uuid_aggregates.sql"),
+  "utf8",
+).replace(/\r\n/g, "\n");
+const legacyRestaurantReceiptMigration = readFileSync(
+  path.join(process.cwd(), "supabase/migrations/20261002100000_restore_legacy_restaurant_receipt_v1_store_insert.sql"),
+  "utf8",
+).replace(/\r\n/g, "\n");
+const legacyRestaurantReceiptProductMigration = readFileSync(
+  path.join(process.cwd(), "supabase/migrations/20261002110000_fix_legacy_restaurant_receipt_product_insert.sql"),
+  "utf8",
+).replace(/\r\n/g, "\n");
 const sqlFixtures = readFileSync(
   path.join(process.cwd(), "supabase/tests/ocr_v5_migration_patch_compatibility.sql"),
   "utf8",
@@ -97,5 +109,39 @@ describe("OCR V5 migration text patch compatibility", () => {
     ].join("\n");
 
     expect(() => patchReceiptLink(definition)).toThrow(/receipt id token matched 2 times/);
+  });
+
+  it("loads restaurant location and restaurant rowtypes with separate SELECT INTO targets", () => {
+    for (const migration of [identityMigration, standaloneMigration]) {
+      expect(migration).not.toMatch(/select\s+location\s*,\s*restaurant\s+into\s+v_location\s*,\s*v_restaurant/i);
+      expect(migration).toMatch(/select\s+location\.\*\s+into\s+v_location/i);
+      expect(migration).toMatch(/select\s+restaurant\.\*\s+into\s+v_restaurant/i);
+    }
+  });
+
+  it("patches each unsupported standalone UUID minimum exactly once", () => {
+    for (const [anchor, replacement] of [
+      ["min(store.id)", "min(store.id::text)::uuid"],
+      ["min(product.id)", "min(product.id::text)::uuid"],
+      ["min(store_product.id)", "min(store_product.id::text)::uuid"],
+    ]) {
+      expect(standaloneUuidAggregateMigration.split(anchor)).toHaveLength(3);
+      expect(standaloneUuidAggregateMigration).toContain(replacement);
+    }
+    expect(standaloneUuidAggregateMigration).toContain("standalone UUID aggregate anchor is missing or ambiguous");
+  });
+
+  it("keeps legacy restaurant receipt writes compatible without name-only store upserts", () => {
+    expect(legacyRestaurantReceiptMigration).toContain("on conflict (user_id, name) do update set");
+    expect(legacyRestaurantReceiptMigration).toContain("branch_name = coalesce(excluded.branch_name, public.stores.branch_name)");
+    expect(legacyRestaurantReceiptMigration).toContain("legacy restaurant receipt store upsert anchor is missing or ambiguous");
+    expect(legacyRestaurantReceiptMigration).toMatch(/v_new := '  returning id into v_store_id;';/);
+  });
+
+  it("keeps legacy receipt lines on the product row inserted for that line", () => {
+    expect(legacyRestaurantReceiptProductMigration).toContain("on conflict (user_id, name) do update set");
+    expect(legacyRestaurantReceiptProductMigration).toContain("legacy restaurant receipt product upsert anchor is missing or ambiguous");
+    expect(legacyRestaurantReceiptProductMigration).toContain("returning id into v_product_id;");
+    expect(legacyRestaurantReceiptProductMigration).toContain("where user_id = v_user_id and name = btrim(v_item.description);");
   });
 });

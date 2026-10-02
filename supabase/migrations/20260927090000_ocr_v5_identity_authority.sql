@@ -186,11 +186,15 @@ begin
     v_reason_code := 'source_identity_ambiguous';
   elsif cardinality(v_match_ids) = 1 then
     v_location_id := v_match_ids[1];
-    select location, restaurant
-      into v_location, v_restaurant
+    select location.*
+      into v_location
     from public.restaurant_locations as location
-    inner join public.restaurants as restaurant on restaurant.id = location.restaurant_id
     where location.id = v_location_id;
+
+    select restaurant.*
+      into v_restaurant
+    from public.restaurants as restaurant
+    where restaurant.id = v_location.restaurant_id;
 
     v_restaurant_id := v_restaurant.id;
     if v_restaurant.status <> 'active'
