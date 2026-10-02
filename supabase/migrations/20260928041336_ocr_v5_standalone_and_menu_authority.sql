@@ -1,6 +1,45 @@
 -- OCR V5 requires server-issued exact Restaurant/Location/Menu/Catalog
 -- identity before a restaurant price observation can be published.
 
+-- Keep pg_get_functiondef patch anchors insensitive to formatting while
+-- requiring each semantic anchor to be unique. This helper lives only for the
+-- migration session and is removed at the end of the migration.
+create or replace function pg_temp.ocr_v5_anchor_span(
+  p_definition text,
+  p_anchor text,
+  p_context text
+)
+returns integer[]
+language plpgsql
+as $function$
+declare
+  v_pattern text := pg_catalog.btrim(p_anchor);
+  v_meta text;
+  v_match_count integer;
+  v_start integer;
+  v_end integer;
+begin
+  if v_pattern is null or v_pattern = '' then
+    raise exception 'OCR V5 patch anchor % is empty', p_context;
+  end if;
+
+  v_pattern := pg_catalog.replace(v_pattern, pg_catalog.chr(92), pg_catalog.chr(92) || pg_catalog.chr(92));
+  foreach v_meta in array array['.', '^', '$', '|', '?', '*', '+', '(', ')', '[', ']', '{', '}'] loop
+    v_pattern := pg_catalog.replace(v_pattern, v_meta, pg_catalog.chr(92) || v_meta);
+  end loop;
+  v_pattern := pg_catalog.regexp_replace(v_pattern, '[[:space:]]+', '[[:space:]]+', 'g');
+
+  v_match_count := pg_catalog.regexp_count(p_definition, v_pattern);
+  if v_match_count <> 1 then
+    raise exception 'OCR V5 patch anchor % matched % times', p_context, v_match_count;
+  end if;
+
+  v_start := pg_catalog.regexp_instr(p_definition, v_pattern, 1, 1, 0);
+  v_end := pg_catalog.regexp_instr(p_definition, v_pattern, 1, 1, 1);
+  return array[v_start, v_end];
+end;
+$function$;
+
 create table public.receipt_menu_identity_candidates (
   id uuid primary key default gen_random_uuid(),
   user_id uuid not null references auth.users(id) on delete cascade,
@@ -307,6 +346,9 @@ declare
   v_new text;
   v_start integer;
   v_end integer;
+  v_anchor_span integer[];
+  v_quantity_anchor integer[];
+  v_indent text;
 begin
   select pg_catalog.pg_get_functiondef(
     'public.ingest_verified_standalone_price_observation_v1(text, jsonb)'::regprocedure
@@ -321,10 +363,10 @@ begin
     || '  v_ocr_identity jsonb;' || pg_catalog.chr(10)
     || '  v_resolved_response jsonb;' || pg_catalog.chr(10)
     || '  v_resolution_id uuid;';
-  if pg_catalog.strpos(v_definition, v_old) = 0 then
-    raise exception 'standalone OCR identity declaration patch target not found';
-  end if;
-  v_definition := pg_catalog.replace(v_definition, v_old, v_new);
+  v_anchor_span := pg_temp.ocr_v5_anchor_span(v_definition, v_old, 'standalone identity declaration');
+  v_definition := pg_catalog.substr(v_definition, 1, v_anchor_span[1] - 1)
+    || pg_catalog.ltrim(v_new)
+    || pg_catalog.substr(v_definition, v_anchor_span[2]);
 
   v_old := '    return v_existing.response || jsonb_build_object(''replayed'', true);';
   v_new := '    if v_existing.kind = ''restaurant_purchase'' then' || pg_catalog.chr(10)
@@ -360,22 +402,32 @@ begin
     || '      end if;' || pg_catalog.chr(10)
     || '    end if;' || pg_catalog.chr(10)
     || v_old;
-  if pg_catalog.strpos(v_definition, v_old) = 0 then
-    raise exception 'standalone OCR legacy replay patch target not found';
-  end if;
-  v_definition := pg_catalog.replace(v_definition, v_old, v_new);
+  v_anchor_span := pg_temp.ocr_v5_anchor_span(v_definition, v_old, 'standalone legacy replay');
+  v_definition := pg_catalog.substr(v_definition, 1, v_anchor_span[1] - 1)
+    || pg_catalog.ltrim(v_new)
+    || pg_catalog.substr(v_definition, v_anchor_span[2]);
 
   v_old := 'where field_name not in (''item_name'', ''serving_label'', ''category_label'')';
   v_new := 'where field_name not in (''item_name'', ''serving_label'', ''category_label'', ''source_menu_code_namespace'', ''source_menu_code'')';
-  if pg_catalog.strpos(v_definition, v_old) = 0 then
-    raise exception 'standalone OCR menu source fact allowlist patch target not found';
-  end if;
-  v_definition := pg_catalog.replace(v_definition, v_old, v_new);
+  v_anchor_span := pg_temp.ocr_v5_anchor_span(v_definition, v_old, 'standalone menu source fact allowlist');
+  v_definition := pg_catalog.substr(v_definition, 1, v_anchor_span[1] - 1)
+    || pg_catalog.ltrim(v_new)
+    || pg_catalog.substr(v_definition, v_anchor_span[2]);
 
   v_old := '  v_source_namespace := coalesce(v_source_namespace, ''standalone-v3'');';
-  v_start := pg_catalog.strpos(v_definition, v_old);
-  v_end := pg_catalog.strpos(v_definition, '  v_quantity_int := case when v_quantity is null then null else v_quantity::integer end;');
-  if v_start = 0 or v_end = 0 or v_end <= v_start then
+  v_anchor_span := pg_temp.ocr_v5_anchor_span(v_definition, v_old, 'standalone restaurant identity branch start');
+  v_quantity_anchor := pg_temp.ocr_v5_anchor_span(
+    pg_catalog.substr(v_definition, v_anchor_span[2]),
+    'v_quantity_int := case when v_quantity is null then null else v_quantity::integer end;',
+    'standalone quantity assignment after restaurant identity branch'
+  );
+  v_start := v_anchor_span[1];
+  v_end := v_anchor_span[2] + v_quantity_anchor[1] - 1;
+  v_indent := coalesce(
+    (pg_catalog.regexp_match(pg_catalog.substr(v_definition, 1, v_end - 1), '[[:blank:]]*$'))[1],
+    '  '
+  );
+  if v_end <= v_anchor_span[2] then
     raise exception 'standalone OCR restaurant identity block patch anchors not found';
   end if;
   v_new := '  v_ocr_identity := public.private_resolve_ocr_standalone_identity_v1(v_user_id, v_key, p_observation);' || pg_catalog.chr(10)
@@ -391,8 +443,8 @@ begin
     || '  v_restaurant_menu_id := (v_ocr_identity #>> ''{authoritativeIds,restaurantMenuId}'')::uuid;' || pg_catalog.chr(10)
     || '  v_catalog_product_id := (v_ocr_identity #>> ''{authoritativeIds,catalogProductId}'')::uuid;' || pg_catalog.chr(10)
     || '  v_standard_product_id := (v_ocr_identity #>> ''{authoritativeIds,standardProductId}'')::uuid;' || pg_catalog.chr(10)
-    || pg_catalog.substr(v_definition, v_end);
-  v_definition := pg_catalog.substr(v_definition, 1, v_start - 1) || v_new;
+    || v_indent || pg_catalog.substr(v_definition, v_end);
+  v_definition := pg_catalog.substr(v_definition, 1, v_start - 1) || pg_catalog.ltrim(v_new);
 
   v_old := '    ''observationId'', v_manual_observation_id,' || pg_catalog.chr(10)
     || '    ''replayed'', false,';
@@ -402,10 +454,10 @@ begin
     || '    ''merchantResolutionStatus'', ''exact'',' || pg_catalog.chr(10)
     || '    ''menuResolutionStatus'', ''exact'',' || pg_catalog.chr(10)
     || '    ''ocrResolution'', null,';
-  if pg_catalog.strpos(v_definition, v_old) = 0 then
-    raise exception 'standalone OCR exact response status patch target not found';
-  end if;
-  v_definition := pg_catalog.replace(v_definition, v_old, v_new);
+  v_anchor_span := pg_temp.ocr_v5_anchor_span(v_definition, v_old, 'standalone exact response authority');
+  v_definition := pg_catalog.substr(v_definition, 1, v_anchor_span[1] - 1)
+    || pg_catalog.ltrim(v_new)
+    || pg_catalog.substr(v_definition, v_anchor_span[2]);
 
   execute v_definition;
 end;
@@ -1535,6 +1587,8 @@ declare
   v_definition text;
   v_old text;
   v_new text;
+  v_anchor_span integer[];
+  v_anchor_count integer;
 begin
   select pg_catalog.pg_get_functiondef(
     'public.private_enrich_verified_receipt_ingestion_v2(jsonb, jsonb)'::regprocedure
@@ -1552,18 +1606,21 @@ begin
     || '  v_line_ocr_resolution jsonb;' || pg_catalog.chr(10)
     || '  v_line_resolution_status text;' || pg_catalog.chr(10)
     || '  v_menu_namespace text;';
-  if pg_catalog.strpos(v_definition, v_old) = 0 then
-    raise exception 'receipt enrichment OCR menu declaration patch target not found';
-  end if;
-  v_definition := pg_catalog.replace(v_definition, v_old, v_new);
+  v_anchor_span := pg_temp.ocr_v5_anchor_span(v_definition, v_old, 'receipt enrichment OCR menu declaration');
+  v_definition := pg_catalog.substr(v_definition, 1, v_anchor_span[1] - 1)
+    || pg_catalog.ltrim(v_new)
+    || pg_catalog.substr(v_definition, v_anchor_span[2]);
 
   v_old := '  v_sku text;' ;
   v_new := v_old || pg_catalog.chr(10) || '  v_match_count integer := 0;';
-  if pg_catalog.strpos(v_definition, '  v_match_count integer') = 0 then
-    if pg_catalog.strpos(v_definition, v_old) = 0 then
-      raise exception 'receipt enrichment menu match declaration patch target not found';
-    end if;
-    v_definition := pg_catalog.replace(v_definition, v_old, v_new);
+  v_anchor_count := pg_catalog.regexp_count(v_definition, 'v_match_count[[:space:]]+integer');
+  if v_anchor_count > 1 then
+    raise exception 'receipt enrichment menu match declaration anchor is ambiguous';
+  elsif v_anchor_count = 0 then
+    v_anchor_span := pg_temp.ocr_v5_anchor_span(v_definition, v_old, 'receipt enrichment menu match declaration');
+    v_definition := pg_catalog.substr(v_definition, 1, v_anchor_span[1] - 1)
+      || pg_catalog.ltrim(v_new)
+      || pg_catalog.substr(v_definition, v_anchor_span[2]);
   end if;
 
   v_old := '    if v_line_type in (''product'', ''service'') and v_description is not null then';
@@ -1612,26 +1669,26 @@ begin
     || '      end if;' || pg_catalog.chr(10)
     || '    end if;' || pg_catalog.chr(10)
     || v_old;
-  if pg_catalog.strpos(v_definition, v_old) = 0 then
-    raise exception 'receipt enrichment OCR menu resolution patch target not found';
-  end if;
-  v_definition := pg_catalog.replace(v_definition, v_old, v_new);
+  v_anchor_span := pg_temp.ocr_v5_anchor_span(v_definition, v_old, 'receipt enrichment OCR menu resolution');
+  v_definition := pg_catalog.substr(v_definition, 1, v_anchor_span[1] - 1)
+    || pg_catalog.ltrim(v_new)
+    || pg_catalog.substr(v_definition, v_anchor_span[2]);
 
   v_old := '        when v_restaurant_menu_id is not null or v_catalog_product_id is not null then ''resolved''';
   v_new := '        when v_line_resolution_status is not null then v_line_resolution_status' || pg_catalog.chr(10)
     || '        when v_restaurant_menu_id is not null or v_catalog_product_id is not null then ''resolved''';
-  if pg_catalog.strpos(v_definition, v_old) = 0 then
-    raise exception 'receipt enrichment OCR menu response status patch target not found';
-  end if;
-  v_definition := pg_catalog.replace(v_definition, v_old, v_new);
+  v_anchor_span := pg_temp.ocr_v5_anchor_span(v_definition, v_old, 'receipt enrichment OCR menu response status');
+  v_definition := pg_catalog.substr(v_definition, 1, v_anchor_span[1] - 1)
+    || pg_catalog.ltrim(v_new)
+    || pg_catalog.substr(v_definition, v_anchor_span[2]);
 
   v_old := '    v_line_results := v_line_results || jsonb_build_array(v_line_result);';
   v_new := '    v_line_result := v_line_result || jsonb_build_object(''ocrResolution'', v_line_ocr_resolution);' || pg_catalog.chr(10)
     || v_old;
-  if pg_catalog.strpos(v_definition, v_old) = 0 then
-    raise exception 'receipt enrichment OCR line resolution patch target not found';
-  end if;
-  v_definition := pg_catalog.replace(v_definition, v_old, v_new);
+  v_anchor_span := pg_temp.ocr_v5_anchor_span(v_definition, v_old, 'receipt enrichment OCR line resolution');
+  v_definition := pg_catalog.substr(v_definition, 1, v_anchor_span[1] - 1)
+    || pg_catalog.ltrim(v_new)
+    || pg_catalog.substr(v_definition, v_anchor_span[2]);
 
   v_old := '  update public.verified_receipt_ingestion_contents';
   v_new := '  v_line_results := (public.private_record_ocr_receipt_menu_observations_v1(' || pg_catalog.chr(10)
@@ -1639,11 +1696,13 @@ begin
     || '    p_receipt' || pg_catalog.chr(10)
     || '  ) -> ''lines'');' || pg_catalog.chr(10)
     || v_old;
-  if pg_catalog.strpos(v_definition, v_old) = 0 then
-    raise exception 'receipt enrichment OCR menu observation patch target not found';
-  end if;
-  v_definition := pg_catalog.replace(v_definition, v_old, v_new);
+  v_anchor_span := pg_temp.ocr_v5_anchor_span(v_definition, v_old, 'receipt enrichment OCR menu observation');
+  v_definition := pg_catalog.substr(v_definition, 1, v_anchor_span[1] - 1)
+    || pg_catalog.ltrim(v_new)
+    || pg_catalog.substr(v_definition, v_anchor_span[2]);
 
   execute v_definition;
 end;
 $migration$;
+
+drop function pg_temp.ocr_v5_anchor_span(text, text, text);
