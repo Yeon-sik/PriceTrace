@@ -43,6 +43,40 @@ The response is a JSON object with `schemaVersion: "verified-receipt-ingestion.v
 
 ## Identity deep links and authenticated reads
 
+### OCR checkpoint recovery
+
+An authenticated receipt owner can recover the current saved server response
+without submitting the receipt again:
+
+```text
+get_verified_receipt_ingestion_response_v1(p_receipt_id: uuid) -> JSON object
+```
+
+The selector must be the `receiptId` previously returned by PriceTrace. The
+read-only RPC checks both receipt ownership and the owner-scoped ingestion
+content record, then returns that record's sanitized response unchanged,
+including current merchant/menu statuses, exact IDs, and server-issued
+`ocrResolution` tokens. Another owner's receipt and a missing response both
+fail with `P0002`; a missing authenticated user fails with `42501`. Multiple
+content records for the same owner and receipt fail closed with `21000`.
+Private ingestion tables keep their existing RLS and grants.
+
+OCR should refresh an old checkpoint with this read before attempting identity
+resolution or downstream publication. After a merchant-resolution response is
+lost, the saved response can already be exact: resume from that response rather
+than invoking resolution or receipt ingestion again. Reconstructing a legacy
+receipt with a newer codec can change its full JSON fingerprint (for example,
+an added nullable field), so re-ingestion is not a recovery read. This RPC does
+not create identity, observations, or a new idempotency binding and does not
+grant publication intent. OCR still requires its final human review and exact
+authority gates before completing Fitness publication.
+
+After deployment, `supabase/tests/ocr_verified_receipt_checkpoint_read.sql`
+provides an administrator-run, read-only database smoke using an existing
+receipt. It checks the unchanged saved response, owner isolation, missing auth,
+and anonymous execution denial without writing fixture data. Role/claim
+simulation in SQL is separate from a real authenticated HTTP check.
+
 The application accepts stable exact-identity links while preserving the existing public pages:
 
 ```text
