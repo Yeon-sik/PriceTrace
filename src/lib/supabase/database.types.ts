@@ -100,6 +100,7 @@ export interface Database {
       verified_receipt_ingestion_contents: { Row: { user_id:string; request_fingerprint:string; receipt_id:string; response:Json; created_at:string }; Insert: Record<string, never>; Update: Record<string, never> };
       verified_receipt_ingestion_requests: { Row: { user_id:string; idempotency_key:string; request_fingerprint:string; receipt_id:string; response:Json; created_at:string }; Insert: Record<string, never>; Update: Record<string, never> };
       merchant_identity_candidates: { Row: { id:string; user_id:string; origin:"receipt_ingestion"|"merchant_only"; source_fingerprint:string; merchant_name:string; branch_name:string|null; business_registration_number:string|null; address:string|null; phone:string|null; business_kind:string; source_namespace:string|null; source_code:string|null; idempotency_key:string|null; user_verified:true; review_status:"pending"|"accepted"|"rejected"|"needs_ocr_resolution"; matched_restaurant_id:string|null; matched_restaurant_location_id:string|null; receipt_id:string|null; created_at:string; updated_at:string }; Insert: Record<string, never>; Update: Record<string, never> };
+      restaurant_menu_identity_candidates: { Row: { id:string; user_id:string; idempotency_key:string; request_fingerprint:string; restaurant_id:string|null; restaurant_location_id:string|null; merchant_candidate_id:string|null; proposed_menu_name:string; factual_metadata:Json; review_status:"pending"|"accepted"|"rejected"; resolved_restaurant_id:string|null; resolved_restaurant_location_id:string|null; resolved_restaurant_menu_id:string|null; resolved_catalog_product_id:string|null; reviewed_by:string|null; reviewed_at:string|null; review_note:string|null; created_at:string; updated_at:string }; Insert: Record<string, never>; Update: Record<string, never> };
       products: { Row: { id:string; user_id:string; name:string; purchase_type:string; category_id:string|null; category_tags:string[]; created_at:string }; Insert: { id?:string; user_id:string; name:string; purchase_type?:string; category_id?:string|null; category_tags?:string[] }; Update: { name?:string; purchase_type?:string; category_id?:string|null; category_tags?:string[] } };
       store_products: { Row: { id:string; user_id:string; store_id:string; product_id:string; store_product_code:string|null }; Insert: { id?:string; user_id:string; store_id:string; product_id:string; store_product_code?:string|null }; Update: { store_product_code?:string|null } };
       receipts: { Row: { id:string; user_id:string; store_id:string; purchased_at:string; transaction_number:string; total_price_krw:number }; Insert: { id?:string; user_id:string; store_id:string; purchased_at:string; transaction_number:string; total_price_krw:number }; Update: { purchased_at?:string; transaction_number?:string; total_price_krw?:number } };
@@ -630,6 +631,17 @@ export interface Database {
       };
       submit_merchant_identity_candidate_v1: {
         Args: { p_idempotency_key:string; p_merchant:Json; p_user_verified:boolean; };
+        Returns: Json;
+      };
+      submit_restaurant_menu_candidate_v1: {
+        Args: { p_idempotency_key:string; p_restaurant_id:string|null; p_restaurant_location_id:string|null; p_merchant_candidate_id:string|null; p_menu_name:string; p_metadata:Json; p_user_verified:boolean; };
+        Returns: Json;
+      };
+      get_my_restaurant_menu_candidates_v1: { Args: Record<string, never>; Returns: Json; };
+      get_my_dining_merchant_candidates_v1: { Args: Record<string, never>; Returns: Json; };
+      admin_list_restaurant_menu_candidates_v1: { Args: Record<string, never>; Returns: Json; };
+      admin_resolve_restaurant_menu_candidate_v1: {
+        Args: { p_candidate_id:string; p_decision:string; p_restaurant_id:string|null; p_restaurant_location_id:string|null; p_restaurant_menu_id:string|null; p_catalog_product_id:string|null; p_review_note?:string|null; };
         Returns: Json;
       };
       admin_resolve_merchant_identity_candidate_v1: {

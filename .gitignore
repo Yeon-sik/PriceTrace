@@ -105,3 +105,7 @@ e2e/*
 !src/domain/restaurant-menu-migration.test.ts
 !src/repositories/restaurant-menu.repository.test.ts
 !e2e/restaurant-menu.spec.ts
+!src/domain/restaurant-menu-proposal.test.ts
+!src/repositories/restaurant-menu-proposal.repository.test.ts
+!e2e/restaurant-menu-proposal.spec.ts
+!eslint.config.mjs
