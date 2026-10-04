@@ -1,6 +1,6 @@
 # PriceTrace | Project Detail
 
-2026-10-05 (Asia/Seoul) 갱신. Primary source boundary는 [main@bb6bf82](https://github.com/Yeon-sik/PriceTrace/tree/bb6bf825e9ae4c385f5e1b597aa6d68b1d73079c)이다. source 설명과 실제 검증 결과를 구분한다. [빠른 소개](./Project_Intro.md)를 참고한다.
+2026-10-05 (Asia/Seoul) 갱신. Primary source boundary는 [main@4c08590](https://github.com/Yeon-sik/PriceTrace/tree/4c0859050045f2c04b86f3f9482ede43e640529c)이다. source 설명과 실제 검증 결과를 구분한다. [빠른 소개](./Project_Intro.md)를 참고한다.
 
 ## 1. 문서 목적과 범위
 
@@ -8,7 +8,7 @@
 
 사실·관측·상품군·규격·판매처 identity를 별도 계약으로 보존한다. OCR source review 후 서버가 exact/resolved 결과를 반환하고 owner checkpoint와 동일 관측을 안전하게 재사용한다.
 
-- 최근 main에는 OCR V5 merchant/menu authority, 적용 migration 정합, owner saved-response 복구, 동일 menu observation 재사용과 legacy store identity 호환 복구가 포함된다.
+- 최근 main에는 OCR V5 merchant/menu authority, 적용 migration 정합, owner saved-response 복구, 동일 menu observation 재사용과 legacy store identity 호환 복구와 Fitness 가게·메뉴 제안을 기존 관리자 화면에서 검토하는 흐름이 포함된다.
 
 미병합 branch, 사용자 미커밋 작업과 명시하지 않은 운영 검증은 기능 완료 근거에 포함하지 않는다.
 
@@ -33,6 +33,7 @@ static export -> GitHub Pages / Capacitor Android
 - PriceTrace는 Product/Restaurant/Menu UUID authority다. OCR은 source 사실과 사용자 검수만 제공한다.
 - accepted receipt/menu 관측은 exact identity와 원본 근거가 일치할 때만 재사용한다. 다른 사실·identity는 충돌로 막는다.
 - legacy 복구는 owner response와 verified binding을 증명한 경우에만 허용하며 경쟁 identity는 fail closed 한다.
+- Fitness 가게·메뉴 제안은 private 후보 계약이다. pending/unresolved는 exact ID가 없고 accepted/exact는 네 identity ID를 모두 요구한다. 검토 UI가 기존 canonical 생성 RPC를 대체하지 않는다.
 - 공개 파일은 allowlist projection만 포함한다. private 원본·인증·개인 식별자를 Git·미러 문서에 노출하지 않는다.
 - Nutrition 영양과 CashOS 원장은 각 서비스가 소유한다. 공유 DB라도 migration authority는 같지 않다.
 
@@ -55,8 +56,8 @@ OCR에서 원본 사실을 확인하고 PriceTrace 서버가 canonical identity�
 
 | 검사 | 결과 | 근거·환경과 한계 |
 | --- | --- | --- |
-| 현재 main Pages workflow | 통과 | [Deploy static site](https://github.com/Yeon-sik/PriceTrace/actions/runs/37195087129): 정적 배포 job. 관리자·운영 RPC smoke와 구분한다. |
-| 기준 source 문서 workflow | 통과 | [Project docs](https://github.com/Yeon-sik/PriceTrace/actions/runs/37195087123): 이전 문서의 검증·게시이며 이번 Intro/Detail revision을 대신하지 않는다. |
+| 현재 main Pages workflow | 통과 | [Deploy static site](https://github.com/Yeon-sik/PriceTrace/actions/runs/37213577759): 정적 배포 job. 관리자·운영 RPC smoke와 구분한다. |
+| 이전 문서 workflow | 통과 | [Project docs](https://github.com/Yeon-sik/PriceTrace/actions/runs/37195087123): 이전 문서의 검증·게시이며 이번 Intro/Detail revision을 대신하지 않는다. |
 | 운영 RPC/RLS·사용자 흐름 | 이번 갱신에서 미실행 | migration/test source 확인. 현재 owner/foreign/anon·exact identity·OCR downstream runtime은 별도 검증이 필요하다. |
 
 이번 문서 변경의 순차 검증 명령은 다음과 같다.
@@ -86,7 +87,7 @@ node .github/project-docs/sync-project-docs-to-notion.mjs --config project-docs.
 
 ## 8. 근거와 관련 문서
 
-- [기준 source revision](https://github.com/Yeon-sik/PriceTrace/tree/bb6bf825e9ae4c385f5e1b597aa6d68b1d73079c)
+- [기준 source revision](https://github.com/Yeon-sik/PriceTrace/tree/4c0859050045f2c04b86f3f9482ede43e640529c)
 - [Project Intro](./Project_Intro.md)
 - [README](../README.md)
 - [verified receipt v2](contracts/VERIFIED_RECEIPT_INGESTION_V2.md)
