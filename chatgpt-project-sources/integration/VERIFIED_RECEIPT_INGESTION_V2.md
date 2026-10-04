@@ -121,6 +121,31 @@ PostgreSQL tests in
 `src/domain/ocr-receipt-menu-observation-reuse.test.ts`, including immutable
 legacy reuse, retry, conflicts, owner isolation, and exact multi-line mapping.
 
+For legacy observations bound to a `pricetrace-db-store` Location, owner OCR
+resolution may restore previously missing identity facts before running the
+normal strong-signal resolver. The Location is selected only by its exact
+server store UUID and the existing immutable owner/receipt/item/price-observation
+bindings. Its creator and verified authority must match the authenticated owner,
+and the newly approved facts must match the original user-verified receipt
+source and source fingerprint. Names and nullable branch labels are consistency
+checks, never UUID selectors. A normalized business number must match the
+original source exactly and contain ten digits; otherwise a complete exact
+branch/address/phone signal is required.
+
+Only missing address, phone, and business-number facts are restored. Existing
+nonblank values, source namespace/code, UUIDs, and immutable observations are
+preserved; an absent branch remains `null`. A contradictory existing fact,
+missing server binding, or another Location matching a supplied strong signal
+fails closed with `23514` and rolls back the resolution. This recovery is
+private to the already authenticated, explicitly human-approved merchant RPC;
+clients cannot supply a target Location UUID or write those fields directly.
+Deploy the recovery migration `20261004063208` followed by the forward schema
+compatibility repair `20261004064719`. The deployed `restaurant_locations`
+table has no `updated_at` column; the repair keeps the write limited to the
+missing verified source facts without adding columns or weakening RLS. Engine
+fixtures mirror that table shape and exercise repeated application of both
+migrations before the owner resolution RPC.
+
 Retries with the same user and idempotency key return the original response. The same canonical payload sent under another key is content-deduplicated but still creates a separate per-key binding, so every caller key is recorded. Reusing a key for another payload fails. Content fingerprints and idempotency keys are separate server-owned records.
 
 ## Merchant-only workflow
