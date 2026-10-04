@@ -98,6 +98,29 @@ An unresolved food-service merchant returns `merchantResolutionStatus: "needs_oc
 
 Exact menu observations use the existing `restaurant_menu_receipt_observations` chain and `receipt_item_menu_option_sources` / `restaurant_menu_option_links` flow.
 
+Merchant resolution and receipt enrichment share one guarded observation writer.
+After explicit `merchantResolutionStatus: "exact"` and line
+`resolutionStatus: "resolved"`, it connects the source line to the server's exact
+receipt-item/price-observation mapping. An existing immutable receipt Menu
+observation is reused only when its owner, receipt, item, price observation,
+Restaurant/Location/Menu authority, date, quantity, and prices all agree. Its
+original evidence snapshot and fingerprint are preserved. A legacy snapshot
+without `sourceLineId` can be reused only when the stored server response and
+the original server receipt-item derivation prove that exact source line;
+an explicit different `sourceLineId` is rejected. A different fingerprint alone
+does not require a second observation.
+
+A contradictory existing observation fails the whole resolution transaction
+with `23514` and an OCR source-review error. It is never reassigned, deleted,
+silently ignored, or paired with a different response identity. Ownership
+failures remain `42501`; duplicate owner-scoped saved responses fail with
+`21000`. There is no current-date fallback for an absent verified receipt date.
+The private helper remains unavailable to API roles; only the authenticated
+owner resolution RPC is exposed. This behavior is covered by executable
+PostgreSQL tests in
+`src/domain/ocr-receipt-menu-observation-reuse.test.ts`, including immutable
+legacy reuse, retry, conflicts, owner isolation, and exact multi-line mapping.
+
 Retries with the same user and idempotency key return the original response. The same canonical payload sent under another key is content-deduplicated but still creates a separate per-key binding, so every caller key is recorded. Reusing a key for another payload fails. Content fingerprints and idempotency keys are separate server-owned records.
 
 ## Merchant-only workflow
