@@ -22,6 +22,13 @@ const appendOnlyTrigger = originalObservationMigration.slice(
   originalObservationMigration.indexOf("create function public.reject_restaurant_menu_append_only_mutation()"),
   originalObservationMigration.indexOf("create trigger restaurant_menu_registration_executions_append_only"),
 );
+const oldFunction = (migrationName: string, functionName: string) => {
+  const sql = readFileSync(path.join(process.cwd(), "supabase/migrations", migrationName), "utf8");
+  const start = sql.indexOf(`create or replace function public.${functionName}(`);
+  const end = sql.indexOf("$function$;", start);
+  if (start < 0 || end < 0) throw new Error(`Original function ${functionName} was not found`);
+  return sql.slice(start, end + "$function$;".length);
+};
 
 const ids = {
   owner: "10000000-0000-0000-0000-000000000001",
@@ -252,6 +259,35 @@ describe("receipt menu observation reuse in PostgreSQL", () => {
     expect(await observations()).toEqual(before);
     expect((await db.query("select count(*)::int as count from public.price_observations")).rows[0]).toEqual({ count: 1 });
     expect(await record()).toEqual(result);
+    expect(await observations()).toEqual(before);
+  });
+
+  it("reproduces the original double-writer 23505 and repairs the same immutable legacy observation", async () => {
+    await insertLegacy();
+    const before = await observations();
+    await db.exec("begin");
+    try {
+      await db.exec(oldFunction(
+        "20260928041336_ocr_v5_standalone_and_menu_authority.sql",
+        "private_record_ocr_receipt_menu_observations_v1",
+      ));
+      await db.exec(oldFunction("20260927090000_ocr_v5_identity_authority.sql", "resolve_ocr_merchant_identity_v1"));
+      await expect(db.query("select public.resolve_ocr_merchant_identity_v1($1::uuid,$2::jsonb,true)",
+        [ids.resolution, JSON.stringify(sourceReceipt.merchant)])).rejects.toMatchObject({
+        code: "23505",
+        constraint: "restaurant_menu_receipt_observations_price_observation_id_key",
+      });
+    } finally {
+      // PostgreSQL transactional DDL restores both repaired functions and all
+      // fixture rows, so the next call retries the identical accepted receipt.
+      await db.exec("rollback");
+    }
+    expect(await observations()).toEqual(before);
+    const repaired = await db.query<{ value: ReturnType<typeof response> }>(
+      "select public.resolve_ocr_merchant_identity_v1($1::uuid,$2::jsonb,true) as value",
+      [ids.resolution, JSON.stringify(sourceReceipt.merchant)],
+    );
+    expect(repaired.rows[0].value.lines[0]).toMatchObject({ restaurantObservationId: ids.legacyObservation });
     expect(await observations()).toEqual(before);
   });
 
