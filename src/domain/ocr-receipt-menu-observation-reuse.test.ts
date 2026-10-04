@@ -2,7 +2,7 @@ import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import { PGlite } from "@electric-sql/pglite";
-import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from "vitest";
 
 const migration = readFileSync(
   path.join(process.cwd(), "supabase/migrations/20261004002338_ocr_receipt_menu_observation_reuse.sql"),
@@ -82,11 +82,14 @@ const fixtureSchema = `
     language sql immutable strict as $$ select pg_catalog.sha256(pg_catalog.convert_to(p_data, 'UTF8')); $$;
   create table public.catalog_products(id uuid primary key, status text not null default 'active',
     purchase_type text not null default 'menu_item', verification_status text not null default 'verified');
-  create table public.restaurants(id uuid primary key, status text not null default 'active',
-    review_status text not null default 'verified', verification_status text not null default 'verified');
-  create table public.restaurant_locations(
-    id uuid primary key, restaurant_id uuid not null references public.restaurants(id),
+  create table public.restaurants(id uuid primary key default gen_random_uuid(), status text not null default 'active',
     review_status text not null default 'verified', verification_status text not null default 'verified',
+    canonical_name text, created_by uuid, reviewed_by uuid, reviewed_at timestamptz);
+  create table public.restaurant_locations(
+    id uuid primary key default gen_random_uuid(), restaurant_id uuid not null references public.restaurants(id),
+    review_status text not null default 'verified', verification_status text not null default 'verified',
+    source_namespace text, source_location_code text, location_label text, address text, phone text,
+    business_registration_number text, created_by uuid, reviewed_by uuid, reviewed_at timestamptz,
     unique(restaurant_id, id)
   );
   create table public.restaurant_menus(
@@ -102,7 +105,7 @@ const fixtureSchema = `
   );
   create table public.receipts(
     id uuid primary key, user_id uuid not null references auth.users(id),
-    purchased_at date not null, unique(user_id, id)
+    purchased_at date not null, store_id uuid, unique(user_id, id)
   );
   create table public.receipt_items(
     id text primary key, user_id uuid not null references auth.users(id), receipt_id uuid not null,
@@ -121,7 +124,9 @@ const fixtureSchema = `
   );
   create table public.verified_receipt_sources(
     receipt_id uuid primary key, user_id uuid not null, issued_on date, issued_at timestamptz,
-    transcription_status text not null, foreign key(user_id, receipt_id) references public.receipts(user_id, id)
+    transcription_status text not null, merchant_name text, branch_name text, business_kind text, retail_channel text,
+    catalog_namespace text, merchant_id text, business_registration_number text, address text, phone text,
+    source_fingerprint text, foreign key(user_id, receipt_id) references public.receipts(user_id, id)
   );
   create table public.verified_receipt_source_lines(
     receipt_id uuid not null, user_id uuid not null, source_line_id text not null, line_ordinal integer,
@@ -134,7 +139,11 @@ const fixtureSchema = `
   );
   create table public.merchant_identity_candidates(
     id uuid primary key, user_id uuid not null, origin text not null, review_status text not null,
-    receipt_id uuid, source_fingerprint text not null, idempotency_key text
+    receipt_id uuid, source_fingerprint text not null, idempotency_key text, merchant_name text, branch_name text,
+    business_registration_number text, address text, phone text, business_kind text, source_namespace text,
+    source_code text, user_verified boolean not null default true, matched_restaurant_id uuid,
+    matched_restaurant_location_id uuid, updated_at timestamptz,
+    unique(user_id,origin,source_fingerprint)
   );
   create table public.verified_receipt_ingestion_contents(
     user_id uuid not null, request_fingerprint text not null, receipt_id uuid not null, response jsonb not null,
@@ -182,10 +191,12 @@ describe("receipt menu observation reuse in PostgreSQL", () => {
         ('${ids.otherLocation}', '${ids.restaurant}');
       insert into public.restaurant_menus(id,restaurant_id,catalog_product_id) values('${ids.menu}', '${ids.restaurant}', '${ids.catalog}'),
         ('${ids.secondMenu}', '${ids.restaurant}', '${ids.secondCatalog}');
-      insert into public.receipts values('${ids.receipt}', '${ids.owner}', '2026-09-25');
-      insert into public.verified_receipt_sources values('${ids.receipt}', '${ids.owner}',
+      insert into public.receipts(id,user_id,purchased_at) values('${ids.receipt}', '${ids.owner}', '2026-09-25');
+      insert into public.verified_receipt_sources(receipt_id,user_id,issued_on,issued_at,transcription_status)
+        values('${ids.receipt}', '${ids.owner}',
         '2026-09-25', null, 'user_verified');
-      insert into public.merchant_identity_candidates values('${ids.resolution}', '${ids.owner}',
+      insert into public.merchant_identity_candidates(id,user_id,origin,review_status,receipt_id,source_fingerprint,idempotency_key)
+        values('${ids.resolution}', '${ids.owner}',
         'receipt_ingestion', 'needs_ocr_resolution', '${ids.receipt}', '${"a".repeat(64)}', 'original-key');`);
     await addSourceLine("meal-1", ids.menu, ids.catalog, ids.price, 1);
     await db.query("insert into public.test_merchant_identity values($1::jsonb)", [JSON.stringify({
@@ -453,5 +464,214 @@ describe("receipt menu observation reuse in PostgreSQL", () => {
       await expect(db.query("select public.resolve_ocr_merchant_identity_v1($1::uuid,$2::jsonb,true)",
         [ids.resolution, JSON.stringify(sourceReceipt.merchant)])).rejects.toMatchObject({ code: "42501" });
     } finally { await db.exec("reset role"); }
+  });
+
+  describe("legacy database-store identity recovery", () => {
+    const storeId = "a0000000-0000-0000-0000-000000000001";
+    const approvedMerchant = {
+      name: "Verified Restaurant", branch_name: "Central Branch", business_kind: "food_service",
+      retail_channel: "dining_out", catalog_namespace: null, merchant_id: null,
+      business_registration_number: null, address: "Seoul verified address", phone: "0212345678",
+    };
+
+    beforeEach(async () => {
+      // Replacing the upstream resolver is transaction-scoped. Every earlier
+      // test keeps its explicit stub; these cases run the real September V5
+      // strong-signal resolver and the new forward repair together.
+      await db.exec("begin");
+      await db.exec(oldFunction("20260927090000_ocr_v5_identity_authority.sql", "private_resolve_verified_receipt_merchant_v2"));
+      const legacyMigration = readFileSync(path.join(process.cwd(),
+        "supabase/migrations/20261004063208_ocr_legacy_store_identity_recovery.sql"), "utf8");
+      expect(legacyMigration.trim()).not.toBe("");
+      await db.exec(legacyMigration);
+      await db.exec(legacyMigration);
+      const compatibilityMigration = readFileSync(path.join(process.cwd(),
+        "supabase/migrations/20261004064719_ocr_legacy_store_identity_schema_compatibility.sql"), "utf8");
+      expect(compatibilityMigration.trim()).not.toBe("");
+      await db.exec(compatibilityMigration);
+      await db.exec(compatibilityMigration);
+      await db.query("update public.receipts set store_id=$1::uuid", [storeId]);
+      await db.query(`update public.restaurants set canonical_name=$1,created_by=$2::uuid,reviewed_by=$2::uuid`,
+        [approvedMerchant.name, ids.owner]);
+      await db.query(`update public.restaurant_locations set source_namespace='pricetrace-db-store',
+        source_location_code=$1,location_label=$2,created_by=$3::uuid,reviewed_by=$3::uuid where id=$4::uuid`,
+        [storeId, approvedMerchant.branch_name, ids.owner, ids.location]);
+      await db.query(`update public.verified_receipt_sources set merchant_name=$1,branch_name=$2,business_kind=$3,
+        retail_channel=$4,catalog_namespace=null,merchant_id=null,business_registration_number=null,
+        address=$5,phone=$6,source_fingerprint=$7`, [approvedMerchant.name, approvedMerchant.branch_name,
+        approvedMerchant.business_kind, approvedMerchant.retail_channel, approvedMerchant.address,
+        approvedMerchant.phone, "a".repeat(64)]);
+      await insertLegacy({ snapshot: { schemaVersion: "receipt.v1", receiptId: ids.receipt,
+        storeId, receiptItemId: itemId("meal-1"), priceObservationId: ids.price } });
+      await saveResponse({ ...response(), merchantResolutionStatus: "needs_ocr_resolution" });
+    });
+
+    afterEach(async () => { await db.exec("rollback"); });
+
+    async function resolveLegacy(merchant: unknown = approvedMerchant) {
+      return (await db.query<{ value: ReturnType<typeof response> & { ocrResolution?: { status: string } } }>(
+        "select public.resolve_ocr_merchant_identity_v1($1::uuid,$2::jsonb,true) as value",
+        [ids.resolution, JSON.stringify(merchant)],
+      )).rows[0].value;
+    }
+
+    async function identityRows() {
+      const restaurants = (await db.query<Record<string, unknown>>("select * from public.restaurants order by id")).rows;
+      const locations = (await db.query<Record<string, unknown>>("select * from public.restaurant_locations order by id")).rows;
+      return { restaurants, locations, observations: await observations() };
+    }
+
+    async function rejectLegacyUnchanged(merchant: unknown = approvedMerchant, code = "23514") {
+      const before = await identityRows();
+      // A failing PostgreSQL statement aborts its transaction. A savepoint lets
+      // us inspect the rollback and preserve the transactional function fixture.
+      await db.exec("savepoint rejected_legacy_resolution");
+      try {
+        await expect(resolveLegacy(merchant)).rejects.toMatchObject({ code });
+      } finally { await db.exec("rollback to savepoint rejected_legacy_resolution"); }
+      expect(await identityRows()).toEqual(before);
+    }
+
+    it("proves the original strong resolver creates different IDs, then reuses the same exact legacy tuple", async () => {
+      const before = await identityRows();
+      await db.exec("savepoint old_strong_resolver");
+      const oldResult = (await db.query<{ value: { status: string; restaurantId: string; restaurantLocationId: string } }>(
+        "select public.private_resolve_verified_receipt_merchant_v2($1::uuid,$2,$3,$4::jsonb,$5::uuid) as value",
+        [ids.owner, "a".repeat(64), "original-key", JSON.stringify(approvedMerchant), ids.resolution],
+      )).rows[0].value;
+      expect(oldResult.status).toBe("exact");
+      expect(oldResult.restaurantId).not.toBe(ids.restaurant);
+      expect(oldResult.restaurantLocationId).not.toBe(ids.location);
+      await db.exec("rollback to savepoint old_strong_resolver");
+      expect(await identityRows()).toEqual(before);
+      const recovered = await resolveLegacy();
+      expect(recovered).toMatchObject({ merchantResolutionStatus: "exact", restaurantId: ids.restaurant,
+        restaurantLocationId: ids.location, ocrResolution: { status: "resolved" } });
+      expect(recovered.lines[0]).toMatchObject({ restaurantObservationId: ids.legacyObservation });
+      const after = await identityRows();
+      expect(after.restaurants).toEqual(before.restaurants);
+      expect(after.observations).toEqual(before.observations);
+      expect(after.locations).toHaveLength(before.locations.length);
+      expect(after.locations.find((row) => row.id === ids.location)).toMatchObject({
+        address: approvedMerchant.address, phone: approvedMerchant.phone,
+        source_namespace: "pricetrace-db-store", source_location_code: storeId,
+        business_registration_number: null,
+      });
+      const oldIdentity = { ...before.locations.find((row) => row.id === ids.location)! };
+      const newIdentity = { ...after.locations.find((row) => row.id === ids.location)! };
+      delete oldIdentity.address;
+      delete oldIdentity.phone;
+      delete oldIdentity.updated_at;
+      delete newIdentity.address;
+      delete newIdentity.phone;
+      delete newIdentity.updated_at;
+      expect(newIdentity).toEqual(oldIdentity);
+    });
+
+    it("recovers the real legacy shape with a NULL branch and an exactly verified normalized business number", async () => {
+      const merchant = { ...approvedMerchant, branch_name: null, business_registration_number: "123-45-67890" };
+      await db.query("update public.restaurant_locations set location_label=null where id=$1::uuid", [ids.location]);
+      await db.exec("update public.verified_receipt_sources set branch_name=null,business_registration_number='1234567890'");
+      const before = await identityRows();
+      const recovered = await resolveLegacy(merchant);
+      expect(recovered).toMatchObject({ merchantResolutionStatus: "exact", restaurantId: ids.restaurant,
+        restaurantLocationId: ids.location });
+      const after = await identityRows();
+      expect(after.restaurants).toEqual(before.restaurants);
+      expect(after.observations).toEqual(before.observations);
+      expect(after.locations).toHaveLength(before.locations.length);
+      expect(after.locations.find((row) => row.id === ids.location)).toMatchObject({
+        address: merchant.address, phone: merchant.phone, business_registration_number: "1234567890",
+        location_label: null, source_namespace: "pricetrace-db-store", source_location_code: storeId,
+      });
+    });
+
+    it("uses exact source-line proof across multiple receipt menus without rewriting observations", async () => {
+      await addSourceLine("meal-2", ids.secondMenu, ids.secondCatalog, ids.secondPrice, 2);
+      await db.query(`insert into public.restaurant_menu_receipt_observations(
+        restaurant_id,restaurant_location_id,restaurant_menu_id,owner_user_id,price_observation_id,receipt_id,
+        receipt_item_id,observed_on,unit_price_krw,quantity,total_price_krw,evidence_snapshot,evidence_fingerprint,verified_by)
+        values($1::uuid,$2::uuid,$3::uuid,$4::uuid,$5::uuid,$6::uuid,$7,'2026-09-25',12000,2,24000,$8::jsonb,$9,$4::uuid)`,
+        [ids.restaurant, ids.location, ids.secondMenu, ids.owner, ids.secondPrice, ids.receipt, itemId("meal-2"),
+          JSON.stringify({ receiptId: ids.receipt, storeId, receiptItemId: itemId("meal-2"), priceObservationId: ids.secondPrice }),
+          `sha256:${"c".repeat(64)}`]);
+      await saveResponse({ ...response([line("meal-2", ids.secondMenu, ids.secondCatalog), line()]),
+        merchantResolutionStatus: "needs_ocr_resolution" });
+      const before = await observations();
+      const result = await resolveLegacy();
+      expect(result.restaurantLocationId).toBe(ids.location);
+      expect(result.lines.map((row) => row.sourceLineId)).toEqual(["meal-2", "meal-1"]);
+      expect(await observations()).toEqual(before);
+    });
+
+    it.each([
+      ["database-store namespace", "update public.restaurant_locations set source_namespace='another-source' where id=$1::uuid"],
+      ["server store code", "update public.restaurant_locations set source_location_code='another-store' where id=$1::uuid"],
+      ["location creator", `update public.restaurant_locations set created_by='${ids.otherOwner}' where id=$1::uuid`],
+      ["nonblank existing address", "update public.restaurant_locations set address='conflicting-address' where id=$1::uuid"],
+      ["nonblank existing phone", "update public.restaurant_locations set phone='099999999' where id=$1::uuid"],
+    ])("rejects incompatible legacy %s and preserves all identities", async (_description, invalidation) => {
+      await db.query(invalidation, [ids.location]);
+      await rejectLegacyUnchanged();
+    });
+
+    it("rejects another location matching the exact approved strong contact signal", async () => {
+      await db.query(`update public.restaurant_locations set location_label=$1,address=$2,phone=$3,
+        created_by=$4::uuid where id=$5::uuid`, [approvedMerchant.branch_name, approvedMerchant.address,
+        approvedMerchant.phone, ids.owner, ids.otherLocation]);
+      await rejectLegacyUnchanged();
+    });
+
+    it("rejects a conflicting nonblank legacy business number without overwriting it", async () => {
+      const merchant = { ...approvedMerchant, branch_name: null, business_registration_number: "123-45-67890" };
+      await db.query("update public.restaurant_locations set location_label=null,business_registration_number='9876543210' where id=$1::uuid",
+        [ids.location]);
+      await db.exec("update public.verified_receipt_sources set branch_name=null,business_registration_number='1234567890'");
+      await rejectLegacyUnchanged(merchant);
+    });
+
+    it("rejects another location matching the exact business number while the branch is NULL", async () => {
+      const merchant = { ...approvedMerchant, branch_name: null, business_registration_number: "123-45-67890" };
+      await db.query("update public.restaurant_locations set location_label=null where id=$1::uuid", [ids.location]);
+      await db.query("update public.restaurant_locations set business_registration_number='1234567890' where id=$1::uuid",
+        [ids.otherLocation]);
+      await db.exec("update public.verified_receipt_sources set branch_name=null,business_registration_number='1234567890'");
+      await rejectLegacyUnchanged(merchant);
+    });
+
+    it.each([
+      { receiptItemId: itemId("meal-1"), priceObservationId: ids.price },
+      { storeId, priceObservationId: ids.price },
+      { storeId, receiptItemId: itemId("meal-1") },
+      { storeId: "a0000000-0000-0000-0000-000000000002", receiptItemId: itemId("meal-1"), priceObservationId: ids.price },
+      { storeId, receiptItemId: itemId("meal-1"), priceObservationId: ids.price, sourceLineId: "wrong-line" },
+    ])("rejects incomplete or contradictory immutable server-store proof %j", async (snapshot) => {
+      // Fixture replacement uses TRUNCATE; the deployed append-only UPDATE/
+      // DELETE trigger remains enabled throughout each actual RPC attempt.
+      await db.exec("truncate public.restaurant_menu_receipt_observations");
+      await insertLegacy({ snapshot });
+      await rejectLegacyUnchanged();
+    });
+
+    it("rejects edited merchant source facts instead of attaching an old store identity", async () => {
+      await rejectLegacyUnchanged({ ...approvedMerchant, address: "A different reviewed address" });
+    });
+
+    it("rejects an original verified source fingerprint that differs from the resolution candidate", async () => {
+      await db.exec(`update public.verified_receipt_sources set source_fingerprint='${"d".repeat(64)}'`);
+      await rejectLegacyUnchanged();
+    });
+
+    it("rejects a foreign owner without returning or filling their legacy identity", async () => {
+      await db.exec(`select set_config('request.jwt.claim.sub','${ids.otherOwner}',false)`);
+      await rejectLegacyUnchanged(approvedMerchant, "42501");
+    });
+
+    it("keeps the recovery helper unavailable to authenticated and anonymous API roles", async () => {
+      const privileges = await db.query<{ authenticated: boolean; anonymous: boolean }>(`select
+        has_function_privilege('authenticated','public.private_restore_ocr_legacy_store_source_facts_v1(uuid,jsonb)','execute') as authenticated,
+        has_function_privilege('anon','public.private_restore_ocr_legacy_store_source_facts_v1(uuid,jsonb)','execute') as anonymous`);
+      expect(privileges.rows[0]).toEqual({ authenticated: false, anonymous: false });
+    });
   });
 });
