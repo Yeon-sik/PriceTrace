@@ -126,6 +126,8 @@ export function ProductBrowser({ groups, query, setQuery, category, setCategory,
     standardImages,
     coupangByStandard,
     catalogNotice,
+    catalogLoading,
+    retryCatalog,
   } = useProductCatalog(authRevision);
   const [catalogView, setCatalogView] = useState<CatalogView>("all");
   const [openStandardId, setOpenStandardId] = useState<string | null>(null);
@@ -261,7 +263,10 @@ export function ProductBrowser({ groups, query, setQuery, category, setCategory,
       <button type="button" aria-pressed={catalogView === "official"} className={catalogView === "official" ? styles.catalogLayerTabActive : ""} onClick={() => changeCatalogView("official")}>공식 상품만 <span>{officialProductDisplayCount.toLocaleString("ko-KR")}</span></button>
     </div>
 
-    {catalogNotice && !showOfficialOnly && <p className={styles.dataNotice} role="status">{catalogNotice}</p>}
+    {!showOfficialOnly && (catalogNotice || catalogLoading) && <div className={styles.dataNotice} role="status">
+      {catalogLoading ? "상품 카탈로그를 불러오는 중입니다." : catalogNotice}
+      {catalogNotice && !catalogLoading && <button type="button" onClick={retryCatalog}>카탈로그 다시 불러오기</button>}
+    </div>}
     {showOfficialOnly
       ? <p className={styles.officialCatalogScope}>PX 공식 판매상품 전체 · 특정 지점의 판매·재고 정보가 아닙니다.</p>
       : <div className={styles.marketControls}>
