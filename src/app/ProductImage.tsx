@@ -3,6 +3,7 @@
 
 import { useCallback, useEffect, useId, useRef, useState } from "react";
 import { createPortal } from "react-dom";
+import { Icon } from "@/components/Icon";
 import { seededOfficialProducts } from "@/domain/official-product";
 import type { ProductCategory } from "@/domain/product-browser";
 import type { ReceiptItem } from "@/domain/types";
@@ -10,64 +11,6 @@ import { OfficialProductRepository } from "@/repositories/official-product.repos
 import styles from "./page.module.css";
 
 const repository = new OfficialProductRepository();
-const fallbackByCategory: Partial<Record<ProductCategory, string>> = {
-  "식품": "🍚",
-  "신선식품": "🥬",
-  "육류": "🥩",
-  "수산물": "🐟",
-  "과일": "🍎",
-  "채소": "🥬",
-  "두부·달걀": "🥚",
-  "즉석면·떡국": "🍜",
-  "국수·파스타·당면": "🍝",
-  "간편식·냉동식품": "🍱",
-  "빵·베이커리": "🥖",
-  "반찬·김·통조림": "🥫",
-  "조미료·소스": "🧂",
-  "쌀·가루류": "🌾",
-  "육가공·어묵": "🌭",
-  "건강기능식품": "💊",
-  "음료": "🥤",
-  "커피·차": "☕",
-  "주스·유산균음료": "🧃",
-  "단백질음료": "🥛",
-  "건강·에너지음료": "⚡",
-  "주류": "🥃",
-  "간식": "🍪",
-  "스낵·과자": "🍿",
-  "아이스크림": "🍨",
-  "초콜릿·디저트": "🍫",
-  "육포·단백질간식": "🥓",
-  "뷰티": "🧴",
-  "로션·크림": "🧴",
-  "선케어": "☀️",
-  "피부관리": "✨",
-  "샴푸·헤어케어": "🧴",
-  "바디케어": "🧼",
-  "면도용품": "🪒",
-  "생활용품": "🧼",
-  "세탁·청소": "🧺",
-  "종이·일회용품": "🧻",
-  "건강·위생용품": "🩹",
-  "주방용품": "🍳",
-  "조리도구": "🍳",
-  "식기·보관용기": "🍽️",
-  "의류·패션": "👕",
-  "의류": "👕",
-  "속옷": "🧦",
-  "패션잡화": "👜",
-  "스포츠·레저": "🏕️",
-  "스포츠용품": "🏸",
-  "아웃도어·레저": "⛺",
-  "자동차용품": "🚗",
-  "자동차 관리용품": "🚙",
-  "전자제품": "🔌",
-  "디지털기기": "📱",
-  "생활가전": "🔌",
-  "기타": "📦",
-  "미분류": "❔",
-};
-
 export function ProductImage({
   item,
   productName: providedProductName,
@@ -106,7 +49,7 @@ export function ProductImage({
     };
   }, [closeExpanded, isExpanded]);
 
-  if (!imageUrl) return <span aria-hidden="true">{fallbackByCategory[category] ?? "📦"}</span>;
+  if (!imageUrl) return <span className={styles.productPlaceholder} aria-label={`${productName} 이미지 없음`}><Icon name="product" size={35} /><span>{category}</span></span>;
 
   const imageAlt = `${productName} 제품 사진`;
   return <>

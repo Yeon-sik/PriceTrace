@@ -10,6 +10,7 @@ private-data/
 node_modules/
 .next/
 .next-e2e/
+.next-production/
 out/
 coverage/
 playwright-report/
@@ -111,3 +112,11 @@ e2e/*
 !e2e/restaurant-menu-proposal.spec.ts
 !e2e/product-catalog-pagination.spec.ts
 !eslint.config.mjs
+
+# Keep the design behavior regressions; generated review artifacts stay local.
+!e2e/observation-instrument.spec.ts
+!src/features/observation-instrument/observation-selector.test.ts
+.agents/skills/impeccable/scripts/bin/
+.impeccable/review/
+.impeccable/*.cjs
+.impeccable/inspect-subject.ts

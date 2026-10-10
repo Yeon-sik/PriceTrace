@@ -1,4 +1,5 @@
 "use client";
+import { Icon } from "@/components/Icon";
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
@@ -133,20 +134,20 @@ export function RestaurantBrowser({ selectedRestaurant, selectedRestaurantMenuId
           <p>검증된 식당을 선택하면 식당 정보, 확인된 지점, 메뉴별 가격 관측 이력을 한 화면에서 확인합니다.</p>
         </div>
         <label className={styles.search}>
-          <span aria-hidden="true">⌕</span>
+          <Icon name="search" size={20} />
           <span className={styles.srOnly}>음식점 검색</span>
           <input
             type="search"
             value={query}
             onChange={(event) => setQuery(event.target.value)}
-            placeholder="식당 Brand, 업종, 지역 검색"
+            placeholder="음식점 이름, 업종, 지역 검색"
           />
         </label>
       </div>
 
       <div className={styles.restaurantBoundaryNotice}>
-        <strong>음식점 상세 구조</strong>
-        <span>목록은 식당 identity를 찾는 공간이고, 상세 화면은 메뉴·식당 정보·지점 및 출처를 분리해 보여줍니다. 가격은 현재가가 아닌 관측 시점이 있는 기록입니다.</span>
+        <Icon name="receipt" size={18} />
+        <span>메뉴 가격은 관측 당시의 기록입니다. 음식점을 선택해 지점, 관측일과 출처를 함께 확인하세요.</span>
       </div>
 
       {configured && !loading && !error && entries.length > 0 && <div className={styles.restaurantDirectorySummary} aria-live="polite">
@@ -186,7 +187,7 @@ export function RestaurantBrowser({ selectedRestaurant, selectedRestaurantMenuId
           className={styles.restaurantCard}
           onClick={() => onSelectRestaurant(entry.restaurant.id)}
         >
-          <span className={styles.restaurantCardIcon} aria-hidden="true">🍽</span>
+          <span className={styles.restaurantCardIcon}><Icon name="restaurant" size={30} /></span>
           <span className={styles.restaurantCardBody}>
             <small>{restaurantCategoryPathLabel(entry.restaurant) ?? "음식점"}</small>
             <strong>{entry.restaurant.brand}</strong>
