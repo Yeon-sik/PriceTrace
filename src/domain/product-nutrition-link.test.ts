@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   ProductNutritionLinkStateSchema,
   ProductNutritionProposalSchema,
+  nutritionFoodFromReadRow,
   approvedNutritionFoodsFromLinkStates,
   buildProductNutritionProposalRequest,
   productNutritionLinkIdentityKey,
@@ -103,6 +104,13 @@ function nutritionFoodRow(revision = nutritionFood.revision) {
 }
 
 describe("product nutrition link contract", () => {
+  it("retains the full verified OCR publication source snapshot beyond 1000 characters", () => {
+    const reference = JSON.stringify({ schema_version: "dining-out-identity.v1", provenance: "검수 근거 ".repeat(250) });
+    expect(reference.length).toBeGreaterThan(1000);
+    expect(nutritionFoodFromReadRow({ ...nutritionFoodRow(), source_reference: reference }).sourceReference).toBe(reference);
+    expect(() => nutritionFoodFromReadRow({ ...nutritionFoodRow(), source_reference: "x".repeat(16_385) })).toThrow();
+  });
+
   it("uses only namespace, exact catalog ID, and nutrition food ID as identity", () => {
     const request = buildProductNutritionProposalRequest({
       action: "link",

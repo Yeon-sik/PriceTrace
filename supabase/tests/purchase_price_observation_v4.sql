@@ -89,6 +89,8 @@ declare
   v_delivery_manual_observation_id uuid;
   v_observation_id uuid;
   v_store_id uuid;
+  v_product_id uuid;
+  v_store_product_id uuid;
   v_receipt_id uuid;
   v_receipt_item_id text;
   v_ordered_on date;

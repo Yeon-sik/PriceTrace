@@ -14,7 +14,9 @@ export function getNutritionSupabaseBrowserClient() {
   const url = process.env.NEXT_PUBLIC_NUTRITION_SUPABASE_URL;
   const key = process.env.NEXT_PUBLIC_NUTRITION_SUPABASE_PUBLISHABLE_KEY;
   if (!url || !key) return null;
-  nutritionBrowserClient ??= createBrowserClient(url, key);
+  // SSR's shared browser singleton can belong to the PriceTrace project.
+  // Cache this project's client locally so its session and RPCs stay separate.
+  nutritionBrowserClient ??= createBrowserClient(url, key, { isSingleton: false });
   return nutritionBrowserClient;
 }
 

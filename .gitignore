@@ -109,3 +109,9 @@ e2e/*
 !src/repositories/restaurant-menu-proposal.repository.test.ts
 !e2e/restaurant-menu-proposal.spec.ts
 !eslint.config.mjs
+
+# Keep the purchase line authority regression contract.
+!src/domain/purchase-price-line-authority-response-migration.test.ts
+!src/repositories/authenticated-product-observation.repository.test.ts
+!src/lib/supabase/nutrition-client.test.ts
+!src/repositories/authenticated-restaurant-observation.repository.test.ts

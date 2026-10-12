@@ -187,3 +187,11 @@ The same idempotency key with the same payload replays the stored response. The
 same payload with another key is content-deduplicated to the original source and
 observations. Reusing a key with a different payload returns a unique-violation
 conflict.
+
+
+## OCR V5 downstream line authority
+
+The additive response metadata and owner checkpoint getter are documented in
+[OCR V5 purchase line authority](./OCR_V5_PURCHASE_LINE_AUTHORITY.md).
+OCR projects V5 purchase records into the unchanged V4 source request;
+server-issued IDs remain response/checkpoint metadata only.

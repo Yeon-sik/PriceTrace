@@ -10,6 +10,7 @@ import { formatKrw } from "@/domain/settlement";
 import { findPxProductNameReview } from "@/domain/px-product-name-review";
 import { useAdminAccess } from "@/hooks/use-admin-access";
 import { PublicReceiptRepository } from "@/repositories/public-receipt.repository";
+import { useAuthenticatedProductObservations } from "@/features/product-browser/use-authenticated-product-observations";
 import { PublicOfficialChannelCatalogRepository } from "@/repositories/public-official-channel-catalog.repository";
 import { PxProductNameReviewRepository } from "@/repositories/px-product-name-review.repository";
 import { useCartStore } from "@/stores/cart.store";
@@ -148,7 +149,11 @@ export default function Home() {
   }, []);
 
   const receipts = publicReceiptData.receipts;
-  const observationListings = publicReceiptData.observations;
+  const { observations: authenticatedObservations, error: purchasedProductError } = useAuthenticatedProductObservations(authRevision, page);
+  const observationListings = useMemo(() => {
+    const ownItems = new Set(authenticatedObservations.map((row) => `${row.item.receiptId}:${row.item.id}`));
+    return [...publicReceiptData.observations.filter((row) => !ownItems.has(`${row.item.receiptId}:${row.item.id}`)), ...authenticatedObservations];
+  }, [authenticatedObservations]);
   const productGroups = useMemo(() => groupProductObservations(observationListings), [observationListings]);
   const approvalCandidates = useMemo(
     () => observationListings.map(receiptObservationCandidate),
@@ -280,6 +285,7 @@ export default function Home() {
     </header>
 
     <main className={styles.main}>
+      {page === "products" && purchasedProductError && <p className={styles.error} role="alert">내 구매 상품을 불러오지 못했습니다. 앱을 다시 활성화하면 재시도합니다.</p>}
       {page === "home" && <><section className={styles.hero}><p className={styles.kicker}>PRICE OBSERVATION PLATFORM</p><h1>음식점 메뉴와 상품 가격을<br /><span>관측 기록으로 비교하세요.</span></h1><p>판매처·지점과 시점이 명확한 영수증 관측가를 비교하고,<br />메뉴는 Fitness Nutrition DB의 영양성분까지 확인할 수 있습니다.</p><div className={styles.heroActions}><button onClick={() => navigate("restaurants")}>음식점 둘러보기 <span>→</span></button><button onClick={() => openProducts()}>상품 둘러보기 <span>→</span></button></div></section><section className={styles.homeGrid}><ExploreTypeBox onRestaurants={() => navigate("restaurants")} onProducts={() => openProducts()} /><CartBox count={cartGroups.length} quantity={cartQuantityTotal} total={cartTotal} onOpen={() => navigate("cart")} /></section></>}
       {page === "restaurants" && <RestaurantBrowser selectedRestaurant={selectedRestaurant} selectedRestaurantMenuId={selectedRestaurantMenuId} onSelectRestaurant={(restaurantId) => navigate("restaurants", { selectedRestaurant: restaurantId, replace: restaurantId === null })} onClearMenuIdentity={() => navigate("restaurants", { replace: true })} />}
       {page === "products" && <ProductBrowser groups={productGroups} query={query} setQuery={setQuery} category={category} setCategory={setCategory} martType={martType} setMartType={setMartType} selectedStore={selectedStore} setSelectedStore={setSelectedStore} sort={sort} setSort={setSort} authRevision={authRevision} selectedStoreProductId={selectedStoreProductId} selectedCatalogProductId={selectedCatalogProductId} onClearIdentity={() => navigate("products", { replace: true })} onAdd={openCartModal} onTrend={setTrendGroup} onOpenStore={(store) => navigate("markets", { selectedMarket: store })} />}

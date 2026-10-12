@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { getSupabaseBrowserClient } from "../../lib/supabase/client";
 import { RestaurantMenuRepository } from "../../repositories/restaurant-menu.repository";
+import { AuthenticatedRestaurantObservationRepository, attachOwnerRestaurantLatest, attachOwnerRestaurantPrices } from "../../repositories/authenticated-restaurant-observation.repository";
 
 export function useRestaurantMenuCatalog(selectedRestaurant: string | null = null) {
   const client = getSupabaseBrowserClient();
@@ -20,6 +21,16 @@ export function useRestaurantMenuCatalog(selectedRestaurant: string | null = nul
   const refresh = useCallback(() => setReloadToken((current) => current + 1), []);
 
   useEffect(() => {
+    if (!client) return;
+    const { data } = client.auth.onAuthStateChange((event) => {
+      if (event === "INITIAL_SESSION") return;
+      setDirectory(null); setDetail(null); refresh();
+    });
+    window.addEventListener("focus", refresh);
+    return () => { data.subscription.unsubscribe(); window.removeEventListener("focus", refresh); };
+  }, [client, refresh]);
+
+  useEffect(() => {
     let active = true;
     if (!repository) {
       setDirectory(null);
@@ -30,8 +41,9 @@ export function useRestaurantMenuCatalog(selectedRestaurant: string | null = nul
 
     setLoading(true);
     setError("");
-    void repository.readDirectory({ limit: 200 }).then((nextDirectory) => {
-      if (active) setDirectory(nextDirectory);
+    void Promise.all([repository.readDirectory({ limit: 200 }),
+      new AuthenticatedRestaurantObservationRepository(client!).load()]).then(([nextDirectory, rows]) => {
+      if (active) setDirectory(attachOwnerRestaurantLatest(nextDirectory, rows));
     }).catch((reason: unknown) => {
       if (!active) return;
       setDirectory(null);
@@ -41,7 +53,7 @@ export function useRestaurantMenuCatalog(selectedRestaurant: string | null = nul
     });
 
     return () => { active = false; };
-  }, [reloadToken, repository]);
+  }, [client, reloadToken, repository]);
 
   useEffect(() => {
     let active = true;
@@ -54,8 +66,9 @@ export function useRestaurantMenuCatalog(selectedRestaurant: string | null = nul
 
     setDetailLoading(true);
     setDetailError("");
-    void repository.readDetail(selectedRestaurant).then((nextDetail) => {
-      if (active) setDetail(nextDetail);
+    void Promise.all([repository.readDetail(selectedRestaurant),
+      new AuthenticatedRestaurantObservationRepository(client!).load(selectedRestaurant)]).then(([nextDetail, rows]) => {
+      if (active) setDetail(attachOwnerRestaurantPrices(nextDetail, rows));
     }).catch((reason: unknown) => {
       if (!active) return;
       setDetail(null);
@@ -65,7 +78,7 @@ export function useRestaurantMenuCatalog(selectedRestaurant: string | null = nul
     });
 
     return () => { active = false; };
-  }, [reloadToken, repository, selectedRestaurant]);
+  }, [client, reloadToken, repository, selectedRestaurant]);
 
   return {
     configured: repository !== null,

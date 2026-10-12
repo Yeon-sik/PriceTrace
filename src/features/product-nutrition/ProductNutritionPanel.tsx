@@ -14,9 +14,16 @@ function formatNutrient(value: number | null, unit: string) {
   return value === null ? "미입력" : `${value.toLocaleString("ko-KR")}${unit}`;
 }
 
-function NutritionSummary({ food }: { food: NutritionFood }) {
+function nutritionSourceLabel(type: string) {
+  if (type === "product_label_ocr" || type === "manufacturer_label") return "영양성분표";
+  if (type === "food_image_estimate") return "음식 사진 기반 추정";
+  if (type === "external_reference") return "외부 영양 자료";
+  return "영양 기록";
+}
+
+export function NutritionSummary({ food }: { food: NutritionFood }) {
   return <>
-    <small>{food.basisAmount.toLocaleString("ko-KR")}{food.basisUnit} 기준 · {food.sourceType}</small>
+    <small>{food.basisAmount.toLocaleString("ko-KR")}{food.basisUnit} 기준 · {nutritionSourceLabel(food.sourceType)}</small>
     <span>{formatNutrient(food.caloriesKcal, "kcal")}</span>
     <small>
       단백질 {formatNutrient(food.proteinGrams, "g")} · 탄수화물 {formatNutrient(food.carbsGrams, "g")} · 지방 {formatNutrient(food.fatGrams, "g")}
