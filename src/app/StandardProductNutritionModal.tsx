@@ -19,7 +19,8 @@ function formatAmount(value: number | null, unit: string) {
 }
 
 function formatBasis(food: NutritionFood) {
-  return `${food.basisAmount.toLocaleString("ko-KR")}${food.basisUnit}`;
+  const unit = food.basisUnit.trim().toLowerCase() === "serving" ? "회분" : food.basisUnit;
+  return `${food.basisAmount.toLocaleString("ko-KR")}${unit}`;
 }
 
 function formatSourceType(sourceType: string) {
@@ -49,7 +50,7 @@ const nutritionRows = (food: NutritionFood) => [
 ] as const;
 
 function displayUnitLabel(unit: NutritionDisplayUnit) {
-  return `${NUTRITION_DISPLAY_AMOUNT}${unit}`;
+  return unit === "serving" ? "1회분" : `${NUTRITION_DISPLAY_AMOUNT}${unit}`;
 }
 
 function NutritionFacts({ food }: { food: NutritionFood }) {
@@ -59,7 +60,7 @@ function NutritionFacts({ food }: { food: NutritionFood }) {
       <h3>{food.name}</h3>
       <div className={styles.nutritionFactsBasis}>
         <strong>기준 단위당 영양성분</strong>
-        <small>{formatBasis(food)} 기록을 {NUTRITION_DISPLAY_AMOUNT}단위 기준으로 환산</small>
+        <small>{formatBasis(food)} 기록을 {food.basisUnit.trim().toLowerCase() === "serving" ? "1회분" : `${NUTRITION_DISPLAY_AMOUNT}${food.basisUnit}`} 기준으로 환산</small>
       </div>
     </header>
     <section className={styles.nutritionTableSection} aria-label="기준 단위당 영양성분">

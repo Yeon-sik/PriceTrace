@@ -1,5 +1,7 @@
 "use client";
 
+import { ReceiptProductNutritionPanel } from "../features/product-nutrition/ReceiptProductNutritionPanel";
+
 import { useMemo } from "react";
 import { buildIdentityNavigationUrl, type IdentityDeepLink } from "@/domain/app-navigation";
 import type {
@@ -114,6 +116,7 @@ function ProductCards({
           <div><dt>판매처 ID</dt><dd><a href={identityHref({ type: "store", id: storeProduct.storeId })}><code>{storeProduct.storeId}</code></a></dd></div>
           {storeProduct.storeProductCode && <div><dt>판매처 상품 코드</dt><dd>{storeProduct.storeProductCode}</dd></div>}
         </dl>
+        <ReceiptProductNutritionPanel storeProductId={storeProduct.id} />
       </article>)}
     </div>
   </section>;

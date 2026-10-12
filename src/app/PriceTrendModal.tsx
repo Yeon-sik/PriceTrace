@@ -1,5 +1,7 @@
 "use client";
 
+import { ReceiptProductNutritionPanel } from "../features/product-nutrition/ReceiptProductNutritionPanel";
+
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { ProductGroup } from "@/domain/product-browser";
 import {
@@ -122,6 +124,7 @@ export function PriceTrendModal({ group, onClose, onOpenStore, onBack }: { group
         </section>
       </>}
 
+      {group.latest.storeProductId && <ReceiptProductNutritionPanel storeProductId={group.latest.storeProductId} />}
       {loading && <p className={styles.trendNote}>저장된 관측을 확인하고 있습니다.</p>}
       {message && <p className={styles.trendNote}>{message}</p>}
 

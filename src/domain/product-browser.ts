@@ -75,6 +75,9 @@ export type ProductObservationListing = {
   observedAt: string;
   martType: Exclude<MartType, "all">;
   source?: "receipt" | "public";
+  /** Owner-scoped identity from the authenticated PT receipt ingestion. */
+  storeProductId?: string;
+  catalogProductId?: string | null;
 };
 
 export type ProductGroup = {
@@ -297,7 +300,8 @@ export function groupProductObservations(listings: ProductObservationListing[]):
   for (const listing of listings) {
     const normalizedName = normalizeReceiptProductName(listing.item.productName);
     const productCode = listing.item.sourceProductCode.trim();
-    const id = productCode ? `${listing.storeLabel}:${productCode}:${normalizedName}` : `${listing.storeLabel}:${normalizedName}`;
+    const id = listing.storeProductId ? `store-product:${listing.storeProductId}`
+      : productCode ? `${listing.storeLabel}:${productCode}:${normalizedName}` : `${listing.storeLabel}:${normalizedName}`;
     grouped.set(id, [...(grouped.get(id) ?? []), listing]);
   }
   return [...grouped.entries()].map(([id, observations]) => {

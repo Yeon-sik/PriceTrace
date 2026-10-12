@@ -27,6 +27,21 @@ function nutritionRpcRows(data: unknown) {
 }
 
 export class NutritionCatalogRepository {
+  async readVerifiedReceiptProductFoods(storeProductId: string): Promise<NutritionFood[]> {
+    const { data, error } = await this.client.rpc("get_verified_receipt_product_nutrition_v1", {
+      p_store_product_id: storeProductId,
+    });
+    if (error) throw new Error(remoteErrorMessage(error, "구매 상품의 영양 정보를 불러오지 못했습니다."));
+    return nutritionRpcRows(data).map((row) => {
+      const food = nutritionFoodFromReadRow(row);
+      const reference = JSON.parse(food.sourceReference ?? "null");
+      if (reference?.receipt_product_identity?.store_product_id !== storeProductId || food.approvedCatalogProductId !== null) {
+        throw new Error("요청한 구매 상품과 영양 연결 정보가 다릅니다.");
+      }
+      return food;
+    });
+  }
+
   constructor(private readonly client: SupabaseClient) {}
 
   async readPublicFoods(catalogProductId: string): Promise<NutritionFood[]> {

@@ -8,6 +8,19 @@ const nutritionFoodId = "fitness-food-100";
 const productRevision = `sha256:${"a".repeat(64)}`;
 const stateRevision = `sha256:${"b".repeat(64)}`;
 
+describe("verified receipt product nutrition", () => {
+  it("reads an exact owner product link without a StandardProduct and rejects a substituted product", async () => {
+    const row = { ...publicFoodRow(), catalog_product_id: null,
+      source_reference: JSON.stringify({ receipt_product_identity: { store_product_id: catalogProductId } }) };
+    const rpc = vi.fn().mockResolvedValue({ data: [row], error: null });
+    const repository = new NutritionCatalogRepository({ rpc } as unknown as SupabaseClient);
+    expect((await repository.readVerifiedReceiptProductFoods(catalogProductId))[0].approvedCatalogProductId).toBeNull();
+    expect(rpc).toHaveBeenCalledWith("get_verified_receipt_product_nutrition_v1", { p_store_product_id: catalogProductId });
+    await expect(repository.readVerifiedReceiptProductFoods("55555555-5555-4555-8555-555555555555"))
+      .rejects.toThrow(/영양 연결 정보가 다릅니다/);
+  });
+});
+
 function publicFoodRow() {
   return {
     contract_version: "nutrition-read.v1",

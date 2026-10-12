@@ -44,7 +44,8 @@ export const NutritionReadV1RowSchema = z.object({
     unit: z.string().trim().min(1).max(50),
   }).strict()),
   source_type: z.string().trim().min(1).max(100),
-  source_reference: z.string().trim().min(1).max(1000).nullable(),
+  // Verified OCR publication carries a JSON provenance/identity snapshot here.
+  source_reference: z.string().trim().min(1).max(16_384).nullable(),
   source_revision: z.string().trim().min(1).max(200).nullable(),
   revision: z.coerce.number().int().positive(),
   catalog_product_id: z.string().uuid().nullable(),
