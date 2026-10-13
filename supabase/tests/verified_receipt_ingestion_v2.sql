@@ -858,18 +858,34 @@ begin
   ));
   v_first := public.submit_verified_receipt_v2('pending-restaurant-' || v_suffix, v_candidate_receipt);
   v_candidate_id := (v_first ->> 'merchantCandidateId')::uuid;
-  if v_first ->> 'merchantResolutionStatus' <> 'needs_user_selection'
+  if v_first ->> 'merchantResolutionStatus' <> 'needs_ocr_resolution'
     or v_first ->> 'restaurantId' is not null or v_candidate_id is null
     or not exists (
       select 1 from public.merchant_identity_candidates
-      where id = v_candidate_id and review_status = 'pending'
+      where id = v_candidate_id and review_status = 'needs_ocr_resolution'
     )
     or (select count(*) from public.restaurants where canonical_name = 'Name-only ' || v_suffix) <> 1
+    or (select count(*) from public.admin_list_pending_merchant_identity_candidates_v1()
+        where candidate_id = v_candidate_id) <> 0
+    or (select count(*) from public.get_my_pending_merchant_identity_candidates_v1()
+        where candidate_id = v_candidate_id) <> 0
+  then raise exception 'name-only restaurant auto-matched or OCR review leaked into legacy candidate queue'; end if;
+
+  -- The legacy merchant-only queue remains readable to its owner and trusted admin.
+  v_first := public.submit_merchant_identity_candidate_v1(
+    'manual-pending-' || v_suffix,
+    jsonb_build_object('merchant_name', 'Manual pending ' || v_suffix,
+      'branch_name', 'Main', 'business_kind', 'food_service'), true
+  );
+  v_candidate_id := (v_first ->> 'candidateId')::uuid;
+  if v_candidate_id is null
+    or not exists (select 1 from public.merchant_identity_candidates
+      where id = v_candidate_id and origin = 'merchant_only' and review_status = 'pending')
     or (select count(*) from public.admin_list_pending_merchant_identity_candidates_v1()
         where candidate_id = v_candidate_id) <> 1
     or (select count(*) from public.get_my_pending_merchant_identity_candidates_v1()
         where candidate_id = v_candidate_id) <> 1
-  then raise exception 'name-only restaurant auto-matched or candidate is hidden'; end if;
+  then raise exception 'legacy pending merchant candidate is hidden'; end if;
   perform set_config(
     'request.jwt.claims',
     jsonb_build_object(
@@ -885,6 +901,14 @@ begin
   ) then
     raise exception 'another user can read the pending merchant candidate';
   end if;
+  begin
+    perform public.admin_list_pending_merchant_identity_candidates_v1();
+    raise exception 'non-admin can list pending merchant candidates';
+  exception when insufficient_privilege then null;
+  end;
+  if has_function_privilege('anon', 'public.admin_list_pending_merchant_identity_candidates_v1()', 'execute')
+    or has_function_privilege('anon', 'public.get_my_pending_merchant_identity_candidates_v1()', 'execute')
+  then raise exception 'anonymous role can read private merchant candidate queues'; end if;
 end;
 $$;
 

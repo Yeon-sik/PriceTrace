@@ -73,7 +73,7 @@ export function MyPendingMerchantCandidates() {
     <div className={styles.adminSectionHead}>
       <div>
         <h2 id="my-pending-merchants-title">내 식당 판매처 후보 / 검토 대기</h2>
-        <p>검증된 영수증의 식당 정보가 도착했습니다. 아래 후보는 아직 정식 음식점으로 연결되지 않았습니다.</p>
+        <p>확인해 제출한 식당 정보입니다. 아래 후보는 관리자 검토를 기다리고 있습니다.</p>
       </div>
       <button type="button" onClick={() => void load()} disabled={loading}>새로고침</button>
     </div>

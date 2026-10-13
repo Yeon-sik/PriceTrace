@@ -37,7 +37,7 @@ export function AdminMerchantCandidatePanel() {
     <div className={styles.adminSectionHead}>
       <div>
         <h2 id="merchant-candidates-title">판매처 후보 / 검토 대기</h2>
-        <p>OCR App에서 검증되어 도착한 판매처 사실입니다. 검토 대기 후보는 아직 정식 음식점으로 확정되지 않았습니다.</p>
+        <p>확인해 제출된 판매처 정보입니다. 검토 대기 후보는 아직 정식 음식점으로 확정되지 않았습니다.</p>
       </div>
       <button type="button" onClick={() => void load()} disabled={loading}>새로고침</button>
     </div>

@@ -60,6 +60,12 @@ describe("verified receipt ingestion contract", () => {
     expect(response.lines[0].lineOrdinal).toBe(1);
     expect(response.lines[0].benefitKind).toBeNull();
     expect(response.lines[0].observationCreated).toBe(false);
+    for (const field of ["observationCreated", "observationStatus"] as const) {
+      expect(() => VerifiedReceiptIngestionResponseSchema.parse({
+        ...response,
+        lines: [{ ...response.lines[0], [field]: undefined }],
+      })).toThrow();
+    }
     expect(() => VerifiedReceiptIngestionResponseSchema.parse({ ...response, storeId: undefined })).toThrow();
   });
 
@@ -89,6 +95,8 @@ describe("verified receipt ingestion contract", () => {
         observationId: null,
         restaurantObservationId: null,
         productId: null,
+        observationCreated: false,
+        observationStatus: "insufficient_source_facts",
         storeProductId: null,
         catalogProductId: null,
         restaurantMenuId: null,
@@ -119,6 +127,8 @@ describe("verified receipt ingestion contract", () => {
         benefitKind: null,
         receiptItemId: "receipt-item-1",
         observationId: null,
+        observationCreated: false,
+        observationStatus: "insufficient_source_facts",
         restaurantObservationId: null,
         productId: "55555555-5555-4555-8555-555555555555",
         storeProductId: "66666666-6666-4666-8666-666666666666",
