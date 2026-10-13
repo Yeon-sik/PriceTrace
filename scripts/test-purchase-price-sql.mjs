@@ -19,7 +19,8 @@ try {
     create role anon; create role authenticated; create role service_role bypassrls;
     create schema auth; create schema storage; create schema extensions;
     create extension pgcrypto with schema extensions;
-    create table auth.users(id uuid primary key, created_at timestamptz default now(), email text);
+    create table auth.users(id uuid primary key, created_at timestamptz default now(), email text,
+      aud text, role text, encrypted_password text, raw_app_meta_data jsonb, raw_user_meta_data jsonb, updated_at timestamptz);
     create function auth.jwt() returns jsonb language sql stable as $$
       select coalesce(nullif(current_setting('request.jwt.claims', true), '')::jsonb, '{}'::jsonb) $$;
     create function auth.uid() returns uuid language sql stable as $$
@@ -68,7 +69,7 @@ try {
   }
   assert.ok(baselineChecked);
   console.log(`MIGRATION_BOOTSTRAP_WITH_DOCUMENTED_ACCOMMODATIONS_PASS ${migrations.length}`);
-  for (const file of ["purchase_price_observation_v4.sql", "purchase_price_line_authority_response.sql", "purchase_restaurant_identity_recovery.sql"]) {
+  for (const file of ["purchase_price_observation_v4.sql", "purchase_price_line_authority_response.sql", "purchase_restaurant_identity_recovery.sql", "user_confirmed_purchase_restaurants.sql", "verified_receipt_ingestion_v2.sql"]) {
     try {
       const result = await db.exec(readSql("tests", file));
       console.log(`SQL_FIXTURE_PASS ${file}`, result.flatMap(r => r.rows).filter(r => r.result));

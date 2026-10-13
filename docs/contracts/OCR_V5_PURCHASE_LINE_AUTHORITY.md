@@ -1,5 +1,9 @@
 # OCR V5 restaurant purchase: PriceTrace V4 line authority
 
+## 2026-10-13 owner-confirmed recovery addition
+
+The current implementation includes a purchase-bound private identity writer and an owner-confirmed response state. See [Owner-confirmed purchase restaurant recovery](./OWNER_CONFIRMED_PURCHASE_RECOVERY.md) for the current contract, Matdan evidence, compatibility, migration prerequisites and validation. Statements below about a missing purchase writer describe the earlier stage.
+
 ## Decision and scope
 
 **PriceTrace source change is necessary:** current V4 `lineResults` already
