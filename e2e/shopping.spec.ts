@@ -1,4 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
+import type { NutritionReadV1Row } from "../src/domain/product-nutrition-link";
 
 const nutritionCatalogProductId = "22222222-2222-4222-8222-222222222222";
 const secondNutritionCatalogProductId = "33333333-3333-4333-8333-333333333333";
@@ -13,13 +14,14 @@ async function mockProductNutritionContracts(page: Page, {
   includeSecondVariant = false,
   failedNutritionCatalogProductId = null as string | null,
   kaguri = false,
+  nutritionValues = {} as Partial<NutritionReadV1Row["nutrition_values"]>,
 } = {}) {
   let currentNutritionOffline = nutritionOffline;
   const requestedNutritionCatalogIds: string[] = [];
   const catalogId = nutritionCatalogProductId;
   const standardId = nutritionStandardProductId;
   const productName = "하겐다즈 미니컵 스트로베리";
-  const nutritionRow = kaguri ? {
+  const nutritionRow: NutritionReadV1Row = kaguri ? {
     contract_version: "nutrition-read.v1",
     nutrition_food_id: "eddcbbb8-eaa6-4be0-9bae-cbc4dc37f41f",
     name: "카구리 큰사발면",
@@ -78,6 +80,7 @@ async function mockProductNutritionContracts(page: Page, {
     revision: 2,
     catalog_product_id: catalogId,
   };
+  nutritionRow.nutrition_values = { ...nutritionRow.nutrition_values, ...nutritionValues };
 
   await page.route("**/rest/v1/rpc/get_public_exact_standard_product_catalog_v4", async (route) => {
     const catalogRows = [{
@@ -474,6 +477,47 @@ test("표준 상품 정보에서 승인된 영양을 별도 영양성분표로 �
   await page.keyboard.press("Escape");
   await expect(dialog).toHaveCount(0);
   await expect(informationButton).toBeFocused();
+});
+
+test("영양 표는 탄수화물과 지방 총량 아래 포함된 성분을 보여 준다", async ({ page }) => {
+  await mockProductNutritionContracts(page, { nutritionValues: {
+    carbs_grams: 43, sugars_grams: 8, added_sugars_grams: 3,
+    fat_grams: 28, saturated_fat_grams: 9, trans_fat_grams: 0.4,
+  } });
+  await page.goto("/PriceTrace?view=products");
+  await page.getByRole("button", { name: "하겐다즈 미니컵 스트로베리 정보 보기", exact: true }).click();
+  await page.getByRole("button", { name: "영양 정보 확인", exact: true }).click();
+
+  const table = page.getByRole("dialog", { name: "기준 단위당 영양 정보" }).getByRole("table");
+  for (const [name, value] of [
+    ["탄수화물 (총)", "43g"], ["탄수화물 중 당류", "8g"], ["당류 중 첨가당", "3g"],
+    ["지방 (총)", "28g"], ["지방 중 포화지방", "9g"], ["지방 중 트랜스지방", "0.4g"],
+  ]) {
+    const row = table.getByRole("row").filter({ has: page.getByRole("rowheader", { name, exact: true }) });
+    await expect(row.getByRole("cell").nth(1)).toHaveText(value);
+  }
+  await expect(table.getByRole("rowheader", { name: "탄수화물 중 당류", exact: true }).locator("span").first())
+    .toHaveAttribute("style", /padding-inline-start: 1em/);
+  await expect(table.getByRole("rowheader", { name: "당류 중 첨가당", exact: true }).locator("span").first())
+    .toHaveAttribute("style", /padding-inline-start: 2em/);
+});
+
+test("알 수 없는 하위 영양성분을 0으로 표시하지 않는다", async ({ page }) => {
+  await mockProductNutritionContracts(page, { nutritionValues: {
+    sugars_grams: null, added_sugars_grams: null, fiber_grams: null,
+    saturated_fat_grams: null, trans_fat_grams: null,
+  } });
+  await page.goto("/PriceTrace?view=products");
+  await page.getByRole("button", { name: "하겐다즈 미니컵 스트로베리 정보 보기", exact: true }).click();
+  await page.getByRole("button", { name: "영양 정보 확인", exact: true }).click();
+
+  const table = page.getByRole("dialog", { name: "기준 단위당 영양 정보" }).getByRole("table");
+  await expect(table.getByRole("rowheader", { name: "당류 중 첨가당", exact: true })).toHaveCount(0);
+  await expect(table.getByRole("rowheader", { name: "탄수화물 중 식이섬유", exact: true })).toHaveCount(0);
+  for (const name of ["탄수화물 중 당류", "지방 중 포화지방", "지방 중 트랜스지방"]) {
+    const row = table.getByRole("row").filter({ has: page.getByRole("rowheader", { name, exact: true }) });
+    await expect(row.getByRole("cell")).toHaveText(["-", "-", "-"]);
+  }
 });
 
 test("카구리 실응답의 기록 기준량과 같은 단위 환산을 영양 모달에 함께 보여 준다", async ({ page }) => {

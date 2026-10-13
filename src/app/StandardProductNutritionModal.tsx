@@ -9,6 +9,7 @@ import {
   type NutritionDisplayUnit,
 } from "@/domain/nutrition-normalization";
 import { useStandardProductNutrition } from "@/features/product-nutrition/use-standard-product-nutrition";
+import { nutritionRows, type NutritionPresentationRow } from "@/features/product-nutrition/nutrition-presentation";
 import { trapDialogFocus, useDialogLifecycle } from "@/hooks/use-dialog-lifecycle";
 import styles from "./page.module.css";
 
@@ -36,18 +37,12 @@ function formatSourceReference(sourceReference: string) {
     : sourceReference;
 }
 
-const nutritionRows = (food: NutritionFood) => [
-  ["열량", food.caloriesKcal, "kcal"],
-  ["나트륨", food.sodiumMg, "mg"],
-  ["탄수화물", food.carbsGrams, "g"],
-  ["당류", food.sugarsGrams, "g"],
-  ["식이섬유", food.fiberGrams, "g"],
-  ["지방", food.fatGrams, "g"],
-  ["트랜스지방", food.transFatGrams, "g"],
-  ["포화지방", food.saturatedFatGrams, "g"],
-  ["콜레스테롤", food.cholesterolMg, "mg"],
-  ["단백질", food.proteinGrams, "g"],
-] as const;
+function NutritionRowLabel({ row }: { row: NutritionPresentationRow }) {
+  return <span style={{ display: "inline-block", paddingInlineStart: `${row.depth}em` }}>
+    {row.parentLabel && <span className={styles.srOnly}>{row.parentLabel} 중 </span>}
+    {row.label}
+  </span>;
+}
 
 function displayUnitLabel(unit: NutritionDisplayUnit) {
   return unit === "serving" ? "1회분" : `${NUTRITION_DISPLAY_AMOUNT}${unit}`;
@@ -68,9 +63,9 @@ function NutritionFacts({ food }: { food: NutritionFood }) {
       <div className={styles.nutritionTableWrap}>
         <table className={styles.nutritionTable}>
           <thead><tr><th scope="col">영양성분</th>{NUTRITION_DISPLAY_UNITS.map((unit) => <th key={unit} scope="col">{displayUnitLabel(unit)}</th>)}</tr></thead>
-          <tbody>{nutritionRows(food).map(([label, value, unit]) => <tr key={label}>
-            <th scope="row">{label}</th>
-            {NUTRITION_DISPLAY_UNITS.map((targetUnit) => <td key={targetUnit}>{formatAmount(nutritionValueAtAmount(food, value, targetUnit), unit)}</td>)}
+          <tbody>{nutritionRows(food).map((row) => <tr key={row.field}>
+            <th scope="row"><NutritionRowLabel row={row} /></th>
+            {NUTRITION_DISPLAY_UNITS.map((targetUnit) => <td key={targetUnit}>{formatAmount(nutritionValueAtAmount(food, row.value, targetUnit), row.unit)}</td>)}
           </tr>)}</tbody>
         </table>
       </div>
@@ -104,9 +99,9 @@ function NutritionRecords({
           <small>{food.id === selectedFoodId ? "현재 기준표에 표시 중" : "이 기록으로 기준표 보기"}</small>
         </button>
         <dl>
-          {nutritionRows(food).map(([label, value, unit]) => <div key={label}>
-            <dt>{label}</dt>
-            <dd>{formatAmount(value, unit)}</dd>
+          {nutritionRows(food).map((row) => <div key={row.field}>
+            <dt><NutritionRowLabel row={row} /></dt>
+            <dd>{formatAmount(row.value, row.unit)}</dd>
           </div>)}
         </dl>
       </li>)}
