@@ -105,6 +105,7 @@ e2e/*
 !src/repositories/public-receipt.repository.test.ts
 !src/repositories/product-read.repository.test.ts
 !src/repositories/nutrition-catalog.repository.test.ts
+!src/repositories/product-catalog.repository.test.ts
 !src/domain/restaurant-menu.test.ts
 !src/domain/restaurant-menu-migration.test.ts
 !src/repositories/restaurant-menu.repository.test.ts
@@ -112,6 +113,7 @@ e2e/*
 !src/domain/restaurant-menu-proposal.test.ts
 !src/repositories/restaurant-menu-proposal.repository.test.ts
 !e2e/restaurant-menu-proposal.spec.ts
+!e2e/product-catalog-pagination.spec.ts
 !eslint.config.mjs
 
 # Keep the purchase line authority regression contract.

@@ -82,7 +82,7 @@ async function mockProductNutritionContracts(page: Page, {
   };
   nutritionRow.nutrition_values = { ...nutritionRow.nutrition_values, ...nutritionValues };
 
-  await page.route("**/rest/v1/rpc/get_public_exact_standard_product_catalog_v4", async (route) => {
+  await page.route("**/rest/v1/rpc/get_public_exact_standard_product_catalog_v4*", async (route) => {
     const catalogRows = [{
       source_label: "와마트 일산점",
       source_product_code: "210059",
