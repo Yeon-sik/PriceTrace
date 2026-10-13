@@ -27,7 +27,7 @@ Thus Matdan really passed purchase recovery and registration; it was not merely 
 
 ## Reusable owner-confirmed design (2026-10-13)
 
-Status: **implementation and rollback validation complete; NOT merge-ready**. Permanent remote deployment was rejected by automatic approval review, and live HTTP probes still return `404 / PGRST202`. Deployment approval and successful deployed HTTP verification are outstanding. No main push or merge is included.
+Status: **implementation and permanent deployment complete; accepted for merge by the user on 2026-10-13**. All three migrations are applied, live rollback fixtures pass, and anonymous HTTP execution is denied. The earlier deployment rejection and missing-RPC state are resolved. Agent-observed verification limits remain recorded below; user acceptance does not relabel unperformed checks as passing.
 
 The first feature commit (`PriceTrace feb458b`, `OCR-App e97af18`) tied restaurant identity to purchase source + merchant candidate, tied menu identity to a source line, and made observation.menu_id unique. That would duplicate a restaurant/menu across independent purchases and prevent a useful shared price history. The undeployed feature migration was revised after verifying that neither its DDL nor its history row existed in the live database. Previously applied/main migrations were not edited.
 
@@ -132,7 +132,7 @@ Keep the deployment package/versioned migration in the Fitness migration process
 
 ## Remaining release blockers and limits
 
-Explicit user approval resolved the earlier automatic approval rejection. Both deployment scripts applied exactly the three reviewed migrations, with no fabricated history rows, seeds, roles or vault changes. Actual executable DB deployment and anonymous HTTP ACL checks are complete. Signed-owner HTTP/session E2E and the broader failing Playwright baseline remain outstanding, so this report does not declare the branch **merge-ready**.
+Explicit user approval resolved the earlier automatic approval rejection. Both deployment scripts applied exactly the three reviewed migrations, with no fabricated history rows, seeds, roles or vault changes. Actual executable DB deployment and anonymous HTTP ACL checks are complete. On 2026-10-13 the user accepted the user-confirmed work as passed and requested both repositories be merged. Signed-owner HTTP/session E2E and the broader failing Playwright baseline are limits of the recorded agent verification, not newly claimed test passes.
 
 No real CashOS mutation, APK/device installation, Desktop GUI identity selection, or signed-owner JWT/session E2E is claimed. SQL role/claims rollback validation and deterministic HTTP adapter/UI fixtures prove the specified code/database contracts; they do not prove production session signatures or a released product using the deployed RPCs.
 
