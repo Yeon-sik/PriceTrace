@@ -60,6 +60,15 @@ declare
   v_content_count integer;
   v_owner_denied boolean := false;
   v_menu_owner_denied boolean := false;
+  v_partial jsonb;
+  v_missing_net jsonb;
+  v_zero_payload jsonb;
+  v_wrong_totals jsonb;
+  v_candidate_receipt jsonb;
+  v_partial_result jsonb;
+  v_partial_id uuid;
+  v_name_only_restaurant_id uuid;
+  v_field text;
 begin
   v_user_id := gen_random_uuid();
   v_other_user_id := gen_random_uuid();
@@ -762,6 +771,119 @@ begin
   where canonical_name = 'Integration Candidate ' || v_suffix;
   if v_restaurant_count <> 0 then
     raise exception 'merchant-only candidate created a restaurant without a location identity';
+  end if;
+
+  v_partial := jsonb_set(v_retail, '{document,source,original_document_id}', to_jsonb(('nullable-' || v_suffix)::text));
+  foreach v_field in array array['unit_price_amount_minor', 'gross_amount_minor', 'discount_amount_minor', 'tax_amount_minor', 'tax_rate_percent'] loop
+    v_partial := jsonb_set(v_partial, array['line_items', '0', v_field], 'null'::jsonb);
+  end loop;
+  foreach v_field in array array['items_gross_amount_minor', 'discount_amount_minor', 'tax_amount_minor', 'fee_amount_minor', 'tip_amount_minor', 'rounding_amount_minor'] loop
+    v_partial := jsonb_set(v_partial, array['totals', v_field], 'null'::jsonb);
+  end loop;
+  v_partial_result := public.submit_verified_receipt_v2('nullable-' || v_suffix, v_partial);
+  v_partial_id := (v_partial_result ->> 'receiptId')::uuid;
+  if v_partial_result -> 'lines' -> 0 ->> 'observationId' is null
+    or v_partial_result -> 'lines' -> 0 ->> 'observationStatus' <> 'created'
+    or v_partial_result -> 'lines' -> 0 ->> 'observationCreated' <> 'true'
+    or not exists (
+      select 1 from public.verified_receipt_sources
+      where receipt_id = v_partial_id and items_gross_amount_minor is null
+        and discount_amount_minor is null
+        and tax_amount_minor is null and fee_amount_minor is null
+        and tip_amount_minor is null and rounding_amount_minor is null
+        and grand_total_amount_minor = 1200
+    )
+    or not exists (
+      select 1 from public.verified_receipt_source_lines
+      where receipt_id = v_partial_id and gross_amount_minor is null
+        and discount_amount_minor is null and tax_amount_minor is null
+        and unit_price_amount_minor is null
+        and tax_rate_percent is null and net_amount_minor = 1200
+    )
+  then raise exception 'nullable source facts or eligible observation were lost'; end if;
+  v_replayed := public.submit_verified_receipt_v2('nullable-' || v_suffix, v_partial);
+  if v_replayed ->> 'replayed' <> 'true' or v_replayed ->> 'receiptId' <> v_partial_id::text
+  then raise exception 'nullable receipt replay failed'; end if;
+
+  v_missing_net := jsonb_set(v_partial, '{document,source,original_document_id}', to_jsonb(('missing-net-' || v_suffix)::text));
+  v_missing_net := jsonb_set(v_missing_net, '{line_items,0,net_amount_minor}', 'null'::jsonb);
+  v_first := public.submit_verified_receipt_v2('missing-net-' || v_suffix, v_missing_net);
+  if v_first -> 'lines' -> 0 ->> 'observationStatus' <> 'insufficient_source_facts'
+    or v_first -> 'lines' -> 0 ->> 'observationCreated' <> 'false'
+    or v_first -> 'lines' -> 0 ->> 'observationId' is not null
+    or not exists (
+      select 1 from public.verified_receipt_source_lines
+      where receipt_id = (v_first ->> 'receiptId')::uuid and net_amount_minor is null
+    )
+    or exists (
+      select 1 from public.receipt_items
+      where receipt_id = (v_first ->> 'receiptId')::uuid
+    )
+  then raise exception 'ineligible line was not retained as source-only'; end if;
+
+  v_wrong_totals := jsonb_set(v_retail, '{document,source,original_document_id}', to_jsonb(('wrong-totals-' || v_suffix)::text));
+  v_wrong_totals := jsonb_set(v_wrong_totals, '{totals,discount_amount_minor}', '1'::jsonb);
+  begin
+    perform public.submit_verified_receipt_v2('wrong-totals-' || v_suffix, v_wrong_totals);
+    raise exception 'contradictory complete totals were accepted';
+  exception when check_violation then
+    null;
+  end;
+  begin
+    perform public.submit_verified_receipt_v2(
+      'missing-grand-' || v_suffix,
+      jsonb_set(v_partial, '{totals,grand_total_amount_minor}', 'null'::jsonb)
+    );
+    raise exception 'missing grand total was accepted';
+  exception when invalid_parameter_value then
+    null;
+  end;
+  v_zero_payload := jsonb_set(v_partial, '{line_items,0,discount_amount_minor}', '0'::jsonb);
+  v_first := public.submit_verified_receipt_v2('zero-' || v_suffix, v_zero_payload);
+  if v_first ->> 'deduplicated' <> 'false' or v_first ->> 'receiptId' = v_partial_id::text
+    or (select request_fingerprint from public.verified_receipt_ingestion_requests where user_id = v_user_id and idempotency_key = 'zero-' || v_suffix)
+       = (select request_fingerprint from public.verified_receipt_ingestion_requests where user_id = v_user_id and idempotency_key = 'nullable-' || v_suffix)
+  then raise exception 'null and zero have the same content identity'; end if;
+
+  insert into public.restaurants(canonical_name, review_status, status, created_by, reviewed_by, reviewed_at)
+  values ('Name-only ' || v_suffix, 'verified', 'active', v_user_id, v_user_id, now())
+  returning id into v_name_only_restaurant_id;
+  insert into public.restaurant_locations(restaurant_id, source_namespace, source_location_code, location_label, review_status, created_by, reviewed_by, reviewed_at)
+  values (v_name_only_restaurant_id, 'test-name-only', v_suffix, 'Main', 'verified', v_user_id, v_user_id, now());
+  v_candidate_receipt := jsonb_set(v_retail, '{document,source,original_document_id}', to_jsonb(('pending-restaurant-' || v_suffix)::text));
+  v_candidate_receipt := jsonb_set(v_candidate_receipt, '{merchant}', jsonb_build_object(
+    'name', 'Name-only ' || v_suffix, 'branch_name', 'Main', 'business_kind', 'food_service',
+    'retail_channel', 'unknown', 'catalog_namespace', null, 'merchant_id', null,
+    'business_registration_number', null, 'address', null, 'phone', null
+  ));
+  v_first := public.submit_verified_receipt_v2('pending-restaurant-' || v_suffix, v_candidate_receipt);
+  v_candidate_id := (v_first ->> 'merchantCandidateId')::uuid;
+  if v_first ->> 'merchantResolutionStatus' <> 'needs_user_selection'
+    or v_first ->> 'restaurantId' is not null or v_candidate_id is null
+    or not exists (
+      select 1 from public.merchant_identity_candidates
+      where id = v_candidate_id and review_status = 'pending'
+    )
+    or (select count(*) from public.restaurants where canonical_name = 'Name-only ' || v_suffix) <> 1
+    or (select count(*) from public.admin_list_pending_merchant_identity_candidates_v1()
+        where candidate_id = v_candidate_id) <> 1
+    or (select count(*) from public.get_my_pending_merchant_identity_candidates_v1()
+        where candidate_id = v_candidate_id) <> 1
+  then raise exception 'name-only restaurant auto-matched or candidate is hidden'; end if;
+  perform set_config(
+    'request.jwt.claims',
+    jsonb_build_object(
+      'sub', gen_random_uuid(),
+      'role', 'authenticated',
+      'app_metadata', jsonb_build_object('role', 'user')
+    )::text,
+    true
+  );
+  if exists (
+    select 1 from public.get_my_pending_merchant_identity_candidates_v1()
+    where candidate_id = v_candidate_id
+  ) then
+    raise exception 'another user can read the pending merchant candidate';
   end if;
 end;
 $$;

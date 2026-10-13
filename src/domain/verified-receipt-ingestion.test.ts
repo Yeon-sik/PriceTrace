@@ -45,6 +45,8 @@ describe("verified receipt ingestion contract", () => {
         lineOrdinal: 1,
         receiptItemId: null,
         observationId: null,
+        observationCreated: false,
+        observationStatus: "insufficient_source_facts",
         restaurantObservationId: null,
         productId: "33333333-3333-4333-8333-333333333333",
         storeProductId: "44444444-4444-4444-8444-444444444444",
@@ -57,6 +59,7 @@ describe("verified receipt ingestion contract", () => {
     expect(response.storeId).toBe("22222222-2222-4222-8222-222222222222");
     expect(response.lines[0].lineOrdinal).toBe(1);
     expect(response.lines[0].benefitKind).toBeNull();
+    expect(response.lines[0].observationCreated).toBe(false);
     expect(() => VerifiedReceiptIngestionResponseSchema.parse({ ...response, storeId: undefined })).toThrow();
   });
 
@@ -152,6 +155,41 @@ describe("verified receipt ingestion contract", () => {
     ["세금 fee 포함 영수증", receipt({ line_items: [{ id: "line-001", type: "product", description: "상품", source_line_references: ["1"], identifiers: [], quantity: { value: 1, unit: "each" }, unit_price_amount_minor: 1000, gross_amount_minor: 1000, discount_amount_minor: 0, tax_amount_minor: 100, net_amount_minor: 1100, confidence: "user_verified", tax_rate_percent: 10, food_service: null }, { id: "line-002", type: "fee", description: "서비스 수수료", source_line_references: ["2"], identifiers: [], quantity: null, unit_price_amount_minor: null, gross_amount_minor: 0, discount_amount_minor: 0, tax_amount_minor: 0, net_amount_minor: 50, confidence: "user_verified", tax_rate_percent: null, food_service: null }], totals: { items_gross_amount_minor: 1000, discount_amount_minor: 0, tax_amount_minor: 100, fee_amount_minor: 50, tip_amount_minor: 0, rounding_amount_minor: 0, grand_total_amount_minor: 1150 } })],
   ])("accepts %s", (_, value) => {
     expect(() => request(value)).not.toThrow();
+  });
+
+  it("preserves unobserved source money as null and distinguishes it from zero", () => {
+    const source = receipt({
+      line_items: [{
+        ...receipt().line_items[0],
+        unit_price_amount_minor: null,
+        gross_amount_minor: null,
+        discount_amount_minor: null,
+        tax_amount_minor: null,
+        net_amount_minor: null,
+        tax_rate_percent: null,
+      }],
+      totals: {
+        items_gross_amount_minor: null,
+        discount_amount_minor: null,
+        tax_amount_minor: null,
+        fee_amount_minor: null,
+        tip_amount_minor: null,
+        rounding_amount_minor: null,
+        grand_total_amount_minor: 1000,
+      },
+    });
+    const parsed = request(source).receipt;
+    expect(parsed.line_items[0].discount_amount_minor).toBeNull();
+    expect(parsed.totals.fee_amount_minor).toBeNull();
+    expect(verifiedReceiptIngestionFingerprint(parsed)).not.toBe(
+      verifiedReceiptIngestionFingerprint(request({
+        ...source,
+        line_items: [{ ...source.line_items[0], discount_amount_minor: 0 }],
+      }).receipt),
+    );
+  });
+  it("requires an observed grand total for verified ingestion", () => {
+    expect(() => request(receipt({ totals: { ...receipt().totals, grand_total_amount_minor: null } }))).toThrow();
   });
 
   it("accepts a SKU-less product without inventing an identifier", () => {
