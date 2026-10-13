@@ -116,3 +116,5 @@ e2e/*
 !src/repositories/authenticated-product-observation.repository.test.ts
 !src/lib/supabase/nutrition-client.test.ts
 !src/repositories/authenticated-restaurant-observation.repository.test.ts
+!src/repositories/owner-confirmed-restaurant.repository.test.ts
+!e2e/owner-confirmed-restaurants.spec.ts

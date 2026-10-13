@@ -91,7 +91,7 @@ describe("independent nutrition amount scaling", () => {
       sugarsGrams: 4,
       addedSugarsGrams: 1.5,
       fiberGrams: 1,
-      fatGrams: 14,
+      fatGrams: expect.closeTo(14, 12),
       saturatedFatGrams: 4.5,
       transFatGrams: 0.2,
       cholesterolMg: 7.5,

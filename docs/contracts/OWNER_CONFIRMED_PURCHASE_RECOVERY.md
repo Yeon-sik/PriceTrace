@@ -25,93 +25,113 @@ Read-only queries against the linked PriceTrace database established:
 
 Thus Matdan really passed purchase recovery and registration; it was not merely a saved candidate. Its branch/contact evidence took the old verified registration path. Hansung's null/null source and absent branch/contact cannot take that path. This is a missing owner-confirmation capability under the existing contract, not evidence that a working name-only registration path regressed.
 
-## New PriceTrace contract
+## Reusable owner-confirmed design (2026-10-13)
 
-Migration: `20261013095911_user_confirmed_purchase_restaurants.sql`.
+Status: **implementation and rollback validation complete; NOT merge-ready**. Permanent remote deployment was rejected by automatic approval review, and live HTTP probes still return `404 / PGRST202`. Deployment approval and successful deployed HTTP verification are outstanding. No main push or merge is included.
 
-`resolve_user_confirmed_purchase_restaurant_line_v1(p_purchase_source_id uuid, p_line_key text, p_merchant_candidate_id uuid, p_user_verified boolean) -> jsonb`
+The first feature commit (`PriceTrace feb458b`, `OCR-App e97af18`) tied restaurant identity to purchase source + merchant candidate, tied menu identity to a source line, and made observation.menu_id unique. That would duplicate a restaurant/menu across independent purchases and prevent a useful shared price history. The undeployed feature migration was revised after verifying that neither its DDL nor its history row existed in the live database. Previously applied/main migrations were not edited.
 
-The caller must own the saved source, line and candidate. The candidate must be user-confirmed food service and its name, branch, namespace and code must exactly match the persisted line seller facts. V4 currently has no seller address/phone/BNR fields, so the new writer rejects candidates carrying those extra facts. The client cannot submit prices, menu text, dates or restaurant UUIDs. All observation values come from the saved source and line. Unknown sellers, unsettled purchases and non-itemized prices are rejected.
+| Table | Identity / evidence boundary |
+| --- | --- |
+| purchase_owner_restaurants | Reusable private restaurant and location UUID pair; unique owner + merchant candidate |
+| purchase_owner_restaurant_sources | Each purchase source + observed candidate bound to the selected private restaurant |
+| purchase_owner_menus | Reusable menu within one owner restaurant; exact menu-name + option/serving fingerprint |
+| purchase_owner_menu_sources | Each persisted source line bound to its owner menu and restaurant evidence binding |
+| purchase_owner_price_observations | One immutable row per source line; many dated rows per menu |
 
-The existing verified source path remains available. Pending candidate name/branch suggestions do not grant authority. Otherwise the server creates:
+`submit_merchant_identity_candidate_v1` already fingerprints seller name, branch, business kind, actual source pair and actual contact/registration facts, with uniqueness by owner + origin + fingerprint. Different purchase request keys therefore reuse the same merchant candidate for the same owner/facts. Rejected candidates cannot be used. Candidate relations and nullable resolved Restaurant/Location/Menu/Catalog mappings preserve a future reviewed consolidation path. No automatic promotion is implemented, and mappings do not confer publication authority.
 
-- `purchase_owner_restaurants`: server restaurant/location UUID pair, bound to owner + purchase source + merchant candidate.
-- `purchase_owner_menus`: private menu UUID per persisted source line, with an existing `restaurant_menu_identity_candidates` proposal.
-- `purchase_owner_price_observations`: one immutable observation per persisted source line.
+Menu proposal keys now use `owner-menu:<owner restaurant UUID>:<menu facts SHA256>`. The proposal's merchant anchor comes from the selected owner restaurant, while the purchase source binding keeps its actual observed candidate. This distinction is necessary when an explicit user choice links incomplete seller facts to an existing richer private identity. The full serving/option text remains part of the menu fingerprint; different names or serving facts create different menus.
 
-These tables have owner-only SELECT RLS, no client write grants, and mutation rejection triggers. No global restaurant, location, menu, standard product or catalogue product is created by private confirmation. The private restaurant/location pair is scoped to this purchase evidence; later independent purchases are not merged by name. A future cross-purchase/global consolidation requires a separate reviewed mapping.
+## Reuse and ambiguity rules
 
-The saved response reader overlays resolved lines using:
+1. The existing real source-pair/global verified path remains available. Receipt V2, standalone and the Matdan branch/contact path retain their existing contracts.
+2. Private reuse is restricted to the same authenticated owner. Exact existing candidate/facts may reuse one compatible owner restaurant after the current canonical review.
+3. Explicitly different branches/source pairs are separated. Missing facts may produce suggestions but cannot silently choose a richer/different anchor.
+4. Multiple compatible physical-place candidates return `needs_review`, `owner_restaurant_selection_required`, and runtime `ownerRestaurantChoices`. No observation is created before selection.
+5. An explicit selection must be one of the server's compatible owner choices. It is accepted through the five-argument RPC overload. The existing four-argument API is preserved.
+6. A previously confirmed source-facts alias can be reused when exactly one compatible owner identity exists; multiple possibilities still require selection.
 
-```json
-{
-  "authorityStatus": "owner_confirmed",
-  "merchantResolutionStatus": "owner_confirmed",
-  "menuResolutionStatus": "owner_confirmed",
-  "authoritativeIds": null,
-  "ownerConfirmedIds": {
-    "restaurantId": "server UUID",
-    "restaurantLocationId": "server UUID",
-    "restaurantMenuId": "server UUID",
-    "menuCandidateId": "server UUID"
-  },
-  "observationType": "purchase_owner_price_observation",
-  "observationStatus": "created"
-}
+The server locks source -> owner advisory lock -> candidate/selected anchor. This orders cross-purchase creation and avoids holding a candidate while waiting for the owner lock. Unique constraints and immutable evidence bindings preserve idempotency. Prices, quantity, dates and menu facts are read from saved owner source lines, not caller-supplied observation payloads.
+
+`authorityStatus=exact` and `authoritativeIds` retain their existing global meaning. Private results always use `authorityStatus=owner_confirmed`, `authoritativeIds=null`, and `ownerConfirmedIds`. No global Restaurant/Location/Menu/catalogue row is created by private confirmation. All five tables have owner SELECT RLS and no client write grants; private write RPCs check ownership and facts explicitly. Evidence/price rows are immutable; identity facts are immutable while future privileged resolved-mapping updates remain possible.
+
+## PriceTrace product read path
+
+`get_my_owner_confirmed_restaurants_v1()` is a separate SECURITY INVOKER, owner-filtered read RPC. It returns `owner-restaurant-read.v1`, owner ID, private restaurants/locations, menus and price histories. It does not change the public directory or the existing globally verified observation repository.
+
+New files:
+
+- `src/domain/owner-confirmed-restaurant.ts`: strict private Zod read model and latest/history selectors, without public catalogue ID semantics.
+- `src/repositories/owner-confirmed-restaurant.repository.ts`: authenticated owner check, dedicated RPC, response-owner validation.
+- `src/features/restaurant-menu/use-owner-confirmed-restaurants.ts`: clears data immediately on auth changes and discards stale responses.
+- `src/app/OwnerConfirmedRestaurants.tsx` and its CSS Module: existing 음식점 screen's **내 확인 식당** scope, restaurant/menu search, latest observed price/date and expandable price history.
+- `src/app/RestaurantBrowser.tsx`: switch between the existing public view and private projection.
+
+The private projection is not merged into RestaurantDirectory/global RestaurantMenu types. The new owner UI/read tests verify two menus and both price histories, other-owner isolation, no anonymous private RPC, no public directory leakage and logout clearing. Desktop/mobile captures use synthetic owner accounts and the user-specified Hansung fixture, not real private records.
+
+## OCR-App, Fitness and CashOS
+
+The V5 flow remains: import -> save PT source -> current canonical fingerprint review -> submit/reuse merchant candidate -> resolve owner restaurant/menu -> immutable price observation -> private Fitness link. Android and Desktop's existing review screens now expose compatible owner restaurant choices. Selection is runtime metadata only and cannot put PT UUIDs or invented seller namespace/code into canonical.
+
+Fitness reuses the original canonical import/food. Four independent A/B nutrition artifacts can reference the same private restaurant/location and the same two menus. Artifact values, visibility, public product links and canonical evidence remain independent and unchanged. No public Nutrition publication RPC is called for owner-confirmed identities.
+
+A missing `link_private_ocr_purchase_nutrition_v1` (`404 / PGRST202`) leaves imported artifact selectors in durable pending metadata with `fitness_private_purchase_link_not_deployed`. It is retryable after deployment without requiring another nutrient import or CashOS transaction. Other contract/auth/conflict errors retain their separate behavior.
+
+CashOS checkpoints and request keys are unchanged. Two genuine purchases produce two transactions; identity recovery, retry, process restart and same-bundle reopening do not resend a successful transaction.
+
+## Cross-purchase acceptance evidence
+
+Hansung A: 2026-10-13, 돼지불백덮밥 5700, 어묵우동 3800.
+Hansung B: 2026-11-10, 돼지불백덮밥 6000, 어묵우동 4000.
+
+`supabase/tests/owner_confirmed_cross_purchase.sql` verifies restaurant=1, location=1, menus=2, observations=4; histories 5700 -> 6000 and 3800 -> 4000; immutable source snapshots; stable merchant/menu candidate IDs; replay; branch separation; ambiguous-name selection; previously chosen alias reuse; different serving; rejected merchant/menu candidates; foreign-owner denial; anonymous denial; owner read/history/latest; no public directory contamination. The fixture and its temporary auth users roll back.
+
+OCR's `OwnerConfirmedPurchaseRecoveryTest` verifies two reviewed canonical inputs, shared private IDs, four independent Fitness artifact/food references, two genuine CashOS calls, unavailable-RPC pending/resume, explicit selection of a non-first line, review/selector rejection, malformed IDs, lost responses, restart and unchanged canonical. `integrations/fitness/test-private-purchase-link.mjs` independently verifies four artifacts / one restaurant / two menus / two purchase sources and RLS/replay/conflict boundaries.
+
+## Migration targets and order
+
+| Order | Project | Migration | Current live state |
+| --- | --- | --- | --- |
+| 1 | PriceTrace bpyvvcmdvgpwjrprkmtq | 20261004131440_restaurant_menu_identity_candidates.sql | DDL and history absent |
+| 2 | PriceTrace bpyvvcmdvgpwjrprkmtq | 20261013095911_user_confirmed_purchase_restaurants.sql | DDL and history absent |
+| 3 | Fitness Nutrition eytwkufdesbarxusifzt | 20261013100505_private_ocr_purchase_nutrition_link.sql | DDL and history absent |
+
+**haxbzkwvybiebpogaouv is OCR Evidence, not Fitness Nutrition.** The Nutrition target was verified against OCR's runtime NUTRITION_SUPABASE_URL and its persisted import schema. Do not use OCR's linked Evidence project for this migration.
+
+Live PriceTrace history uses different timestamp versions for some older migrations. The prepared deployment scripts fetch the actual remote SQL/history into a fresh temporary project, copy only these missing feature prerequisites, and push the resulting reviewed set. They never insert fake history rows or call `migration repair`. Dry runs confirmed exactly two PT migrations and one Fitness migration, with no seeds/roles/vault changes.
+
+Reproducible commands (default is dry-run; `-Apply` is the permanent write requiring approval):
+
+```powershell
+# In PriceTrace; use the installed CLI path or another reviewed compatible CLI.
+./scripts/deploy-owner-purchase.ps1 -SupabaseCli C:/Github/PriceTrace_OCR_APP/node_modules/.bin/supabase.cmd
+# In OCR-App, independently against Nutrition:
+./integrations/fitness/deploy-private-link.ps1 -SupabaseCli ./node_modules/.bin/supabase.cmd
+# After approved permanent application:
+# repeat each command with -Apply, verify real migration rows + objects, then:
+node C:/Github/창팡맨/scripts/smoke-owner-purchase-http.mjs C:/Github/PriceTrace_OCR_APP/.env
 ```
 
-`exact` and `authoritativeIds` retain their global verified meaning. Old clients therefore cannot mistake these private identities for publishable catalogue authority. The old purchase resolver is wrapped to return an existing private resolution instead of producing a second observation; merchant overrides after private resolution are rejected. Receipt V2 and standalone resolvers are unchanged.
+Keep the deployment package/versioned migration in the Fitness migration process. Do not release OCR's private linkage as complete while that RPC is absent. After deployment, refresh generated DB types through the official CLI against the reviewed deployed schema; the current undeployed live schema cannot generate these new objects. New private TypeScript I/O uses the existing untyped SupabaseClient boundary, with a strict dedicated domain parser.
 
-## OCR-App call path and files
+## Validation (2026-10-13)
 
-All paths below are relative to OCR-App.
+- OCR: `:core:test` 313 passed; `:app:testDebugUnitTest` 142 passed; `:desktop-app:test` 54 total / 3 existing skips / 0 failures. Debug APK and Desktop JAR built.
+- PT: lint, typecheck, 568 Vitest tests and production static build passed. The existing nutrition float assertion now uses 12-decimal tolerance for 14.000000000000002 versus 14; production nutrient arithmetic was not changed.
+- Purchase SQL: V4 retail/seller-unknown, verified exact authority, legacy recovery, Hansung private recovery, cross-purchase/read/RLS and receipt V2 fixtures passed. The in-memory bootstrap retains its two documented historical syntax accommodations; this is not an unmodified empty-DB bootstrap claim.
+- Fitness local SQL: four independent artifacts with reused restaurant/menu references, owner/anonymous ACL, replay/conflict and unchanged nutrients/visibility passed.
+- PT live rollback: cross-purchase/read/RLS fixture passed; dependency and feature objects confirmed absent after rollback.
+- Fitness live rollback: two actual existing imports linked/replayed in a transaction, unchanged food rows and owner isolation passed; new link DDL confirmed absent after rollback.
+- New owner UI Playwright: 4/4 passed, including desktop/mobile history rendering and logout; mechanical UI detector returned no findings.
+- Expanded existing Playwright: 21/27 passed, 6 failures. All six scenarios also failed with RestaurantBrowser restored temporarily to the preceding `feb458b` source (1 worker), with the feature file restored afterward to its exact prior hash. These cover official/public cart, initial shared URL, public restaurant reload, seller navigation and the stale `100serving` assertion (current UI says `1회분`). They are not reported as passing, and the control comparison did not identify a new private UI regression. The broader existing E2E baseline remains failing.
+- HTTP probes: both new RPCs returned 404/PGRST202 (`RPC_NOT_DEPLOYED`). There is no deployed successful owner PostgREST/JWT proof.
+- `git diff --check`: passed in both repos.
 
-| File | Change |
-| --- | --- |
-| `core/src/main/java/com/pricetrace/receiptscanner/ingestion/IngestionOrchestrator.kt` | Current fingerprint review gate, fact-only merchant request, multi-line recovery progress, private identity completion |
-| `core/src/main/java/com/pricetrace/receiptocr/pricetrace/PriceTraceCanonicalGateway.kt` | Existing merchant candidate RPC followed by the new purchase-bound resolver; candidate response itself grants no authority |
-| `core/src/main/java/com/pricetrace/receiptscanner/ingestion/PurchaseNutritionIdentity.kt` | Separate strict `ownerConfirmed` decoder; `exact()` remains unchanged |
-| `core/src/main/java/com/pricetrace/receiptocr/fitness/FitnessCanonicalProjectionSubmitter.kt` | Reuse canonical import and route owner-confirmed identity to a private link instead of public publication |
-| `core/src/main/java/com/pricetrace/receiptocr/fitness/NutritionSupabaseGateway.kt` | Authenticated private-link RPC, refresh/retry and response validation |
-| `core/src/main/java/com/pricetrace/receiptocr/fitness/NutritionPrivatePurchaseLink.kt` | Private-link payload and strict private response contract |
-| `core/src/test/java/com/pricetrace/receiptscanner/ingestion/OwnerConfirmedPurchaseRecoveryTest.kt` | Review, two-line recovery, dropped response, service recreation and same-bundle reopening |
-| `core/src/test/resources/hansung-restaurant-purchase.v5.json` | User-specified purchase facts; nutrition values are explicitly synthetic test data |
-| `integrations/fitness/` | Independently deployable Fitness migration and local/remote rollback test harness |
+## Remaining release blockers and limits
 
-The existing current-fingerprint review must be present before merchant submission. For an already accepted pending purchase, the existing review/retry action reads the same server source ID and resolves pending lines. Each successful line advances the loop; an unresolved selector stops without an infinite retry. `seller_override=null` continues to inherit record seller facts. Canonical is not rewritten with IDs, verification flags or fabricated source identifiers.
+Automatic approval review rejected permanent PriceTrace migration application because shared remote DB deployment needs explicit trusted-user approval. No rejected deployment command ran; no migration row was faked. Permanent PT and Fitness application, deployed anonymous ACL/owner HTTP smoke, and generated-schema refresh remain outstanding. Therefore the completion criterion for actual executable deployment has not been satisfied and this branch is **not merge-ready**.
 
-## Fitness and CashOS
+No real CashOS mutation, APK/device installation, Desktop GUI identity selection, or signed-owner JWT/session E2E is claimed. SQL role/claims rollback validation and deterministic HTTP adapter/UI fixtures prove the specified code/database contracts; they do not prove production session signatures or a released product connected to the absent RPCs.
 
-Existing `publish_verified_ocr_dining_out_nutrition_v1` publishes globally; it is intentionally not used for `owner_confirmed`.
-
-OCR-App ships a separate Fitness-target migration, `integrations/fitness/supabase/migrations/20261013100505_private_ocr_purchase_nutrition_link.sql`. Its `link_private_ocr_purchase_nutrition_v1` binds an existing owner canonical import/food to `purchase_record_client_key + purchase_line_key + nutrition_client_key`, validating those keys against persisted import provenance. It stores the server runtime purchase/restaurant/location/menu references in `nutrition_private_purchase_links`. Nutrients, source canonical, visibility and public product links are untouched.
-
-Fitness and PriceTrace use independent databases. External PT IDs in this owner-only table are opaque private references, not a cryptographically attested grant of global authority. This private linkage cannot authorize publication or expose another user's nutrition. OCR obtains the IDs through its authenticated PT response; a caller submitting arbitrary external IDs can only describe their own private reference, not take over a global identity.
-
-CashOS is never invoked by the identity resolver. Already-uploaded sink checkpoints, original request keys and accepted purchase source IDs are retained. Fitness imports replay their original keys (or use the existing owner import-audit recovery path for legacy keys), and the new link is unique by canonical import ID with conflict detection. No new nutrient estimation occurs.
-
-## Concurrency and retry
-
-Both new and legacy purchase writers lock the owner source before resolution. Unique source/candidate and source-line constraints prevent duplicate restaurant pairs, menus and observations. Line/source records remain immutable. Reimporting the same source content returns the existing purchase source. The Fitness writer locks the canonical import; identical link replay returns the same link, changed IDs or provenance conflict. Lost responses are safe to retry.
-
-## Validation and deployment state
-
-- OCR core: 310 tests; Android: 142; Desktop: 54 including 3 pre-existing skips. No failures. Android debug APK and Desktop JAR built. A final core run also checks private review completion and same-bundle reopen.
-- PriceTrace lint, typecheck, build: pass.
-- PriceTrace Vitest: 562 pass / 1 existing main failure. `nutrition-presentation.test.ts` expects `fatGrams: 14` but receives `14.000000000000002`; the tested feature files are unchanged from `2f41060`.
-- `npm.cmd run test:purchase-sql`: V4 retail/seller-unknown, global exact authority, legacy purchase recovery, Hansung private identity/RLS/ACL/replay and receipt V2 resolver SQL fixtures pass.
-- The local SQL runner executes 100 migrations with its two documented pre-existing historical syntax bootstrap accommodations; it is not proof of a clean unmodified empty-database bootstrap.
-- Fitness local SQL: existing 2 foods/imports remain unchanged; 2 private links; replay, mismatch, foreign owner, anonymous and no direct write checks pass.
-- PriceTrace live SQL rollback: `REMOTE_OWNER_PURCHASE_ROLLBACK_PASS`; new DDL and dependency rolled back, confirmed absent afterward.
-- Fitness live SQL rollback: 2 existing persisted imports linked/replayed without changing food rows; owner isolation passed; `REMOTE_FITNESS_PRIVATE_LINK_ROLLBACK_PASS`; DDL rolled back.
-- `git diff --check`: pass in both repositories.
-
-Live PriceTrace lacked the already-committed `20261004131440_restaurant_menu_identity_candidates.sql` prerequisite. The live rollback test included it before the new migration. Permanent deployment must reconcile that prerequisite and existing migration history, then apply the new PT migration and the separate Fitness migration to their respective projects. Do not blindly replay unrelated missing migrations.
-
-No permanent migration deployment, application installation, real CashOS mutation, physical-device/Desktop GUI E2E, or HTTP PostgREST/JWT test was performed. SQL role/claims tests establish database boundaries, not JWT signature/session behavior.
-
-`src/lib/supabase/database.types.ts` was not hand-edited: this change is SQL + Kotlin JSON RPC, with no new TypeScript table consumer. After deployment, refresh it using the official `supabase gen types --linked --schema public --lang typescript` workflow against the reviewed target schema. Generating against the current undeployed schema would omit these new tables/RPCs.
-
-PriceTrace changed files: the new migration and fixture, `scripts/test-purchase-price-sql.mjs`, `package.json` (reproducible SQL test command), this report, and the V5 contract cross-reference.
-
-Database boundaries follow the [Supabase RLS](https://supabase.com/docs/guides/database/postgres/row-level-security) and [function privilege](https://supabase.com/docs/guides/database/functions) guidance; the actual authorization behavior is verified by the SQL tests above.
+RLS and RPC privileges follow the [Supabase RLS](https://supabase.com/docs/guides/database/postgres/row-level-security) and [function privilege](https://supabase.com/docs/guides/database/functions) guidance. The feature's actual boundaries are verified by the fixtures and explicit limitations above.
