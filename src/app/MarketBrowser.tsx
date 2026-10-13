@@ -1,4 +1,5 @@
 "use client";
+import { Icon } from "@/components/Icon";
 
 import { useEffect, useMemo, useState } from "react";
 import { groupProductObservations, type ProductGroup, type ProductObservationListing } from "@/domain/product-browser";
@@ -96,8 +97,8 @@ export function MarketBrowser({ receipts, observations, selectedStore, selectedS
           const verifiedPublic = entry.receipts.some((receipt) => receipt.source === "public");
           const latestObservedAt = entry.observations.reduce((latest, observation) => observation.observedAt > latest ? observation.observedAt : latest, "");
           return <button key={entry.name} className={styles.marketCard} onClick={() => onSelectStore(entry.name)}>
+            <span className={styles.marketCardTop}><strong>{entry.name}</strong><Icon name="external" size={21} /></span>
             <span className={styles.marketCardEyebrow}>{verifiedPublic ? "검증 공개 영수증" : "로컬 영수증"}</span>
-            <strong>{entry.name}</strong>
             <small>영수증 {entry.receipts.length}건 · 상품 {groups.length}개 · 변동 추적 {trackedCount}개</small>
             <span>{entry.address ?? "주소 정보 없음"}</span>
             <span>최근 관측 {latestObservedAt || "정보 없음"} · {entry.phone ?? "연락처 정보 없음"}</span>
@@ -184,7 +185,7 @@ export function MarketBrowser({ receipts, observations, selectedStore, selectedS
         <small>같은 판매처·상품 코드·상품명 기준</small>
       </div>
       <div className={styles.marketHistoryControls}>
-        <label className={styles.search}><span aria-hidden="true">⌕</span><span className={styles.srOnly}>판매처 상품 검색</span><input type="search" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="상품명 또는 상품 코드 검색" /></label>
+        <label className={styles.search}><Icon name="search" size={20} /><span className={styles.srOnly}>판매처 상품 검색</span><input type="search" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="상품명 또는 상품 코드 검색" /></label>
         <button type="button" className={changedOnly ? styles.filterToggleActive : ""} aria-pressed={changedOnly} onClick={() => setChangedOnly((current) => !current)}>2회 이상 추적만</button>
       </div>
       <p className={styles.marketHistoryResult}>상품 {visibleInsights.length}개 · 직전 대비 가격은 동일 판매처의 이전 기록과 비교합니다.</p>

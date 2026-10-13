@@ -1,6 +1,7 @@
 "use client";
+import { Icon } from "@/components/Icon";
 
-import { useMemo, useState } from "react";
+import { useId, useMemo, useState } from "react";
 import { cartProductFromGroup, cartProductFromOfficialListing, type CartProduct } from "@/domain/cart";
 import { productNameWithoutBrand } from "@/domain/brand";
 import {
@@ -130,6 +131,8 @@ export function ProductBrowser({ groups, query, setQuery, category, setCategory,
     retryCatalog,
   } = useProductCatalog(authRevision);
   const [catalogView, setCatalogView] = useState<CatalogView>("all");
+  const [filtersOpen, setFiltersOpen] = useState(false);
+  const filterPanelId = useId();
   const [openStandardId, setOpenStandardId] = useState<string | null>(null);
   const [storeListTarget, setStoreListTarget] = useState<{ title: string; rows: { storeLabel: string; observedAt: string }[] } | null>(null);
   const selectedCategoryRoot = productCategoryRoot(category);
@@ -246,7 +249,7 @@ export function ProductBrowser({ groups, query, setQuery, category, setCategory,
         <p>표준 상품, 유통채널 공식 판매상품, 영수증 가격 관측을 출처별로 구분합니다.</p>
       </div>
       <label className={styles.search}>
-        <span aria-hidden="true">⌕</span>
+        <Icon name="search" size={20} />
         <span className={styles.srOnly}>상품 검색</span>
         <input
           type="search"
@@ -267,8 +270,10 @@ export function ProductBrowser({ groups, query, setQuery, category, setCategory,
       {catalogLoading ? "상품 카탈로그를 불러오는 중입니다." : catalogNotice}
       {catalogNotice && !catalogLoading && <button type="button" onClick={retryCatalog}>카탈로그 다시 불러오기</button>}
     </div>}
+    <button type="button" className={styles.catalogFilterToggle} aria-expanded={filtersOpen} aria-controls={filterPanelId} onClick={() => setFiltersOpen((open) => !open)}><span>필터·정렬 {filtersOpen ? "−" : "+"}</span><small>{category} · {showOfficialOnly || sort === "cheap" ? "저렴한 순" : sort === "expensive" ? "비싼 순" : "판매처 많은 순"}{martType !== "all" ? ` · ${martType === "px" ? "PX" : "일반 마트"}` : ""}{selectedStore !== "all" ? ` · ${selectedStore}` : ""}</small></button>
+    <div id={filterPanelId} role="group" aria-label="상품 필터·정렬" className={filtersOpen ? styles.catalogFiltersOpen : styles.catalogFilters}>
     {showOfficialOnly
-      ? <p className={styles.officialCatalogScope}>PX 공식 판매상품 전체 · 특정 지점의 판매·재고 정보가 아닙니다.</p>
+      ? null
       : <div className={styles.marketControls}>
           <div className={styles.segmented} role="group" aria-label="판매처 유형">{([ ["all", "전체"], ["regular", "일반 마트"], ["px", "PX (군마트)"] ] as const).map(([value, label]) => <button key={value} aria-pressed={martType === value} className={martType === value ? styles.selectedSegment : ""} onClick={() => { setMartType(value); setSelectedStore("all"); }}>{label}</button>)}</div>
           <label className={styles.storeSelect}>판매 마트<select value={selectedStore} onChange={(event) => setSelectedStore(event.target.value)}><option value="all">전체 마트</option>{stores.map((store) => <option key={store} value={store}>{store}</option>)}</select></label>
@@ -282,6 +287,8 @@ export function ProductBrowser({ groups, query, setQuery, category, setCategory,
       <button aria-pressed={category === selectedCategoryRoot} className={category === selectedCategoryRoot ? styles.filterActive : ""} onClick={() => setCategory(selectedCategoryRoot)}>{selectedCategoryRoot} 전체</button>
       {selectedCategoryChildren.map((item) => <button aria-pressed={category === item} className={category === item ? styles.filterActive : ""} key={item} onClick={() => setCategory(item)}>{item}</button>)}
     </div>}
+    </div>
+    {showOfficialOnly && <p className={styles.officialScopeAlwaysVisible}>PX 공식 판매상품 전체 · 특정 지점의 판매·재고 정보가 아닙니다.</p>}
     <div className={styles.resultBar}><p>상품 {resultCount.toLocaleString("ko-KR")}개</p>{(query || category !== "전체" || martType !== "all" || selectedStore !== "all" || showStandardOnly || showOfficialOnly) && <button onClick={() => { setQuery(""); setCategory("전체"); setMartType("all"); setSelectedStore("all"); setCatalogView("all"); }}>필터 초기화</button>}</div>
 
     <div className={styles.productGrid} aria-live="polite">{gridEntries.map((entry) => entry.kind === "official-standard"
