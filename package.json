@@ -14,6 +14,7 @@
     "lint": "eslint src",
     "typecheck": "tsc --noEmit",
     "test": "vitest run src",
+    "test:purchase-sql": "node scripts/test-purchase-price-sql.mjs node_modules/@electric-sql/pglite",
     "test:watch": "vitest src",
     "test:e2e": "playwright test",
     "validate:private-receipts": "vite-node scripts/validate-private-receipts.ts",

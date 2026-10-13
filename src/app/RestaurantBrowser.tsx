@@ -17,6 +17,7 @@ import { formatKrw } from "@/domain/settlement";
 import { useRestaurantMenuCatalog } from "@/features/restaurant-menu/use-restaurant-menu-catalog";
 import { PrivateIdentityDetail } from "./PrivateIdentityDetail";
 import { StandardProductNutritionModal } from "./StandardProductNutritionModal";
+import { OwnerConfirmedRestaurants, RestaurantScopeSwitch } from "./OwnerConfirmedRestaurants";
 import styles from "./page.module.css";
 
 type RestaurantBrowserProps = {
@@ -85,6 +86,7 @@ export function RestaurantBrowser({ selectedRestaurant, selectedRestaurantMenuId
     refresh,
   } = useRestaurantMenuCatalog(selectedRestaurant);
   const [query, setQuery] = useState("");
+  const [privateView, setPrivateView] = useState(false);
   const [restaurantCategory, setRestaurantCategory] = useState("전체");
   const [detailTab, setDetailTab] = useState<RestaurantDetailTab>("menus");
   const [menuQuery, setMenuQuery] = useState("");
@@ -124,6 +126,7 @@ export function RestaurantBrowser({ selectedRestaurant, selectedRestaurantMenuId
   }
 
   if (!selectedRestaurant) {
+    if (privateView) return <OwnerConfirmedRestaurants onPublic={() => setPrivateView(false)} />;
     const menuCount = entries.reduce((total, entry) => total + entry.menuCount, 0);
     return <section className={styles.browser}>
       <div className={styles.browserHead}>
@@ -144,6 +147,7 @@ export function RestaurantBrowser({ selectedRestaurant, selectedRestaurantMenuId
         </label>
       </div>
 
+      <RestaurantScopeSwitch privateView={false} onChange={setPrivateView} />
       <div className={styles.restaurantBoundaryNotice}>
         <strong>음식점 상세 구조</strong>
         <span>목록은 식당 identity를 찾는 공간이고, 상세 화면은 메뉴·식당 정보·지점 및 출처를 분리해 보여줍니다. 가격은 현재가가 아닌 관측 시점이 있는 기록입니다.</span>
