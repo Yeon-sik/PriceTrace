@@ -96,7 +96,9 @@ describe("private restaurant menu proposals", () => {
       ` + fn("submit_merchant_identity_candidate_v1") + fn("admin_resolve_merchant_identity_candidate_v1"));
       await execute("proposal migration", migration);
       await execute("existing merchant resolution repair", read("migrations/20261004134439_merchant_resolution_column_qualification.sql"));
-      await execute("SQL contract test", read("tests/restaurant_menu_identity_candidates.sql"));
+      await execute("rejected request version chains", read("migrations/20261005010000_rejected_dining_proposal_resubmission.sql"));
+      await execute("SQL contract test", read("tests/restaurant_menu_identity_candidates.sql").replace(
+        "-- Approval is not an eternal grant:", read("tests/rejected_dining_proposal_resubmission.sql") + "\n-- Approval is not an eternal grant:"));
       const { rows } = await db.query<{ count: number }>("select count(*)::int as count from public.restaurant_menu_identity_candidates");
       expect(rows[0].count).toBe(0); // SQL test rolled back every fixture.
     } finally { await db.close(); }
