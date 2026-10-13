@@ -93,9 +93,9 @@ OCR's `OwnerConfirmedPurchaseRecoveryTest` verifies two reviewed canonical input
 
 | Order | Project | Migration | Current live state |
 | --- | --- | --- | --- |
-| 1 | PriceTrace bpyvvcmdvgpwjrprkmtq | 20261004131440_restaurant_menu_identity_candidates.sql | DDL and history absent |
-| 2 | PriceTrace bpyvvcmdvgpwjrprkmtq | 20261013095911_user_confirmed_purchase_restaurants.sql | DDL and history absent |
-| 3 | Fitness Nutrition eytwkufdesbarxusifzt | 20261013100505_private_ocr_purchase_nutrition_link.sql | DDL and history absent |
+| 1 | PriceTrace bpyvvcmdvgpwjrprkmtq | 20261004131440_restaurant_menu_identity_candidates.sql | Applied; DDL and version row verified |
+| 2 | PriceTrace bpyvvcmdvgpwjrprkmtq | 20261013095911_user_confirmed_purchase_restaurants.sql | Applied; DDL and version row verified |
+| 3 | Fitness Nutrition eytwkufdesbarxusifzt | 20261013100505_private_ocr_purchase_nutrition_link.sql | Applied; DDL and version row verified |
 
 **haxbzkwvybiebpogaouv is OCR Evidence, not Fitness Nutrition.** The Nutrition target was verified against OCR's runtime NUTRITION_SUPABASE_URL and its persisted import schema. Do not use OCR's linked Evidence project for this migration.
 
@@ -113,7 +113,7 @@ Reproducible commands (default is dry-run; `-Apply` is the permanent write requi
 node C:/Github/창팡맨/scripts/smoke-owner-purchase-http.mjs C:/Github/PriceTrace_OCR_APP/.env
 ```
 
-Keep the deployment package/versioned migration in the Fitness migration process. Do not release OCR's private linkage as complete while that RPC is absent. After deployment, refresh generated DB types through the official CLI against the reviewed deployed schema; the current undeployed live schema cannot generate these new objects. New private TypeScript I/O uses the existing untyped SupabaseClient boundary, with a strict dedicated domain parser.
+Keep the deployment package/versioned migration in the Fitness migration process. All three migrations were permanently applied in the order above on 2026-10-13 after explicit user approval. Future changes require new forward migrations. The official CLI generated a deployed PriceTrace schema snapshot containing the new tables and RPC overloads. The existing application DB types are a curated contract and differ substantially from the complete live schema, so they were not replaced wholesale. New private TypeScript I/O uses the existing untyped SupabaseClient boundary, with a strict dedicated domain parser.
 
 ## Validation (2026-10-13)
 
@@ -121,17 +121,19 @@ Keep the deployment package/versioned migration in the Fitness migration process
 - PT: lint, typecheck, 568 Vitest tests and production static build passed. The existing nutrition float assertion now uses 12-decimal tolerance for 14.000000000000002 versus 14; production nutrient arithmetic was not changed.
 - Purchase SQL: V4 retail/seller-unknown, verified exact authority, legacy recovery, Hansung private recovery, cross-purchase/read/RLS and receipt V2 fixtures passed. The in-memory bootstrap retains its two documented historical syntax accommodations; this is not an unmodified empty-DB bootstrap claim.
 - Fitness local SQL: four independent artifacts with reused restaurant/menu references, owner/anonymous ACL, replay/conflict and unchanged nutrients/visibility passed.
-- PT live rollback: cross-purchase/read/RLS fixture passed; dependency and feature objects confirmed absent after rollback.
-- Fitness live rollback: two actual existing imports linked/replayed in a transaction, unchanged food rows and owner isolation passed; new link DDL confirmed absent after rollback.
+- PT post-deployment live rollback: cross-purchase/read/RLS fixture passed against permanently deployed objects. Fixture data and temporary auth users rolled back; deployed schema and history remain present.
+- Fitness post-deployment live rollback: two actual existing imports linked/replayed in a transaction; unchanged food rows and owner isolation passed. Temporary links rolled back; deployed schema and history remain present.
 - New owner UI Playwright: 4/4 passed, including desktop/mobile history rendering and logout; mechanical UI detector returned no findings.
 - Expanded existing Playwright: 21/27 passed, 6 failures. All six scenarios also failed with RestaurantBrowser restored temporarily to the preceding `feb458b` source (1 worker), with the feature file restored afterward to its exact prior hash. These cover official/public cart, initial shared URL, public restaurant reload, seller navigation and the stale `100serving` assertion (current UI says `1회분`). They are not reported as passing, and the control comparison did not identify a new private UI regression. The broader existing E2E baseline remains failing.
-- HTTP probes: both new RPCs returned 404/PGRST202 (`RPC_NOT_DEPLOYED`). There is no deployed successful owner PostgREST/JWT proof.
+- Post-deployment HTTP probes: both new RPCs returned 401/42501 (`ANONYMOUS_EXECUTE_DENIED`); `HTTP_PRIVATE_RPC_ANONYMOUS_ACL_PASS`. The earlier 404/PGRST202 deployment blocker is resolved. Signed-owner PostgREST/JWT success remains unverified.
+- Live privileges: all six new PT tables and the Fitness link table have RLS, authenticated SELECT, no anonymous SELECT and no direct authenticated INSERT. New public owner RPCs allow authenticated execution and deny anonymous execution.
+- Security advisors: the only findings matching new objects are intentional authenticated `SECURITY DEFINER` execution for the PT writer and Fitness link writer. Both use an empty search path, explicit owner checks and restricted grants; foreign-owner and anonymous rejection passed. Other project advisor findings were not remediated by this feature.
 - `git diff --check`: passed in both repos.
 
 ## Remaining release blockers and limits
 
-Automatic approval review rejected permanent PriceTrace migration application because shared remote DB deployment needs explicit trusted-user approval. No rejected deployment command ran; no migration row was faked. Permanent PT and Fitness application, deployed anonymous ACL/owner HTTP smoke, and generated-schema refresh remain outstanding. Therefore the completion criterion for actual executable deployment has not been satisfied and this branch is **not merge-ready**.
+Explicit user approval resolved the earlier automatic approval rejection. Both deployment scripts applied exactly the three reviewed migrations, with no fabricated history rows, seeds, roles or vault changes. Actual executable DB deployment and anonymous HTTP ACL checks are complete. Signed-owner HTTP/session E2E and the broader failing Playwright baseline remain outstanding, so this report does not declare the branch **merge-ready**.
 
-No real CashOS mutation, APK/device installation, Desktop GUI identity selection, or signed-owner JWT/session E2E is claimed. SQL role/claims rollback validation and deterministic HTTP adapter/UI fixtures prove the specified code/database contracts; they do not prove production session signatures or a released product connected to the absent RPCs.
+No real CashOS mutation, APK/device installation, Desktop GUI identity selection, or signed-owner JWT/session E2E is claimed. SQL role/claims rollback validation and deterministic HTTP adapter/UI fixtures prove the specified code/database contracts; they do not prove production session signatures or a released product using the deployed RPCs.
 
 RLS and RPC privileges follow the [Supabase RLS](https://supabase.com/docs/guides/database/postgres/row-level-security) and [function privilege](https://supabase.com/docs/guides/database/functions) guidance. The feature's actual boundaries are verified by the fixtures and explicit limitations above.
