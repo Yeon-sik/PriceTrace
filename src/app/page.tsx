@@ -31,6 +31,7 @@ const AdminPage = dynamic(() => import("./AdminPage").then((module) => module.Ad
 });
 
 const publicReceiptData = new PublicReceiptRepository().loadAll();
+const publicProductGroups = groupProductObservations(publicReceiptData.observations);
 const publicOfficialCatalog = new PublicOfficialChannelCatalogRepository().loadPxCatalog();
 const pxProductNameReviews = new PxProductNameReviewRepository().load(publicOfficialCatalog);
 const publicReceiptById = new Map(publicReceiptData.receipts.map((receipt) => [receipt.id, receipt]));
@@ -293,7 +294,7 @@ export default function Home() {
 
     <main className={styles.main} id="main-content" tabIndex={-1}>
       {page === "products" && purchasedProductError && <p className={styles.error} role="alert">내 구매 상품을 불러오지 못했습니다. 앱을 다시 활성화하면 재시도합니다.</p>}
-      {page === "home" && <ObservationHome groups={productGroups} receiptCount={receipts.length} cart={{ count: cartGroups.length, quantity: cartQuantityTotal, total: cartTotal }} onProducts={() => openProducts()} onRestaurants={() => navigate("restaurants")} onMarkets={() => navigate("markets")} onCart={() => navigate("cart")} onTrend={setTrendGroup} />}
+      {page === "home" && <ObservationHome groups={publicProductGroups} receiptCount={receipts.length} cart={{ count: cartGroups.length, quantity: cartQuantityTotal, total: cartTotal }} onProducts={() => openProducts()} onRestaurants={() => navigate("restaurants")} onMarkets={() => navigate("markets")} onCart={() => navigate("cart")} onTrend={setTrendGroup} />}
       {page === "restaurants" && <RestaurantBrowser selectedRestaurant={selectedRestaurant} selectedRestaurantMenuId={selectedRestaurantMenuId} onSelectRestaurant={(restaurantId) => navigate("restaurants", { selectedRestaurant: restaurantId, replace: restaurantId === null })} onClearMenuIdentity={() => navigate("restaurants", { replace: true })} />}
       {page === "products" && <ProductBrowser groups={productGroups} query={query} setQuery={setQuery} category={category} setCategory={setCategory} martType={martType} setMartType={setMartType} selectedStore={selectedStore} setSelectedStore={setSelectedStore} sort={sort} setSort={setSort} authRevision={authRevision} selectedStoreProductId={selectedStoreProductId} selectedCatalogProductId={selectedCatalogProductId} onClearIdentity={() => navigate("products", { replace: true })} onAdd={openCartModal} onTrend={setTrendGroup} onOpenStore={(store) => navigate("markets", { selectedMarket: store })} />}
       {page === "markets" && <MarketBrowser receipts={receipts} observations={observationListings} selectedStore={selectedMarket} selectedStoreId={selectedStoreId} onSelectStore={(store) => navigate("markets", { selectedMarket: store, replace: true })} onSelectStoreId={() => navigate("markets", { replace: true })} onOpenTrend={setTrendGroup} />}

@@ -9,7 +9,7 @@ const privateProjection = { schemaVersion: "owner-restaurant-read.v1", ownerId: 
     { id: uuid(4), name: "어묵우동", servingLabel: null, priceHistory: [price(7, "2026-11-10", 4000), price(8, "2026-10-13", 3800)] }],
 }] };
 
-async function prepare(page: Page, owner: number | null) {
+async function prepare(page: Page, owner: number | null, privateProducts: unknown[] = []) {
   const user = owner ? { id: uuid(owner), aud: "authenticated", role: "authenticated", email: `owner-${owner}@example.invalid`,
     app_metadata: {}, user_metadata: {}, created_at: "2026-10-13T00:00:00Z" } : null;
   if (user) {
@@ -25,6 +25,7 @@ async function prepare(page: Page, owner: number | null) {
     const rpc = path.split("/").at(-1);
     let data: unknown = [];
     if (path === "/auth/v1/user") data = user;
+    else if (path === "/rest/v1/price_observations") data = owner === 11 ? privateProducts : [];
     else if (rpc === "get_restaurant_directory_v2") data = { schemaVersion: "restaurant-directory.v2", namespace: "pricetrace", revision: `sha256:${"a".repeat(64)}`, restaurants: [] };
     else if (rpc === "get_my_owner_confirmed_restaurants_v1") { privateReads++; data = owner === 11 ? privateProjection : { ...privateProjection, ownerId: uuid(owner!), restaurants: [] }; }
     else if (path === "/auth/v1/logout") { await route.fulfill({ status: 204 }); return; }
@@ -75,4 +76,29 @@ test("로그아웃하면 private 식당과 가격 기록이 즉시 사라진다"
   await page.getByRole("button", { name: "로그아웃", exact: true }).click();
   await expect(page.getByText("로그인이 필요합니다.")).toBeVisible();
   await expect(page.getByText("한성대학교 학생식당", { exact: true })).toHaveCount(0);
+});
+
+test("개인 구매 상품은 공개 홈의 관측 통계와 최근 기록에 섞이지 않는다", async ({ page }) => {
+  const ownerId = uuid(11);
+  await prepare(page, 11, [{
+    id: uuid(30), user_id: ownerId, receipt_item_id: null,
+    observed_at: "2026-11-10", unit_price_krw: 9000, quantity: 1,
+    catalog_product_id: null, verification_status: "verified",
+    store_products: {
+      id: uuid(31), user_id: ownerId, store_id: uuid(32), store_product_code: null,
+      products: { id: uuid(33), user_id: ownerId, name: "비공개 구매 상품", purchase_type: "retail_product" },
+      stores: { id: uuid(32), user_id: ownerId, name: "비공개 판매처" },
+    },
+    receipt_items: null,
+  }]);
+  await page.getByRole("navigation", { name: "주요 메뉴", exact: true }).getByRole("button", { name: "상품 목록", exact: true }).click();
+  await expect(page.getByRole("article").filter({ hasText: "비공개 구매 상품" })).toBeVisible();
+  const purchaseRead = page.waitForResponse(response => new URL(response.url()).pathname === "/rest/v1/price_observations");
+  await page.getByRole("button", { name: "가격 추적기 홈", exact: true }).click();
+  await (await purchaseRead).finished();
+  await page.evaluate(() => new Promise<void>(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))));
+  const publicSummary = page.locator('dl[aria-label="공개 영수증 기록 현황"]');
+  await expect(publicSummary).toContainText("223건");
+  await expect(publicSummary).toContainText("2026.07.14");
+  await expect(page.locator("main")).not.toContainText("비공개 구매 상품");
 });
