@@ -2,6 +2,7 @@ import { readFileSync, readdirSync } from "node:fs";
 import { resolve, join } from "node:path";
 import { pathToFileURL } from "node:url";
 import assert from "node:assert/strict";
+import { verifyOcrComponentContract } from "./verify-ocr-component-contract.mjs";
 
 // Optional test-only runtime, supplied externally. Never contacts a remote DB.
 const runtime = process.argv[2];
@@ -69,7 +70,7 @@ try {
   }
   assert.ok(baselineChecked);
   console.log(`MIGRATION_BOOTSTRAP_WITH_DOCUMENTED_ACCOMMODATIONS_PASS ${migrations.length}`);
-  for (const file of ["purchase_price_observation_v4.sql", "purchase_price_line_authority_response.sql", "purchase_restaurant_identity_recovery.sql", "user_confirmed_purchase_restaurants.sql", "owner_confirmed_cross_purchase.sql", "restaurant_component_identity_resolution.sql", "purchase_public_identity_search.sql", "verified_receipt_ingestion_v2.sql"]) {
+  for (const file of ["purchase_price_observation_v4.sql", "purchase_price_line_authority_response.sql", "purchase_restaurant_identity_recovery.sql", "user_confirmed_purchase_restaurants.sql", "owner_confirmed_cross_purchase.sql", "restaurant_component_parent_reads.sql", "restaurant_component_identity_resolution.sql", "purchase_public_identity_search.sql", "verified_receipt_ingestion_v2.sql"]) {
     try {
       const result = await db.exec(readSql("tests", file));
       console.log(`SQL_FIXTURE_PASS ${file}`, result.flatMap(r => r.rows).filter(r => r.result));
@@ -79,7 +80,12 @@ try {
   }
   // Optional read-only deployed definition snapshot. Re-run the same fixtures
   // after forward patches against that exact body, without contacting Supabase.
-  if (process.argv[3]) {
+  const componentArgument = process.argv.indexOf("--ocr-component");
+  if (componentArgument !== -1) {
+    assert.ok(process.argv[componentArgument + 1], "--ocr-component requires the OCR-generated artifact path");
+    await verifyOcrComponentContract(db, process.argv[componentArgument + 1]);
+  }
+  if (process.argv[3] && !process.argv[3].startsWith("--")) {
     const snapshot = JSON.parse(readFileSync(process.argv[3], "utf8"));
     const deployed = snapshot.rows?.[0]?.purchase_function;
     assert.equal(typeof deployed, "string");

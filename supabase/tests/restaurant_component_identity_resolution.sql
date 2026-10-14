@@ -80,11 +80,15 @@ begin
   perform public.register_purchase_menu_components_v1(source_a,'line-1',repeat('a',64),
     '[{"nutritionClientKey":"food-soup","name":"국물","role":"complimentary_side","evidenceRefs":["food-photo-1"]}]',true);
   if (select count(*) from public.purchase_owner_menu_component_sources) <> 1 then raise exception 'component replay duplicate'; end if;
-  begin
-    perform public.register_purchase_menu_components_v1(source_b,'line-1',repeat('a',64),
-      '[{"nutritionClientKey":"food-soup","name":"국물","role":"complimentary_side","evidenceRefs":["food-photo-1"]}]',true);
-    raise exception 'same canonical nutrition linked to two purchases'; exception when unique_violation then null;
-  end;
+  -- Local producer keys/fingerprints do not identify independent purchase evidence.
+  perform public.register_purchase_menu_components_v1(source_b,'line-1',repeat('a',64),
+    '[{"nutritionClientKey":"food-soup","name":"국물","role":"complimentary_side","evidenceRefs":["food-photo-1"]}]',true);
+  if (select count(*) from public.purchase_owner_menu_component_sources) <> 2
+    or (select count(*) from public.purchase_owner_menu_components) <> 1 then raise exception 'cross-purchase evidence boundary lost'; end if;
+  perform public.register_purchase_menu_components_v1(source_a,'line-1',repeat('b',64),
+    '[{"nutritionClientKey":"food-soup","name":"국물","role":"complimentary_side","evidenceRefs":["food-photo-2"]}]',true);
+  if (select count(*) from public.purchase_owner_menu_component_sources) <> 3
+    or (select count(*) from public.purchase_owner_menu_components) <> 1 then raise exception 'new revision did not append evidence'; end if;
   begin
     perform public.register_purchase_menu_components_v1(source_a,'line-1',repeat('a',64),
       '[{"nutritionClientKey":"food-soup","name":"다른 국물","role":"complimentary_side","evidenceRefs":["food-photo-1"]}]',true);
@@ -106,6 +110,18 @@ begin
   result := public.resolve_user_confirmed_purchase_restaurant_line_v1(source_side,'paid-side',candidate_seed,true,null,null,'create_menu');
   if result #>> '{lineResults,1,observationCreated}' <> 'true' or result #>> '{lineResults,1,ownerConfirmedIds,restaurantMenuId}' = menu::text then raise exception 'paid side lost independent menu'; end if;
   if (select count(*) from public.purchase_owner_price_observations) <> observations + 1 then raise exception 'paid side price missing'; end if;
+  perform public.resolve_user_confirmed_purchase_restaurant_line_v1(source_side,'line-1',candidate_seed,true,null,menu,'select_menu');
+  perform public.register_purchase_menu_components_v1(source_side,'line-1',repeat('a',64),
+    '[{"nutritionClientKey":"food-soup","name":"국물","role":"complimentary_side","evidenceRefs":["food-photo-1"]}]',true);
+  begin
+    perform public.register_purchase_menu_components_v1(source_side,'paid-side',repeat('a',64),
+      '[{"nutritionClientKey":"food-soup","name":"국물","role":"complimentary_side","evidenceRefs":["food-photo-1"]}]',true);
+    raise exception 'same source revision key changed parent'; exception when unique_violation then null;
+  end;
+  if (select jsonb_array_length(m->'components')
+    from jsonb_array_elements(public.get_my_owner_confirmed_restaurants_v2()->'restaurants') r,
+      jsonb_array_elements(r->'menus') m where m->>'id' = menu::text) <> 1 then
+    raise exception 'revisions or purchases duplicated component read'; end if;
 
   -- Serving/branch/source-pair conflicts cannot be selected as aliases.
   a := jsonb_set(jsonb_set(purchase,'{items,0,option_text}','"large"'),'{order,order_reference}','"serving-conflict"');
@@ -151,6 +167,10 @@ begin
   begin perform public.resolve_user_confirmed_purchase_restaurant_line_v1(source_b,'line-1',candidate_b,true,restaurant,null,'select_restaurant'); raise exception 'foreign restaurant selected on owned source'; exception when insufficient_privilege then null; end;
   begin perform public.resolve_user_confirmed_purchase_restaurant_line_v1(source_b,'line-1',candidate_b,true,null,menu,'select_menu'); raise exception 'foreign menu selected on owned source'; exception when insufficient_privilege then null; end;
   begin perform public.resolve_purchase_owner_platform_v1(source_b,platform,false,true); raise exception 'foreign platform selected on owned source'; exception when insufficient_privilege then null; end;
+  result := public.resolve_user_confirmed_purchase_restaurant_line_v1(source_b,'line-1',candidate_b,true);
+  perform public.register_purchase_menu_components_v1(source_b,'line-1',repeat('a',64),
+    '[{"nutritionClientKey":"food-soup","name":"국물","role":"complimentary_side","evidenceRefs":["food-photo-1"]}]',true);
+  if (select count(*) from public.purchase_owner_menu_component_sources) <> 1 then raise exception 'other owner boundary lost'; end if;
   execute 'set local role anon';
   begin perform public.search_purchase_owner_identity_v1(source_a,'line-1','menu',''); raise exception 'anonymous search'; exception when insufficient_privilege then null; end;
   begin perform public.resolve_purchase_owner_platform_v1(source_a,null,true,true); raise exception 'anonymous platform'; exception when insufficient_privilege then null; end;
