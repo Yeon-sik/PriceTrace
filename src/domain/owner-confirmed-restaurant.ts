@@ -11,11 +11,14 @@ const priceHistorySchema = z.object({
 const ownerMenuSchema = z.object({
   id: z.string().uuid(), name: z.string().min(1), servingLabel: z.string().nullable(),
   priceHistory: z.array(priceHistorySchema),
+  components: z.array(z.object({ id: z.string().uuid(), name: z.string().min(1),
+    role: z.enum(["side", "complimentary_side", "sauce", "beverage", "other"]),
+  }).strict()).optional(),
 }).strict();
 
 // Deliberately separate from RestaurantDirectory/RestaurantMenu/global catalogue IDs.
 export const OwnerConfirmedRestaurantReadSchema = z.object({
-  schemaVersion: z.literal("owner-restaurant-read.v1"), ownerId: z.string().uuid(),
+  schemaVersion: z.enum(["owner-restaurant-read.v1", "owner-restaurant-read.v2"]), ownerId: z.string().uuid(),
   restaurants: z.array(z.object({
     id: z.string().uuid(), locationId: z.string().uuid(), name: z.string().min(1),
     branchName: z.string().nullable(), authorityStatus: z.literal("owner_confirmed"),

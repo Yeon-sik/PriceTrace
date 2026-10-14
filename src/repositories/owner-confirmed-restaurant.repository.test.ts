@@ -27,7 +27,7 @@ test("owner repository reads both menus and independent price history without pu
   expect(read.restaurants[0].authorityStatus).toBe("owner_confirmed");
   expect(ownerMenuPriceHistory(read.restaurants[0].menus[0]).map(row => row.unitPriceKrw)).toEqual([6000, 5700]);
   expect(latestOwnerMenuPrice(read.restaurants[0].menus[1])).toMatchObject({ observedOn: "2026-11-10", unitPriceKrw: 4000 });
-  expect(mock.rpc).toHaveBeenCalledWith("get_my_owner_confirmed_restaurants_v1");
+  expect(mock.rpc).toHaveBeenCalledWith("get_my_owner_confirmed_restaurants_v2");
   expect(mock.from).not.toHaveBeenCalled();
 });
 test("anonymous does not query private or public rows", async () => {
@@ -51,4 +51,20 @@ test("global exact, malformed UUIDs and public catalogue metadata are rejected b
 test("RPC errors are surfaced instead of reporting an empty successful registration", async () => {
   const mock = client(id(11)); mock.rpc.mockResolvedValue({ data: null, error: { message: "not deployed" } } as never);
   await expect(repository(mock).load()).rejects.toThrow("다시 시도");
+});
+
+test("component read has no invented price and older deployments fall back only for missing v2 RPC", async () => {
+  const mock = client(id(11));
+  const extended = projection();
+  const data = { ...extended, schemaVersion: "owner-restaurant-read.v2", restaurants: [{ ...extended.restaurants[0],
+    menus: extended.restaurants[0].menus.map(menu => ({ ...menu, components: [{ id: id(50), name: "국물", role: "complimentary_side" }] })),
+  }] };
+  mock.rpc.mockResolvedValue({ data, error: null });
+  const read = (await repository(mock).load())!;
+  expect(read.restaurants[0].menus[0].components).toEqual([{ id: id(50), name: "국물", role: "complimentary_side" }]);
+  expect(read.restaurants[0].menus[0].priceHistory).toHaveLength(2);
+  mock.rpc.mockReset().mockResolvedValueOnce({ data: null, error: { code: "PGRST202" } } as never)
+    .mockResolvedValueOnce({ data: extended, error: null });
+  expect((await repository(mock).load())?.schemaVersion).toBe("owner-restaurant-read.v1");
+  expect(mock.rpc).toHaveBeenLastCalledWith("get_my_owner_confirmed_restaurants_v1");
 });
