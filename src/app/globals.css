@@ -1,3 +1,38 @@
-:root { color-scheme: light; --ink:#18212f; --muted:#627086; --line:#dce3ec; --brand:#176b50; --bg:#f4f7fa; --card:#fff; }
-* { box-sizing:border-box; } body { margin:0; color:var(--ink); background:var(--bg); font-family:Arial, "Noto Sans KR", sans-serif; } button,input,select { font:inherit; } button { cursor:pointer; } button:focus-visible,input:focus-visible,select:focus-visible { outline:3px solid #78c7ad; outline-offset:2px; }
-input,select,textarea,button { border:1px solid #bdc8d5; border-radius:7px; padding:8px; background:#fff; } button { background:var(--brand); color:#fff; border-color:var(--brand); } button:disabled { background:#9eaaa7; border-color:#9eaaa7; }
+:root {
+  color-scheme: dark;
+  --bg: #101512;
+  --surface: #171e19;
+  --surface-raised: #202922;
+  --card: var(--surface);
+  --ink: #edf1e9;
+  --muted: #adb8af;
+  --subtle: #91a096;
+  --line: #344138;
+  --accent: #a5deac;
+  --accent-soft: #223d2b;
+  --brand: #2a6342;
+  --on-brand: #f2f7f0;
+  --warning: #e7c28c;
+  --warning-bg: #332a1e;
+  --danger: #f2aaa2;
+  --danger-bg: #382521;
+}
+* { box-sizing: border-box; }
+html { scrollbar-gutter: stable; }
+body { margin: 0; color: var(--ink); background: var(--bg); font-family: var(--font-suit), sans-serif; font-size: 15px; line-height: 1.55; -webkit-font-smoothing: antialiased; }
+::selection { background: var(--accent); color: var(--bg); }
+button, input, select, textarea { font: inherit; }
+button, a, input, select, textarea, summary { -webkit-tap-highlight-color: transparent; }
+button { cursor: pointer; }
+button, input, select, textarea { border: 1px solid var(--line); border-radius: 5px; padding: 9px 12px; background: var(--surface); color: var(--ink); }
+button { background: var(--brand); color: var(--on-brand); border-color: transparent; transition: background-color 160ms, border-color 160ms, color 160ms; }
+button:disabled { background: var(--surface-raised); color: var(--subtle); cursor: not-allowed; }
+input::placeholder, textarea::placeholder { color: var(--subtle); opacity: 1; }
+input[type="checkbox"], input[type="radio"], input[type="range"] { accent-color: var(--accent); }
+:focus-visible { outline: 2px solid var(--accent) !important; outline-offset: 4px; }
+button, a, summary { touch-action: manipulation; }
+a { color: var(--accent); text-underline-offset: 4px; }
+svg { flex-shrink: 0; }
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { scroll-behavior: auto !important; animation: none !important; transition: none !important; }
+}

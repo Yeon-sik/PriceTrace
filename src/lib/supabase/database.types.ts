@@ -95,12 +95,15 @@ export interface Database {
       standalone_price_observation_ingestion_requests: { Row: { user_id:string; idempotency_key:string; request_fingerprint:string; request_payload:Json; kind:"retail_purchase"|"restaurant_purchase"; observation_id:string; retail_price_observation_id:string|null; restaurant_menu_manual_observation_id:string|null; response:Json; created_at:string }; Insert: Record<string, never>; Update: Record<string, never> };
       admin_unverified_product_sale_registrations: { Row: { id:string; idempotency_key:string; request_payload:Json; standard_product_id:string; catalog_product_id:string; market_price_observation_id:string; created_by:string; created_at:string }; Insert: { id?:string; idempotency_key:string; request_payload:Json; standard_product_id:string; catalog_product_id:string; market_price_observation_id:string; created_by:string; created_at?:string }; Update: Record<string, never> };
       restaurant_menu_manual_registration_executions: { Row: { id:string; idempotency_key:string; request_payload:Json; restaurant_id:string; restaurant_location_id:string; restaurant_menu_id:string; catalog_product_id:string; manual_observation_id:string; created_by:string; created_at:string }; Insert: { id?:string; idempotency_key:string; request_payload:Json; restaurant_id:string; restaurant_location_id:string; restaurant_menu_id:string; catalog_product_id:string; manual_observation_id:string; created_by:string; created_at?:string }; Update: Record<string, never> };
-      verified_receipt_sources: { Row: { receipt_id:string; user_id:string; schema_version:"receipt.v2"; document_id:string|null; document_type:string; document_status:string; issued_on:string|null; issued_at:string|null; fulfillment_type:string; fulfillment_evidence:string; capture_method:string; transcription_status:"user_verified"; merchant_name:string; branch_name:string|null; business_kind:string; retail_channel:string; catalog_namespace:string|null; merchant_id:string|null; business_registration_number:string|null; address:string|null; phone:string|null; items_gross_amount_minor:number; discount_amount_minor:number; tax_amount_minor:number; fee_amount_minor:number; tip_amount_minor:number; rounding_amount_minor:number; grand_total_amount_minor:number; source_fingerprint:string; created_at:string }; Insert: Record<string, never>; Update: Record<string, never> };
-      verified_receipt_source_lines: { Row: { receipt_id:string; user_id:string; source_line_id:string; line_type:string; description:string|null; source_line_references:string[]; merchant_sku:string|null; quantity_value:number|null; quantity_unit:string|null; unit_price_amount_minor:number|null; gross_amount_minor:number; discount_amount_minor:number; tax_amount_minor:number; net_amount_minor:number|null; tax_rate_percent:number|null; food_service_role:string|null; applies_to_source_line_id:string|null; benefit_kind:string|null; line_ordinal:number|null; product_id:string|null; store_product_id:string|null; catalog_product_id:string|null; restaurant_menu_id:string|null; created_at:string }; Insert: Record<string, never>; Update: Record<string, never> };
+      verified_receipt_sources: { Row: { receipt_id:string; user_id:string; schema_version:"receipt.v2"; document_id:string|null; document_type:string; document_status:string; issued_on:string|null; issued_at:string|null; fulfillment_type:string; fulfillment_evidence:string; capture_method:string; transcription_status:"user_verified"; merchant_name:string; branch_name:string|null; business_kind:string; retail_channel:string; catalog_namespace:string|null; merchant_id:string|null; business_registration_number:string|null; address:string|null; phone:string|null; items_gross_amount_minor:number|null; discount_amount_minor:number|null; tax_amount_minor:number|null; fee_amount_minor:number|null; tip_amount_minor:number|null; rounding_amount_minor:number|null; grand_total_amount_minor:number; source_fingerprint:string; created_at:string }; Insert: Record<string, never>; Update: Record<string, never> };
+      verified_receipt_source_lines: { Row: { receipt_id:string; user_id:string; source_line_id:string; line_type:string; description:string|null; source_line_references:string[]; merchant_sku:string|null; quantity_value:number|null; quantity_unit:string|null; unit_price_amount_minor:number|null; gross_amount_minor:number|null; discount_amount_minor:number|null; tax_amount_minor:number|null; net_amount_minor:number|null; tax_rate_percent:number|null; food_service_role:string|null; applies_to_source_line_id:string|null; benefit_kind:string|null; line_ordinal:number|null; product_id:string|null; store_product_id:string|null; catalog_product_id:string|null; restaurant_menu_id:string|null; created_at:string }; Insert: Record<string, never>; Update: Record<string, never> };
       verified_receipt_ingestion_contents: { Row: { user_id:string; request_fingerprint:string; receipt_id:string; response:Json; created_at:string }; Insert: Record<string, never>; Update: Record<string, never> };
       verified_receipt_ingestion_requests: { Row: { user_id:string; idempotency_key:string; request_fingerprint:string; receipt_id:string; response:Json; created_at:string }; Insert: Record<string, never>; Update: Record<string, never> };
       merchant_identity_candidates: { Row: { id:string; user_id:string; origin:"receipt_ingestion"|"merchant_only"; source_fingerprint:string; merchant_name:string; branch_name:string|null; business_registration_number:string|null; address:string|null; phone:string|null; business_kind:string; source_namespace:string|null; source_code:string|null; idempotency_key:string|null; user_verified:true; review_status:"pending"|"accepted"|"rejected"|"needs_ocr_resolution"; matched_restaurant_id:string|null; matched_restaurant_location_id:string|null; receipt_id:string|null; created_at:string; updated_at:string }; Insert: Record<string, never>; Update: Record<string, never> };
       restaurant_menu_identity_candidates: { Row: { id:string; user_id:string; idempotency_key:string; request_fingerprint:string; restaurant_id:string|null; restaurant_location_id:string|null; merchant_candidate_id:string|null; proposed_menu_name:string; factual_metadata:Json; review_status:"pending"|"accepted"|"rejected"; resolved_restaurant_id:string|null; resolved_restaurant_location_id:string|null; resolved_restaurant_menu_id:string|null; resolved_catalog_product_id:string|null; reviewed_by:string|null; reviewed_at:string|null; review_note:string|null; created_at:string; updated_at:string }; Insert: Record<string, never>; Update: Record<string, never> };
+      price_observation_sources: { Row: { id:string; source_namespace:string; source_store_code:string; display_name:string; location_label:string|null; status:"active"|"archived"; review_status:"pending"|"verified"|"rejected"; created_by:string|null; reviewed_by:string|null; reviewed_at:string|null; created_at:string; updated_at:string }; Insert: { id?:string; source_namespace:string; source_store_code:string; display_name:string; location_label?:string|null; status?:"active"|"archived"; review_status?:"pending"|"verified"|"rejected"; created_by?:string|null; reviewed_by?:string|null; reviewed_at?:string|null }; Update: { display_name?:string; location_label?:string|null; status?:"active"|"archived"; review_status?:"pending"|"verified"|"rejected"; reviewed_by?:string|null; reviewed_at?:string|null; updated_at?:string } };
+      public_price_observations: { Row: { id:string; store_id:string; observed_on:string; catalog_product_id:string; unit_price_krw:number; verification_status:"user_verified"|"rejected"; created_at:string }; Insert: { id?:string; store_id:string; observed_on:string; catalog_product_id:string; unit_price_krw:number; verification_status?:"user_verified"|"rejected" }; Update: { verification_status?:"user_verified"|"rejected" } };
+      price_observation_submission_requests: { Row: { idempotency_key:string; request_fingerprint:string; public_price_observation_id:string; created_at:string }; Insert: { idempotency_key:string; request_fingerprint:string; public_price_observation_id:string; created_at?:string }; Update: Record<string, never> };
       products: { Row: { id:string; user_id:string; name:string; purchase_type:string; category_id:string|null; category_tags:string[]; created_at:string }; Insert: { id?:string; user_id:string; name:string; purchase_type?:string; category_id?:string|null; category_tags?:string[] }; Update: { name?:string; purchase_type?:string; category_id?:string|null; category_tags?:string[] } };
       store_products: { Row: { id:string; user_id:string; store_id:string; product_id:string; store_product_code:string|null }; Insert: { id?:string; user_id:string; store_id:string; product_id:string; store_product_code?:string|null }; Update: { store_product_code?:string|null } };
       receipts: { Row: { id:string; user_id:string; store_id:string; purchased_at:string; transaction_number:string; total_price_krw:number }; Insert: { id?:string; user_id:string; store_id:string; purchased_at:string; transaction_number:string; total_price_krw:number }; Update: { purchased_at?:string; transaction_number?:string; total_price_krw?:number } };
@@ -520,6 +523,49 @@ export interface Database {
           replayed:boolean;
         }[];
       };
+      submit_price_observation_v1: {
+        Args: {
+          p_idempotency_key:string;
+          p_store_id:string;
+          p_observed_on:string;
+          p_catalog_product_id:string;
+          p_unit_price_krw:number;
+        };
+        Returns: {
+          observation_id:string;
+          replayed:boolean;
+          applied_action:"created"|"deduplicated"|"replayed";
+        }[];
+      };
+      get_price_observation_sources_v1: {
+        Args: Record<string, never>;
+        Returns: {
+          store_id:string;
+          source_namespace:string;
+          source_store_code:string;
+          display_name:string;
+          location_label:string|null;
+        }[];
+      };
+      get_price_observations_v1: {
+        Args: {
+          p_catalog_product_id?:string|null;
+          p_store_id?:string|null;
+          p_limit?:number;
+        };
+        Returns: {
+          observation_id:string;
+          store_id:string;
+          source_namespace:string;
+          source_store_code:string;
+          store_name:string;
+          location_label:string|null;
+          observed_on:string;
+          catalog_product_id:string;
+          unit_price_krw:number;
+          verification_status:"user_verified"|"rejected";
+        }[];
+      };
       get_product_read_v1: {
         Args: {
           p_catalog_product_id?:string|null;
@@ -643,6 +689,14 @@ export interface Database {
       admin_resolve_restaurant_menu_candidate_v1: {
         Args: { p_candidate_id:string; p_decision:string; p_restaurant_id:string|null; p_restaurant_location_id:string|null; p_restaurant_menu_id:string|null; p_catalog_product_id:string|null; p_review_note?:string|null; };
         Returns: Json;
+      };
+      get_my_pending_merchant_identity_candidates_v1: {
+        Args: Record<string, never>;
+        Returns: { candidate_id:string; origin:"receipt_ingestion"|"merchant_only"; merchant_name:string; branch_name:string|null; business_registration_number:string|null; address:string|null; phone:string|null; business_kind:string; source_namespace:string|null; source_code:string|null; created_at:string; }[];
+      };
+      admin_list_pending_merchant_identity_candidates_v1: {
+        Args: Record<string, never>;
+        Returns: { candidate_id:string; origin:"receipt_ingestion"|"merchant_only"; merchant_name:string; branch_name:string|null; business_registration_number:string|null; address:string|null; phone:string|null; business_kind:string; source_namespace:string|null; source_code:string|null; created_at:string; }[];
       };
       admin_resolve_merchant_identity_candidate_v1: {
         Args: { p_candidate_id:string; p_restaurant_id:string|null; p_restaurant_location_id:string|null; p_decision:string; };

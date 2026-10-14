@@ -105,7 +105,7 @@ export function AuthPanel({ onChange, onOpen, modal = false, onClose }: Props) {
         </button>
         <p className={styles.kicker}>PRICETRACE ACCOUNT</p>
         <h2 id="auth-title">로그인</h2>
-        <p>로그인하면 영수증·판매처·상품의 private identity 상세를 확인할 수 있습니다. 관리자 기능은 관리자 계정에만 표시됩니다.</p>
+        <p>내 계정에 연결된 영수증과 상품의 상세 기록을 확인하세요. 관리자 기능은 권한이 있는 계정에 표시됩니다.</p>
         <form onSubmit={submit}>
           <label>
             이메일

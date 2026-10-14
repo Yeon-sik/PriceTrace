@@ -10,6 +10,7 @@ private-data/
 node_modules/
 .next/
 .next-e2e/
+.next-production/
 out/
 coverage/
 playwright-report/
@@ -46,6 +47,7 @@ docs/*
 !docs/integrations/
 docs/integrations/*
 !docs/integrations/product-nutrition-link.md
+!docs/integrations/price-observation-submit.md
 !docs/templates/
 !docs/templates/PROJECT_INTRO_TEMPLATE.md
 !docs/templates/PROJECT_DETAIL_TEMPLATE.md
@@ -96,12 +98,15 @@ e2e/*
 !src/domain/product-read-migration.test.ts
 !src/domain/product-nutrition-link.test.ts
 !src/features/product-nutrition/nutrition-presentation.test.ts
+!src/domain/price-observation-submit.test.ts
+!src/domain/price-observation-submit-migration.test.ts
 !src/repositories/cart.repository.test.ts
 !src/repositories/admin-receipt.repository.test.ts
 !src/repositories/official-product.repository.test.ts
 !src/repositories/public-receipt.repository.test.ts
 !src/repositories/product-read.repository.test.ts
 !src/repositories/nutrition-catalog.repository.test.ts
+!src/repositories/product-catalog.repository.test.ts
 !src/domain/restaurant-menu.test.ts
 !src/domain/restaurant-menu-migration.test.ts
 !src/repositories/restaurant-menu.repository.test.ts
@@ -109,6 +114,7 @@ e2e/*
 !src/domain/restaurant-menu-proposal.test.ts
 !src/repositories/restaurant-menu-proposal.repository.test.ts
 !e2e/restaurant-menu-proposal.spec.ts
+!e2e/product-catalog-pagination.spec.ts
 !eslint.config.mjs
 
 # Keep the purchase line authority regression contract.
@@ -118,3 +124,10 @@ e2e/*
 !src/repositories/authenticated-restaurant-observation.repository.test.ts
 !src/repositories/owner-confirmed-restaurant.repository.test.ts
 !e2e/owner-confirmed-restaurants.spec.ts
+# Keep the design behavior regressions; generated review artifacts stay local.
+!e2e/observation-instrument.spec.ts
+!src/features/observation-instrument/observation-selector.test.ts
+.agents/skills/impeccable/scripts/bin/
+.impeccable/review/
+.impeccable/*.cjs
+.impeccable/inspect-subject.ts

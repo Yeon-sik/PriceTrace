@@ -82,7 +82,7 @@ async function mockProductNutritionContracts(page: Page, {
   };
   nutritionRow.nutrition_values = { ...nutritionRow.nutrition_values, ...nutritionValues };
 
-  await page.route("**/rest/v1/rpc/get_public_exact_standard_product_catalog_v4", async (route) => {
+  await page.route("**/rest/v1/rpc/get_public_exact_standard_product_catalog_v4*", async (route) => {
     const catalogRows = [{
       source_label: "와마트 일산점",
       source_product_code: "210059",
@@ -158,7 +158,7 @@ async function mockProductNutritionContracts(page: Page, {
 
 test("전체 상품에서 공식 상품을 함께 보여 주고 상품 계층과 마트 범위를 따로 거른다", async ({ page }) => {
   await page.goto("/PriceTrace");
-  await page.getByRole("button", { name: "상품 둘러보기 →" }).click();
+  await page.getByRole("button", { name: "상품 둘러보기", exact: true }).click();
 
   const catalogTabs = page.getByRole("group", { name: "상품 데이터 계층" });
   await expect(catalogTabs.getByRole("button", { name: "전체 상품", exact: true })).toHaveAttribute("aria-pressed", "true");
@@ -230,7 +230,7 @@ test("공개 관측 상품을 보여 주고 새로고침 뒤에도 장바구니�
   });
   await expect(emptyFloatingCart).toBeVisible();
   await expect(emptyFloatingCart).not.toContainText("총합");
-  await page.getByRole("button", { name: "상품 둘러보기 →" }).click();
+  await page.getByRole("button", { name: "상품 둘러보기", exact: true }).click();
 
   const product = page.getByRole("article").filter({
     has: page.getByRole("heading", { name: productName, exact: true }),
@@ -281,7 +281,7 @@ test("공개 관측 상품을 보여 주고 새로고침 뒤에도 장바구니�
 
 test("큰 대표 이미지도 상품 이름 위의 이미지 영역을 벗어나지 않는다", async ({ page }) => {
   await page.goto("/PriceTrace");
-  await page.getByRole("button", { name: "상품 둘러보기 →" }).click();
+  await page.getByRole("button", { name: "상품 둘러보기", exact: true }).click();
 
   const card = page.getByRole("article").first();
   const imageSlot = card.getByTestId("product-image-slot");
@@ -327,7 +327,7 @@ test("상품 이미지를 화면 이동 없이 확대하고 Esc로 닫는다", a
     });
   });
   await page.goto("/PriceTrace");
-  await page.getByRole("button", { name: "상품 둘러보기 →" }).click();
+  await page.getByRole("button", { name: "상품 둘러보기", exact: true }).click();
 
   const card = page.getByRole("article").filter({ hasText: "하겐다즈" }).first();
   const zoomButton = card.getByRole("button", { name: /하겐다즈.*이미지 확대 보기/ });
@@ -346,7 +346,7 @@ test("상품 이미지를 화면 이동 없이 확대하고 Esc로 닫는다", a
 test("상품 카드의 액션 행은 내용 길이가 달라도 같은 줄에 고정된다", async ({ page }) => {
   await page.goto("/PriceTrace");
   await page.waitForLoadState("networkidle");
-  await page.getByRole("button", { name: "상품 둘러보기 →" }).click();
+  await page.getByRole("button", { name: "상품 둘러보기", exact: true }).click();
   await expect(page.getByRole("heading", { name: "상품 목록", exact: true })).toBeVisible();
 
   const cards = page.getByRole("article");
@@ -365,7 +365,7 @@ test("상품 카드의 액션 행은 내용 길이가 달라도 같은 줄에 �
 test("개별 상품 카드의 상품명, 판매처, 가격을 촘촘하게 표시한다", async ({ page }) => {
   await page.goto("/PriceTrace");
   await page.waitForLoadState("networkidle");
-  await page.getByRole("button", { name: "상품 둘러보기 →" }).click();
+  await page.getByRole("button", { name: "상품 둘러보기", exact: true }).click();
   await expect(page.getByRole("heading", { name: "상품 목록", exact: true })).toBeVisible();
 
   const card = page.getByRole("article").first();
@@ -386,7 +386,7 @@ test("상품 가격 이력에서 판매처 기준을 확인하고 판매처별 �
   const productName = "하겐다즈 미니컵 스트로베리";
 
   await page.goto("/PriceTrace");
-  await page.getByRole("button", { name: "상품 둘러보기 →" }).click();
+  await page.getByRole("button", { name: "상품 둘러보기", exact: true }).click();
   await expect(page.getByRole("heading", { name: "상품 목록", exact: true })).toBeVisible();
   await expect(page.getByRole("heading", { name: "상품 목록", exact: true })).toBeVisible();
   const product = page.getByRole("article").filter({
@@ -438,7 +438,7 @@ test("모바일에서도 판매처 기록과 상품 검색에 접근할 수 있�
 test("표준 상품 정보에서 승인된 영양을 별도 영양성분표로 보여 준다", async ({ page }) => {
   await mockProductNutritionContracts(page);
   await page.goto("/PriceTrace");
-  await page.getByRole("button", { name: "상품 둘러보기 →" }).click();
+  await page.getByRole("button", { name: "상품 둘러보기", exact: true }).click();
 
   const standardCard = page.getByRole("article").filter({
     has: page.getByRole("button", { name: "하겐다즈 미니컵 스트로베리 정보 보기", exact: true }),
@@ -523,7 +523,7 @@ test("알 수 없는 하위 영양성분을 0으로 표시하지 않는다", asy
 test("카구리 실응답의 기록 기준량과 같은 단위 환산을 영양 모달에 함께 보여 준다", async ({ page }) => {
   await mockProductNutritionContracts(page, { kaguri: true });
   await page.goto("/PriceTrace");
-  await page.getByRole("button", { name: "상품 둘러보기 →" }).click();
+  await page.getByRole("button", { name: "상품 둘러보기", exact: true }).click();
   await page.getByRole("button", { name: "하겐다즈 미니컵 스트로베리 정보 보기", exact: true }).click();
   await page.getByRole("button", { name: "영양 정보 확인", exact: true }).click();
 
@@ -540,7 +540,8 @@ test("카구리 실응답의 기록 기준량과 같은 단위 환산을 영양 
   await expect(nutritionDialog).toContainText("1,550mg");
   await expect(nutritionFacts).toContainText("1,504.85mg");
   await expect(nutritionFacts).toContainText("100ml");
-  await expect(nutritionFacts).toContainText("100serving");
+  await expect(nutritionFacts.getByRole("columnheader", { name: "1회분", exact: true })).toBeVisible();
+  await expect(nutritionFacts).not.toContainText("100serving");
   await expect(nutritionFacts).toContainText("-");
 });
 
@@ -571,7 +572,7 @@ test("여러 정확 규격 중 일부 영양 조회가 실패해도 확인된 �
 test("승인된 영양 내용이 없으면 영양 팝업에 내용없음을 표시한다", async ({ page }) => {
   await mockProductNutritionContracts(page, { approvedNutrition: false });
   await page.goto("/PriceTrace");
-  await page.getByRole("button", { name: "상품 둘러보기 →" }).click();
+  await page.getByRole("button", { name: "상품 둘러보기", exact: true }).click();
 
   await page.getByRole("button", {
     name: "하겐다즈 미니컵 스트로베리 정보 보기",
@@ -586,7 +587,7 @@ test("승인된 영양 내용이 없으면 영양 팝업에 내용없음을 표�
 test("Nutrition 장애를 상품·가격 상세와 분리한다", async ({ page }) => {
   await mockProductNutritionContracts(page, { nutritionOffline: true });
   await page.goto("/PriceTrace");
-  await page.getByRole("button", { name: "상품 둘러보기 →" }).click();
+  await page.getByRole("button", { name: "상품 둘러보기", exact: true }).click();
 
   await page.getByRole("button", {
     name: "하겐다즈 미니컵 스트로베리 정보 보기",
@@ -607,7 +608,7 @@ test("Nutrition 장애를 상품·가격 상세와 분리한다", async ({ page 
 test("영양 정보 일시 장애 뒤 팝업에서 다시 시도할 수 있다", async ({ page }) => {
   const nutritionMock = await mockProductNutritionContracts(page, { nutritionOffline: true });
   await page.goto("/PriceTrace");
-  await page.getByRole("button", { name: "상품 둘러보기 →" }).click();
+  await page.getByRole("button", { name: "상품 둘러보기", exact: true }).click();
   await page.getByRole("button", {
     name: "하겐다즈 미니컵 스트로베리 정보 보기",
     exact: true,

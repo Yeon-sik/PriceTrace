@@ -1,251 +1,110 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import type { ProductSpecification } from "../../domain/canonical-price";
+import { useCallback, useEffect, useState } from "react";
 import { seededOfficialProducts, type OfficialProductRecord } from "../../domain/official-product";
-import {
-  buildPublicStandardCatalogIndex,
-  publicStandardMappingKey,
-  PublicStandardCatalogRowsSchema,
-  type PublicCoupangPrice,
-  type PublicStandardCategory,
-} from "../../domain/public-standard-catalog";
 import { getSupabaseBrowserClient } from "../../lib/supabase/client";
 import { OfficialProductRepository } from "../../repositories/official-product.repository";
-import type { CatalogSpecification } from "./product-browser.selectors";
+import {
+  emptyProductCatalog,
+  ProductCatalogRepository,
+  type ProductCatalogSnapshot,
+} from "../../repositories/product-catalog.repository";
 
 const officialProductRepository = new OfficialProductRepository();
 
-function isMissingCatalogRpc(error: { code?: string; message?: string } | null) {
-  return error?.code === "PGRST202"
-    || error?.message?.includes("Could not find the function") === true;
-}
+type CatalogState = {
+  publicCatalog: ProductCatalogSnapshot;
+  catalog: ProductCatalogSnapshot;
+  ownerId: string | null;
+  authRevision: number;
+  status: "loading" | "ready" | "error";
+};
 
 export function useProductCatalog(authRevision: number) {
   const client = getSupabaseBrowserClient();
-  const [officialProducts, setOfficialProducts] = useState<Record<string, OfficialProductRecord>>(
-    seededOfficialProducts,
-  );
-  const [standardMappings, setStandardMappings] = useState<Map<string, string>>(new Map());
-  const [exactStandardMappings, setExactStandardMappings] = useState<Map<string, string>>(new Map());
-  const [catalogSpecs, setCatalogSpecs] = useState<Map<string, CatalogSpecification>>(new Map());
-  const [standardNames, setStandardNames] = useState<Map<string, string>>(new Map());
-  const [standardBrands, setStandardBrands] = useState<Map<string, string>>(new Map());
-  const [standardCategories, setStandardCategories] = useState<Map<string, PublicStandardCategory>>(new Map());
-  const [standardImages, setStandardImages] = useState<Map<string, string>>(new Map());
-  const [coupangByStandard, setCoupangByStandard] = useState<Map<string, PublicCoupangPrice>>(new Map());
-  const [catalogNotice, setCatalogNotice] = useState("");
+  const [officialProducts, setOfficialProducts] = useState<Record<string, OfficialProductRecord>>(seededOfficialProducts);
+  const [retryRevision, setRetryRevision] = useState(0);
+  const [state, setState] = useState<CatalogState>(() => {
+    const publicCatalog = emptyProductCatalog();
+    return { publicCatalog, catalog: publicCatalog, ownerId: null, authRevision, status: "loading" };
+  });
+  const retryCatalog = useCallback(() => setRetryRevision((revision) => revision + 1), []);
 
   useEffect(() => {
     setOfficialProducts({ ...seededOfficialProducts, ...officialProductRepository.loadAll() });
   }, []);
 
   useEffect(() => {
-    let active = true;
+    const controller = new AbortController();
+    const { signal } = controller;
+    let ownerId: string | null | undefined;
+    setState((previous) => ({ ...previous, status: "loading" }));
     if (!client) {
-      setCatalogNotice("표준 상품 정보를 불러오지 못해 현재는 개별 상품으로 표시합니다.");
-      return () => { active = false; };
+      setState((previous) => ({ ...previous, authRevision, catalog: previous.publicCatalog, status: "error" }));
+      return () => controller.abort();
     }
 
-    const loadStandardCatalog = async () => {
-      let publicCatalogReady = false;
-      let signedInCatalogReady = false;
-      let coupangReady = false;
-      let sharedMappings = new Map<string, string>();
-      const exactMappings = new Map<string, string>();
-      let specs = new Map<string, CatalogSpecification>();
-      let names = new Map<string, string>();
-      let brands = new Map<string, string>();
-      let categories = new Map<string, PublicStandardCategory>();
-      let images = new Map<string, string>();
-      let coupangPrices = new Map<string, PublicCoupangPrice>();
-
-      const v4PublicResult = await client.rpc("get_public_exact_standard_product_catalog_v4");
-      const v3PublicResult = v4PublicResult.error && isMissingCatalogRpc(v4PublicResult.error)
-        ? await client.rpc("get_public_exact_standard_product_catalog_v3")
-        : v4PublicResult;
-      const v2PublicResult = v3PublicResult.error && isMissingCatalogRpc(v3PublicResult.error)
-        ? await client.rpc("get_public_exact_standard_product_catalog_v2")
-        : v3PublicResult;
-      const exactPublicResult = v2PublicResult.error && isMissingCatalogRpc(v2PublicResult.error)
-        ? await client.rpc("get_public_exact_standard_product_catalog")
-        : v2PublicResult;
-      const publicResult = exactPublicResult.error && isMissingCatalogRpc(exactPublicResult.error)
-        ? await client.rpc("get_public_standard_product_catalog")
-        : exactPublicResult;
-      if (!publicResult.error) {
-        const parsed = PublicStandardCatalogRowsSchema.safeParse(publicResult.data ?? []);
-        if (parsed.success) {
-          const publicIndex = buildPublicStandardCatalogIndex(parsed.data);
-          sharedMappings = publicIndex.standardMappings;
-          for (const [key, catalogProductId] of publicIndex.exactStandardMappings) {
-            exactMappings.set(key, catalogProductId);
-          }
-          specs = publicIndex.catalogSpecs;
-          names = publicIndex.standardNames;
-          brands = publicIndex.standardBrands;
-          categories = publicIndex.standardCategories;
-          coupangPrices = publicIndex.coupangByStandard;
-          publicCatalogReady = true;
-          coupangReady = true;
-        }
+    const { data: authListener } = client.auth.onAuthStateChange((event, session) => {
+      const nextOwnerId = session?.user.id ?? null;
+      if (event === "INITIAL_SESSION" && ownerId === undefined) {
+        ownerId = nextOwnerId;
+        return;
       }
+      if (nextOwnerId === ownerId) return;
+      // Discard signed-in enrichment immediately, even before the caller updates authRevision.
+      controller.abort();
+      setState((previous) => ({
+        ...previous, catalog: previous.publicCatalog, ownerId: nextOwnerId, status: "loading",
+      }));
+      retryCatalog();
+    });
 
-      const imageResult = await client
-        .from("standard_product_images")
-        .select("standard_product_id,image_url");
-      if (!imageResult.error) {
-        images = new Map(
-          (imageResult.data ?? []).map((row) => [
-            row.standard_product_id as string,
-            row.image_url as string,
-          ]),
-        );
+    const load = async () => {
+      try {
+        const { data, error } = await client.auth.getUser();
+        signal.throwIfAborted();
+        if (error && error.name !== "AuthSessionMissingError") throw error;
+        const authenticatedOwnerId = data.user?.id ?? null;
+        if (ownerId !== undefined && ownerId !== authenticatedOwnerId) {
+          controller.abort();
+          retryCatalog();
+          return;
+        }
+        ownerId = authenticatedOwnerId;
+        setState((previous) => ({
+          ...previous, authRevision, ownerId: authenticatedOwnerId,
+          catalog: previous.ownerId === authenticatedOwnerId ? previous.catalog : previous.publicCatalog,
+          status: "loading",
+        }));
+        const result = await new ProductCatalogRepository(client).load(authenticatedOwnerId, signal);
+        signal.throwIfAborted();
+        setState({ ...result, ownerId: authenticatedOwnerId, authRevision, status: "ready" });
+      } catch {
+        if (signal.aborted) return;
+        // No partial snapshot is published; a same-account retry keeps all last good data.
+        setState((previous) => ({
+          ...previous, authRevision,
+          catalog: previous.authRevision === authRevision ? previous.catalog : previous.publicCatalog,
+          status: "error",
+        }));
+        controller.abort();
       }
-
-      const { data: authData } = await client.auth.getUser();
-      if (authData.user) {
-        const [mappingResult, catalogResult, standardResult, categoryResult, coupangResult] = await Promise.all([
-          client
-            .from("source_product_mappings")
-            .select("source_label,source_product_code,catalog_product_id")
-            .eq("review_status", "verified"),
-          client
-            .from("catalog_products")
-            .select("id,standard_product_id,content_amount,content_unit,package_count,reference_unit")
-            .eq("status", "active")
-            .eq("specification_status", "verified"),
-          client
-            .from("standard_products")
-            .select("id,canonical_name,brand,category_id")
-            .eq("status", "active"),
-          client
-            .from("catalog_categories")
-            .select("id,slug,display_name")
-            .eq("purchase_type", "retail_product"),
-          client
-            .from("standard_product_coupang_prices")
-            .select("standard_product_id,listed_price_krw,quantity,content_amount,content_unit,max_bundle_quantity,max_bundle_listed_price_krw,product_url,observed_at")
-            .order("observed_at", { ascending: false }),
-        ]);
-        if (!mappingResult.error) {
-          for (const mapping of mappingResult.data ?? []) {
-            exactMappings.set(
-              publicStandardMappingKey(mapping.source_label, mapping.source_product_code),
-              mapping.catalog_product_id as string,
-            );
-          }
-        }
-        if (!catalogResult.error) {
-          specs = new Map([
-            ...specs,
-            ...(catalogResult.data ?? [])
-              .filter((row) => row.content_amount && row.content_unit)
-              .map((row) => [
-                row.id as string,
-                {
-                  contentAmount: row.content_amount as number,
-                  contentUnit: row.content_unit as ProductSpecification["contentUnit"],
-                  packageCount: row.package_count as number,
-                  referenceUnit: row.reference_unit as 10 | 100 | 1000,
-                  standardProductId: row.standard_product_id as string,
-                },
-              ] as const),
-          ]);
-        }
-        if (!standardResult.error) {
-          names = new Map([
-            ...names,
-            ...(standardResult.data ?? []).map((row) => [
-              row.id as string,
-              row.canonical_name as string,
-            ] as const),
-          ]);
-          brands = new Map([
-            ...brands,
-            ...(standardResult.data ?? [])
-              .filter((row) => typeof row.brand === "string" && row.brand.trim().length > 0)
-              .map((row) => [row.id as string, row.brand as string] as const),
-          ]);
-          if (!categoryResult.error) {
-            const categoryById = new Map((categoryResult.data ?? []).map((row) => [
-              row.id as string,
-              {
-                id: row.id as string,
-                slug: row.slug as string,
-                name: row.display_name as string,
-              } satisfies PublicStandardCategory,
-            ] as const));
-            categories = new Map([
-              ...categories,
-              ...(standardResult.data ?? []).flatMap((row) => {
-                const categoryId = row.category_id as string | null;
-                const category = categoryId ? categoryById.get(categoryId) : undefined;
-                return category ? [[row.id as string, category] as const] : [];
-              }),
-            ]);
-          }
-        }
-        if (!coupangResult.error) {
-          const mergedCoupang = new Map(coupangPrices);
-          for (const row of coupangResult.data ?? []) {
-            const standardProductId = row.standard_product_id as string | null;
-            if (!standardProductId) continue;
-            const existing = mergedCoupang.get(standardProductId);
-            if (!existing || (row.observed_at as string) > existing.observedAt) {
-              mergedCoupang.set(standardProductId, {
-                listedPriceKrw: row.listed_price_krw as number,
-                quantity: row.quantity as number,
-                maxBundleQuantity: row.max_bundle_quantity as number | null,
-                maxBundleListedPriceKrw: row.max_bundle_listed_price_krw as number | null,
-                contentAmount: row.content_amount as number | null,
-                contentUnit: row.content_unit as ProductSpecification["contentUnit"] | null,
-                productUrl: row.product_url as string,
-                observedAt: row.observed_at as string,
-              });
-            }
-          }
-          coupangPrices = mergedCoupang;
-          coupangReady = true;
-        }
-        signedInCatalogReady = !mappingResult.error
-          && !catalogResult.error
-          && !standardResult.error
-          && !categoryResult.error;
-      }
-
-      if (!active) return;
-      setStandardMappings(sharedMappings);
-      setExactStandardMappings(exactMappings);
-      setCatalogSpecs(specs);
-      setStandardNames(names);
-      setStandardBrands(brands);
-      setStandardCategories(categories);
-      setStandardImages(images);
-      setCoupangByStandard(coupangPrices);
-      setCatalogNotice(
-        !publicCatalogReady && !signedInCatalogReady
-          ? "표준 상품 정보를 불러오지 못해 현재는 개별 상품으로 표시합니다."
-          : !coupangReady
-            ? "표준 상품은 표시하지만 쿠팡 가격 정보를 불러오지 못했습니다."
-            : "",
-      );
     };
+    void load();
+    return () => {
+      controller.abort();
+      authListener.subscription.unsubscribe();
+    };
+  }, [authRevision, client, retryRevision, retryCatalog]);
 
-    void loadStandardCatalog();
-    return () => { active = false; };
-  }, [authRevision, client]);
-
+  const currentRevision = state.authRevision === authRevision;
   return {
     officialProducts,
-    standardMappings,
-    exactStandardMappings,
-    catalogSpecs,
-    standardNames,
-    standardBrands,
-    standardCategories,
-    standardImages,
-    coupangByStandard,
-    catalogNotice,
+    ...(currentRevision ? state.catalog : state.publicCatalog),
+    catalogLoading: !currentRevision || state.status === "loading",
+    catalogNotice: currentRevision && state.status === "error"
+      ? "상품 카탈로그를 모두 불러오지 못했습니다. 다시 불러와 주세요."
+      : "",
+    retryCatalog,
   };
 }
