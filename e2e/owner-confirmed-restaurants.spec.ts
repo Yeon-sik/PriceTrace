@@ -31,7 +31,11 @@ async function prepare(page: Page, owner: number | null, privateProducts: unknow
     else if (path === "/auth/v1/logout") { await route.fulfill({ status: 204 }); return; }
     await route.fulfill({ contentType: "application/json", body: JSON.stringify(data) });
   });
+  const initialProductRead = privateProducts.length > 0
+    ? page.waitForResponse(response => new URL(response.url()).pathname === "/rest/v1/price_observations")
+    : null;
   await page.goto("/PriceTrace?view=restaurants");
+  if (initialProductRead) await (await initialProductRead).finished();
   return () => privateReads;
 }
 
@@ -91,7 +95,9 @@ test("개인 구매 상품은 공개 홈의 관측 통계와 최근 기록에 �
     },
     receipt_items: null,
   }]);
+  const productRead = page.waitForResponse(response => new URL(response.url()).pathname === "/rest/v1/price_observations");
   await page.getByRole("navigation", { name: "주요 메뉴", exact: true }).getByRole("button", { name: "상품 목록", exact: true }).click();
+  await (await productRead).finished();
   await expect(page.getByRole("article").filter({ hasText: "비공개 구매 상품" })).toBeVisible();
   const purchaseRead = page.waitForResponse(response => new URL(response.url()).pathname === "/rest/v1/price_observations");
   await page.getByRole("button", { name: "가격 추적기 홈", exact: true }).click();

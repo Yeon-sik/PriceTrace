@@ -540,7 +540,8 @@ test("카구리 실응답의 기록 기준량과 같은 단위 환산을 영양 
   await expect(nutritionDialog).toContainText("1,550mg");
   await expect(nutritionFacts).toContainText("1,504.85mg");
   await expect(nutritionFacts).toContainText("100ml");
-  await expect(nutritionFacts).toContainText("100serving");
+  await expect(nutritionFacts.getByRole("columnheader", { name: "1회분", exact: true })).toBeVisible();
+  await expect(nutritionFacts).not.toContainText("100serving");
   await expect(nutritionFacts).toContainText("-");
 });
 

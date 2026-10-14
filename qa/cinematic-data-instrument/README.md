@@ -98,3 +98,37 @@
 - `npm.cmd run test:e2e -- --workers=1`: 29개 통과 (3.4분). 카탈로그 중간 실패·재시도·계정 변경·로그아웃 회귀 포함.
 - `npm.cmd run android:debug`: `NEXT_DIST_DIR`를 설정하지 않은 표준 `out` 경로에서 APK 빌드 통과. 최초 검증에서 임시 production 경로를 사용해 Capacitor가 `out`을 찾지 못한 뒤, 코드 변경 없이 표준 경로로 재실행했다.
 - 커밋 범위: 런타임 소스, 회귀 테스트, 폰트와 라이선스, 디자인 문서, 이 QA 기록. 설치된 skill 디렉터리와 생성된 검토 자료는 로컬에 보존한다.
+
+## 미병합 작업 통합 검증 (2026-10-14)
+
+통합 branch: `feat/merge-pending-commits-20261014`, PR #63. 기반 main은 `d85a72f44072fec3e517a2c717489b94c3a24b1e`다.
+
+| 원래 branch | 통합한 HEAD |
+|---|---|
+| `feat/pricetrace-app-icons` | `e523e429` |
+| `feat/catalog-complete-pagination` | `1086f766` |
+| `feat/cinematic-data-instrument` | `93545c66` |
+| `feat/fitness-dining-proposals` | `d16b67f0` |
+| `feat/price-observation-submit-v1` | `4ec3c50c` |
+| `feat/verified-receipt-source-facts` | `594adcf7` |
+
+- 현재 OCR 구매 행 검수·identity·사용자 확인 식당·영양 계약을 기준으로 충돌을 해결했다. 이미 squash 병합된 branch는 현재 내용의 동등성을 확인한 뒤 원래 커밋의 ancestry를 기록했다. 기존 migration 파일은 수정하지 않았다.
+- nullable 영수증 원본 사실과 `observationCreated`/`observationStatus`를 현재 계약에 추가하고, ChatGPT 계약 소스팩을 기존 생성기로 갱신했다. legacy pending 후보와 OCR 추가 검수 후보를 구분하며 owner/admin/anonymous 권한 회귀를 유지했다.
+- 개인 구매가 공개 홈의 관측 수·판매처 수·최근 관측에 포함되는 통합 오류를 실패 테스트로 재현한 뒤, 홈은 검증된 공개 영수증에서 만든 그룹만 사용하도록 수정했다. 상품 목록에서는 기존 owner 구매 조회를 유지한다.
+- 비동기 카탈로그·owner 구매 조회를 E2E가 응답 완료 후 검증하도록 동기화했다. 이미 main에서 `1회분`으로 수정된 영양 열 제목에 맞춰 과거 `100serving` 기대값을 갱신했다. 가격·영양 환산과 계정 격리 assertion은 유지한다.
+
+| 검사 | 결과 |
+|---|---|
+| `npm.cmd run lint` | 통과 |
+| `npm.cmd run typecheck` | 통과 |
+| `npm.cmd run test` | 74 files / 603 tests 통과. 재제출 SQL fixture를 실행하는 PGlite 회귀 포함. |
+| `npm.cmd run test:purchase-sql` | 101개 migration을 문서화된 역사적 bootstrap 보정과 함께 로컬 메모리 DB에 적용한 뒤 구매·영수증·owner 권한 fixture 6개 통과. 실제 Supabase 서비스/JWT 검증은 아님. |
+| `npm.cmd run build` | production 정적 export 통과. First Load JS 503 kB. |
+| production export의 전체 Playwright 회귀 | 36개 통과 (6.1분, workers=1). |
+| `npm.cmd run android:debug` | 표준 `out` 경로에서 Capacitor 동기화와 `assembleDebug` 통과. 기기 설치 없음. |
+
+브라우저 검증은 개발 서버의 compile/HMR 대기를 배제하기 위해 synthetic API fixture 환경으로 production export를 만든 뒤, 임시 loopback 정적 서버와 기존 Playwright 설정을 상속한 임시 config로 수행했다. 실제 실행 명령은 `npm.cmd run test:e2e -- --config=.merge-playwright.config.ts --workers=1 --timeout=90000`이다. 전체 test 시간 예산만 늘렸으며 5초 assertion과 데이터·권한 검증은 완화하지 않았다. 임시 서버/config는 검증 후 제거했다. 처음 production 실행은 과거 `100serving` 기대값에서 1개 실패했고, 현재 표시 계약을 반영한 전체 재실행에서 36개 모두 통과했다.
+
+원격 migration 이력은 읽기 전용으로 확인했다. 가격 관측 제출 v1과 nullable 영수증 source facts migration은 원격에 적용되어 있으나, `20261005010000_rejected_dining_proposal_resubmission.sql`은 미적용이다. 기존의 다른 local/remote 이력 차이를 자동 복구하거나 production DB에 쓰지 않았다. Git 통합과 실제 재제출 RPC의 원격 동작은 별도의 완료 상태다.
+
+주문 캡처 worktree의 미커밋 17개 변경, stash 4개, 다른 worktree의 로컬 skill·생성 자료를 보존했다. 실제 원격 사용자 세션과 Android 실기기 동작은 검증하지 않았다.

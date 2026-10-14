@@ -126,6 +126,14 @@ function waitForCatalogPageFailure(page: Page, resource: string) {
   }).then(response => response.finished());
 }
 
+function waitForSignedInCatalog(page: Page) {
+  return page.waitForResponse(response => {
+    const url = new URL(response.url());
+    return url.pathname.endsWith("/standard_products")
+      && url.searchParams.get("offset") === "1000" && response.status() === 200;
+  }).then(response => response.finished());
+}
+
 test("공개 RPC 중간 페이지 실패 후 재시도로 마지막 페이지의 상품을 가져온다", async ({ page }) => {
   const f = await prepare(page, { failPublicInitially: true });
   await expect(page.getByRole("button", { name: "카탈로그 다시 불러오기", exact: true })).toBeVisible();
@@ -148,7 +156,9 @@ test("추가 조회 실패 시 정상 화면을 보존하고 재시도로 전체
   await expect(page.getByRole("button", { name: `${publicName} 정보 보기`, exact: true })).toBeVisible();
   await expect(page.getByRole("button", { name: "계정 A 상품 정보 보기", exact: true })).toHaveCount(0);
   f.failSignedIn(false);
+  const completedPage = waitForSignedInCatalog(page);
   await page.getByRole("button", { name: "카탈로그 다시 불러오기", exact: true }).click();
+  await completedPage;
   await expect(page.getByRole("button", { name: "계정 A 상품 정보 보기", exact: true })).toBeVisible();
   await expect(page.getByRole("button", { name: "카탈로그 다시 불러오기", exact: true })).toHaveCount(0);
   expect(f.offsets).toContain(1000);
@@ -170,7 +180,9 @@ test("계정 전환 후 취소된 이전 계정 페이지가 새 카탈로그를
   await expect(page.getByRole("status").filter({ hasText: "상품 카탈로그를 불러오는 중" })).toBeVisible();
   await page.getByRole("button", { name: "로그아웃", exact: true }).click();
   await expect(page.getByRole("button", { name: `${publicName} 정보 보기`, exact: true })).toBeVisible();
+  const completedPage = waitForSignedInCatalog(page);
   await signIn(page, "B");
+  await completedPage;
   await expect(page.getByRole("button", { name: "계정 B 상품 정보 보기", exact: true })).toBeVisible();
   await f.releaseDelayedPage();
   await expect(page.getByRole("button", { name: "계정 B 상품 정보 보기", exact: true })).toBeVisible();
@@ -180,7 +192,9 @@ test("계정 전환 후 취소된 이전 계정 페이지가 새 카탈로그를
 test("로그아웃 후 재조회가 실패해도 이전 계정의 카탈로그를 노출하지 않는다", async ({ page }) => {
   const f = await prepare(page);
   await expect(page.getByRole("button", { name: `${publicName} 정보 보기`, exact: true })).toBeVisible();
+  const firstAccountPage = waitForSignedInCatalog(page);
   await signIn(page, "A");
+  await firstAccountPage;
   await expect(page.getByRole("button", { name: "계정 A 상품 정보 보기", exact: true })).toBeVisible();
   f.failPublic(true);
   const failedPage = waitForCatalogPageFailure(page, "get_public_exact_standard_product_catalog_v4");
@@ -190,6 +204,8 @@ test("로그아웃 후 재조회가 실패해도 이전 계정의 카탈로그�
   await expect(page.getByRole("button", { name: `${publicName} 정보 보기`, exact: true })).toBeVisible();
   await expect(page.getByRole("button", { name: "계정 A 상품 정보 보기", exact: true })).toHaveCount(0);
   f.failPublic(false);
+  const completedPage = waitForSignedInCatalog(page);
   await signIn(page, "B");
+  await completedPage;
   await expect(page.getByRole("button", { name: "계정 B 상품 정보 보기", exact: true })).toBeVisible();
 });
