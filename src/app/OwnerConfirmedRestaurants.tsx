@@ -46,6 +46,9 @@ export function OwnerConfirmedRestaurants({ onPublic }: { onPublic: () => void }
                 {latest && <div className={privateStyles.latest}><strong>{latestPrice === null || latestPrice === undefined ? "미기록" : formatKrw(latestPrice)}</strong>
                   <span>{latest.unitPriceKrw !== null ? "최근 개당 관측가" : "최근 합계 관측가"} · <time dateTime={latest.observedOn}>{latest.observedOn}</time></span></div>}
               </div>
+              {!!menu.components?.length && <ul aria-label={`${menu.name} 구성요소`}>
+                {menu.components.map(component => <li key={component.id}>{component.name} · {component.role === "complimentary_side" ? "함께 제공" : component.role} · 가격 미관측</li>)}
+              </ul>}
               <details className={privateStyles.history}><summary>가격 이력 {history.length}건</summary>
                 <div className={privateStyles.tableScroll} role="region" aria-label={`${menu.name} 가격 이력`} tabIndex={0}>
                   <table><caption className={styles.srOnly}>{menu.name} 구매 날짜별 가격</caption><thead><tr><th>구매 날짜</th><th>개당 가격</th><th>수량</th><th>구매 합계</th></tr></thead>
