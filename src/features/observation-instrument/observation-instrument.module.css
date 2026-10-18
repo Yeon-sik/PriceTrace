@@ -1,12 +1,12 @@
-.home { --fine-rule: #2c3930; }
+.home { --fine-rule: #e2e8e4; }
 .hero { display: grid; grid-template-columns: 1fr 1.05fr; align-items: center; gap: 48px; padding: 40px 0 56px; }
 .introduction { padding-bottom: 24px; }
 .introduction h1 { margin: 0 0 27px; font-size: clamp(46px, 5.2vw, 76px); font-weight: 550; letter-spacing: -.04em; line-height: 1.18; }
 .introduction h1 span { color: var(--accent); }
 .introduction > p { color: var(--muted); font-size: 17px; line-height: 1.8; margin: 0 0 32px; }
 .heroActions { display: flex; align-items: center; gap: 24px; flex-wrap: wrap; }
-.heroActions button { display: inline-flex; align-items: center; justify-content: space-between; gap: 24px; padding: 13px 19px; min-height: 48px; font-weight: 650; background: var(--ink); color: var(--bg); }
-.heroActions button:hover { background: var(--accent); }
+.heroActions button { display: inline-flex; align-items: center; justify-content: space-between; gap: 24px; padding: 13px 19px; min-height: 48px; font-weight: 650; background: var(--brand); color: var(--on-brand); }
+.heroActions button:hover { background: var(--brand-hover); }
 .heroActions button + button { background: none; color: var(--ink); padding: 10px 0; gap: 10px; border-radius: 0; border-bottom: 1px solid var(--line); }
 .heroActions button + button:hover { border-color: var(--accent); color: var(--accent); }
 .heroFootnote { display: flex; align-items: center; gap: 13px; color: var(--subtle); font-size: 12px; margin-top: 54px; line-height: 1.7; }
@@ -21,7 +21,7 @@
 .spatialSurface { position: relative; height: 330px; perspective: 900px; }
 .geometry { position: absolute; inset: 0; transform: rotateX(var(--tilt-x, 0deg)) rotateY(var(--tilt-y, 0deg)); transition: transform 180ms ease-out; }
 .geometry svg { width: 100%; height: 100%; overflow: visible; }
-.orbit { stroke: #576a5c; stroke-width: .9; }
+.orbit { stroke: #a7bfae; stroke-width: .9; }
 .innerOrbit { stroke: var(--line); stroke-width: .7; stroke-dasharray: 2 5; }
 .axis { stroke: var(--line); stroke-width: 1; }
 .marker path { stroke: var(--line); stroke-width: .65; }
@@ -33,7 +33,7 @@
 .readout { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); width: 210px; display: flex; flex-direction: column; align-items: center; text-align: center; background: var(--bg); padding: 12px 10px; }
 .readout > svg { color: var(--subtle); margin-bottom: 10px; }
 .readoutName { font-size: 13px; color: var(--muted); overflow-wrap: anywhere; line-height: 1.5; }
-.readout strong { font-size: 43px; font-weight: 500; line-height: 1.35; letter-spacing: -.035em; font-variant-numeric: tabular-nums; }
+.readout strong { font-size: 43px; font-weight: 550; line-height: 1.35; letter-spacing: -.035em; font-variant-numeric: tabular-nums; }
 .readoutDate { font-size: 12px; color: var(--subtle); font-variant-numeric: tabular-nums; }
 .instrumentSource { display: flex; align-items: center; gap: 8px; font-size: 12px; padding-bottom: 17px; color: var(--muted); }
 .instrumentSource > span { min-width: 0; overflow-wrap: anywhere; }
@@ -45,7 +45,7 @@
 .timeline input { width: 100%; margin: 4px 0 0; padding: 0; height: 32px; background: transparent; cursor: ew-resize; }
 .timeline .timelineEnds { color: var(--subtle); font-variant-numeric: tabular-nums; font-size: 10px; }
 .subjectSelect { display: flex; align-items: center; gap: 14px; font-size: 12px; color: var(--subtle); margin-top: 17px; }
-.subjectSelect select { border: 0; border-bottom: 1px solid var(--fine-rule); border-radius: 0; background: var(--bg); max-width: calc(100% - 75px); font-size: 12px; color: var(--muted); padding: 8px 24px 8px 0; }
+.subjectSelect select { border: 0; border-bottom: 1px solid var(--control-line); border-radius: 0; background: var(--bg); max-width: calc(100% - 75px); font-size: 12px; color: var(--muted); padding: 8px 24px 8px 0; }
 .evidenceStrip { margin: 0; padding: 29px 0 30px; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); display: grid; grid-template-columns: repeat(3, 1fr) 1.2fr; }
 .evidenceStrip > div { padding-left: 30px; border-left: 1px solid var(--fine-rule); }
 .evidenceStrip > div:first-child { padding-left: 0; border-left: 0; }
@@ -63,7 +63,7 @@
 .recordHead > :last-child { text-align: right; padding-right: 28px; }
 .recordList { margin: 0; padding: 0; list-style: none; }
 .recordList button { display: grid; grid-template-columns: 23px minmax(0, 1fr) 100px 123px; align-items: center; gap: 15px; width: 100%; padding: 18px 0; border: 0; border-bottom: 1px solid var(--fine-rule); border-radius: 0; background: none; text-align: left; color: var(--ink); }
-.recordList button:hover { background: var(--surface); }
+.recordList button:hover { background: var(--surface-raised); }
 .recordIndex { color: var(--subtle); font-size: 10px; font-variant-numeric: tabular-nums; }
 .recordProduct { min-width: 0; }
 .recordProduct strong { display: block; font-size: 14px; font-weight: 550; overflow-wrap: anywhere; }

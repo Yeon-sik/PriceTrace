@@ -1,24 +1,27 @@
 ---
 name: PriceTrace
-description: 출처와 시점이 읽히는 Cinematic Data Instrument
+description: 흰색 바탕과 PriceTrace 녹색으로 읽는 가격 관측
 colors:
-  bg: "#101512"
-  surface: "#171e19"
-  surface-raised: "#202922"
-  ink: "#edf1e9"
-  muted: "#adb8af"
-  subtle: "#91a096"
-  line: "#344138"
-  fine-rule: "#2c3930"
-  accent: "#a5deac"
-  accent-soft: "#223d2b"
+  bg: "#ffffff"
+  surface: "#ffffff"
+  surface-raised: "#f5f7f6"
+  ink: "#19251e"
+  muted: "#52615a"
+  subtle: "#64716a"
+  line: "#dce3df"
+  fine-rule: "#e2e8e4"
+  accent: "#2a6342"
+  accent-soft: "#edf6ef"
   brand: "#2a6342"
-  on-brand: "#f2f7f0"
-  warning: "#e7c28c"
-  warning-bg: "#332a1e"
-  danger: "#f2aaa2"
-  danger-bg: "#382521"
-  image-paper: "#f0f0ea"
+  on-brand: "#ffffff"
+  warning: "#855207"
+  warning-bg: "#fff7e6"
+  danger: "#b42332"
+  danger-bg: "#fff1f2"
+  image-paper: "#f6f7f5"
+  control-line: "#7a8b80"
+  brand-hover: "#1d4f32"
+  overlay: "#19251e66"
 typography:
   display:
     fontFamily: "var(--font-suit), sans-serif"
@@ -85,12 +88,12 @@ components:
     rounded: "{rounded.control}"
     padding: "9px 12px"
   button-home:
-    backgroundColor: "{colors.ink}"
-    textColor: "{colors.bg}"
+    backgroundColor: "{colors.brand}"
+    textColor: "{colors.on-brand}"
     rounded: "{rounded.control}"
     padding: "13px 19px"
   button-home-hover:
-    backgroundColor: "{colors.accent}"
+    backgroundColor: "{colors.brand-hover}"
     textColor: "{colors.bg}"
     rounded: "{rounded.control}"
     padding: "13px 19px"
@@ -137,24 +140,24 @@ components:
 
 **Creative North Star: "Cinematic Data Instrument"**
 
-Cinematic Data Instrument는 짙은 광물성 바탕, 은빛에 가까운 본문, 절제한 녹색으로 가격 기록의 출처와 시점을 읽게 하는 시각 체계다. 공간감은 홈의 관측 도형에 모으고 상품·음식점·판매처·장바구니 작업 화면은 얇은 구분선과 일정한 정보 위계로 정돈한다.
+PriceTrace는 흰색 바탕과 선명한 본문 위에서 녹색으로 주요 동작, 선택 상태와 관측 정보를 강조한다. 공간감은 홈의 관측 도형에 모으고 상품·음식점·판매처·장바구니 작업 화면은 얇은 구분선과 일정한 정보 위계로 정돈한다.
 
 표현의 중심은 실제 관측 기록이다. 가격과 날짜는 도형 밖의 HTML에 남으며, 녹색은 선택된 관측·활성 상태·이동 동작을 설명한다. 배경 재질은 단색 면의 차이로 만들고 사진은 승인된 상품 이미지가 있을 때만 표시한다.
 
 **Key Characteristics:**
 
-- 녹색 기운의 짙은 중성 면과 밝은 본문, 가는 구분선.
+- 흰색 기본 면과 진한 본문, 중립적인 구분선, 역할이 분명한 녹색.
 - SUIT Variable 한 계열과 가격·날짜의 tabular numerals.
 - 홈의 제한된 공간 반응과 작업 화면의 평평한 구성.
 - 터치·키보드·모션 축소 상태에서도 읽을 수 있는 관측 정보.
 
-이 문서는 2026-10-05의 구현 소스에서 추출했다. 기본 토큰은 [globals.css](src/app/globals.css), 서체 로딩은 [layout.tsx](src/app/layout.tsx), 작업 화면은 [page.module.css](src/app/page.module.css)의 `Cinematic Data Instrument` 구간과 그 뒤의 보정, 홈은 [observation-instrument.module.css](src/features/observation-instrument/observation-instrument.module.css)를 기준으로 한다. 반응 로직은 [use-observation-motion.ts](src/features/observation-instrument/use-observation-motion.ts)에서 확인했다.
+2026-10-19 사용자의 흰색 배경 요청에 따라 색상 역할을 갱신했다. 기존 관측 도형과 탐색 흐름은 유지한다. 기본 토큰은 [globals.css](src/app/globals.css), 서체 로딩은 [layout.tsx](src/app/layout.tsx), 작업 화면은 [page.module.css](src/app/page.module.css)의 `White canvas` 구간과 그 뒤의 보정, 홈은 [observation-instrument.module.css](src/features/observation-instrument/observation-instrument.module.css)를 기준으로 한다. 반응 로직은 [use-observation-motion.ts](src/features/observation-instrument/use-observation-motion.ts)에서 확인했다.
 
 앞의 YAML은 실제 값의 기록이다. `rounded`·`spacing`의 키는 반복 사용된 값을 찾기 위한 문서용 이름이며 새로운 CSS 변수를 추가하지 않는다. `fine-rule`은 홈에만 정의된 로컬 변수이고 `image-paper`는 상품 사진 영역과 이미지 확대 화면에서 반복되는 색이다. 공통 `--card`는 `--surface`의 별칭이다. 구현에 없는 색상 단계는 만들지 않았다. 빌드·브라우저·접근성 검사 결과는 이 문서가 증명하지 않는다.
 
 ## Colors
 
-녹색 기운의 짙은 중성색 위에 밝은 글자와 옅은 녹색을 배치한다. 색상 값은 앞의 YAML을 기준으로 한다.
+페이지와 내비게이션은 흰색을 기본으로 하고, 녹색은 주요 버튼·링크·선택·관측 강조에 사용한다. 넓은 면은 중립색으로 유지한다. 색상 값은 앞의 YAML을 기준으로 한다.
 
 ### Primary
 
@@ -164,13 +167,13 @@ Cinematic Data Instrument는 짙은 광물성 바탕, 은빛에 가까운 본문
 
 ### Neutral
 
-- **광물성 바탕** — `bg`: 페이지, 내비게이션, 관측 판독부.
+- **흰색 바탕** — `bg`: 페이지, 내비게이션, 관측 판독부.
 - **작업 면** — `surface`: 상품·판매처 카드, 입력, 모달.
 - **올라온 면** — `surface-raised`: 선택 컨트롤, 이미지 자리표시, 비활성 버튼.
-- **밝은 본문** — `ink`: 제목, 가격, 주요 정보.
+- **주요 본문** — `ink`: 제목, 가격, 주요 정보.
 - **보조 본문** — `muted`: 설명과 비활성 내비게이션.
 - **메타데이터** — `subtle`: 날짜, 보조 아이콘, 자리표시 문구.
-- **구조선** — `line`: 공통 테두리. `fine-rule`: 홈의 더 낮은 대비 구분선.
+- **구조선** — `line`: 카드와 구역의 테두리. `fine-rule`: 홈의 더 낮은 대비 구분선. `control-line`: 입력칸과 검색 컨트롤의 경계.
 - **사진 바탕** — `image-paper`: 실제 상품 이미지의 가독성을 위한 밝은 면. 일반 작업 패널의 기본색으로 확장하지 않는다.
 
 ### Semantic feedback
@@ -221,11 +224,11 @@ Cinematic Data Instrument는 짙은 광물성 바탕, 은빛에 가까운 본문
 
 | 역할 | 구현 값 | 적용 |
 | --- | --- | --- |
-| 모달 | `0 24px 100px #0008` | 인증·공식 상품·추이·영양 모달 |
-| 떠 있는 장바구니 | `0 6px 24px #0005` | 데스크톱 장바구니 진입 |
+| 모달 | `0 24px 100px #19251e24` | 인증·공식 상품·추이·영양 모달 |
+| 떠 있는 장바구니 | `0 6px 24px #19251e14` | 데스크톱 장바구니 진입 |
 | 선택 표시 | `inset 0 -2px var(--accent)` | 분할 컨트롤·카탈로그 탭 |
 
-공통 모달 배경은 `#050a07c9`와 `backdrop-filter: blur(5px)`를 사용한다. 홈의 관측 도형은 900px perspective 안에서 SVG 기하만 기울인다. 가운데 가격 판독부는 기울이는 요소 밖에 있어 안정적으로 읽힌다.
+공통 모달 배경은 `var(--overlay)` (`#19251e66`)와 `backdrop-filter: blur(3px)`를 사용한다. 홈의 관측 도형은 900px perspective 안에서 SVG 기하만 기울인다. 가운데 가격 판독부는 기울이는 요소 밖에 있어 안정적으로 읽힌다.
 
 **The Quiet Work Surface Rule.** 작업 화면의 카드는 면과 테두리로 구분한다. 큰 그림자는 모달의 분리에 사용하고, 떠 있는 장바구니에는 작은 그림자를 사용한다.
 
@@ -241,7 +244,7 @@ Cinematic Data Instrument는 짙은 광물성 바탕, 은빛에 가까운 본문
 
 기본 작업 버튼은 동작 녹색의 채움과 밝은 글자를 사용한다. 전역 전환은 배경색·테두리색·글자색에 각각 160ms를 사용한다. 비활성 버튼은 올라온 면과 메타데이터 색으로 바뀌고 `not-allowed` 커서를 사용한다. 공통 버튼에 별도의 이동·확대 호버 효과는 없다.
 
-홈의 첫 탐색 버튼은 밝은 바탕과 짙은 글자이며, 호버에서 관측 녹색 바탕으로 바뀐다. 높이는 최소 48px다. 두 번째 탐색 동작은 투명 바탕과 아래 구분선을 사용하고 호버에서 글자·선이 녹색으로 바뀐다. 작업 화면의 가격 기록 버튼은 투명 바탕·테두리를 사용한다.
+홈의 첫 탐색 버튼은 PriceTrace 녹색 바탕과 흰색 글자이며, 호버에서 더 짙은 녹색으로 바뀐다. 높이는 최소 48px다. 두 번째 탐색 동작은 투명 바탕과 아래 구분선을 사용하고 호버에서 글자·선이 녹색으로 바뀐다. 작업 화면의 가격 기록 버튼은 투명 바탕·테두리를 사용한다.
 
 키보드 포커스는 전역 `2px solid var(--accent)` outline과 4px offset을 사용한다. 원래의 버튼 의미와 접근 가능한 이름을 유지한다.
 
