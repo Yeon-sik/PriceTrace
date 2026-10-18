@@ -49,23 +49,25 @@ function displayUnitLabel(unit: NutritionDisplayUnit) {
 }
 
 function NutritionFacts({ food }: { food: NutritionFood }) {
+  const displayUnit = NUTRITION_DISPLAY_UNITS.find((unit) => unit === food.basisUnit.trim().toLowerCase());
+  const displayBasis = displayUnit ? displayUnitLabel(displayUnit) : formatBasis(food);
+  const displayAmount = displayUnit === "serving" ? 1 : NUTRITION_DISPLAY_AMOUNT;
   return <article className={styles.nutritionFacts} aria-label={`${food.name} 영양성분표`}>
     <header className={styles.nutritionFactsHeader}>
       <span>영양정보</span>
       <h3>{food.name}</h3>
       <div className={styles.nutritionFactsBasis}>
-        <strong>기준 단위당 영양성분</strong>
-        <small>{formatBasis(food)} 기록을 {food.basisUnit.trim().toLowerCase() === "serving" ? "1회분" : `${NUTRITION_DISPLAY_AMOUNT}${food.basisUnit}`} 기준으로 환산</small>
+        <strong>{displayBasis} 기준</strong>
+        {displayUnit && food.basisAmount !== displayAmount && <small>{formatBasis(food)} 기록을 {displayBasis} 기준으로 환산</small>}
       </div>
     </header>
-    <section className={styles.nutritionTableSection} aria-label="기준 단위당 영양성분">
-      <h4>기준 단위당 영양성분</h4>
+    <section className={styles.nutritionTableSection} aria-label={`${displayBasis} 기준 영양성분`}>
       <div className={styles.nutritionTableWrap}>
         <table className={styles.nutritionTable}>
-          <thead><tr><th scope="col">영양성분</th>{NUTRITION_DISPLAY_UNITS.map((unit) => <th key={unit} scope="col">{displayUnitLabel(unit)}</th>)}</tr></thead>
+          <thead><tr><th scope="col">영양성분</th><th scope="col">함량</th></tr></thead>
           <tbody>{nutritionRows(food).map((row) => <tr key={row.field}>
             <th scope="row"><NutritionRowLabel row={row} /></th>
-            {NUTRITION_DISPLAY_UNITS.map((targetUnit) => <td key={targetUnit}>{formatAmount(nutritionValueAtAmount(food, row.value, targetUnit), row.unit)}</td>)}
+            <td>{formatAmount(displayUnit ? nutritionValueAtAmount(food, row.value, displayUnit) : row.value, row.unit)}</td>
           </tr>)}</tbody>
         </table>
       </div>

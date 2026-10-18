@@ -494,7 +494,7 @@ test("영양 표는 탄수화물과 지방 총량 아래 포함된 성분을 보
     ["지방 (총)", "28g"], ["지방 중 포화지방", "9g"], ["지방 중 트랜스지방", "0.4g"],
   ]) {
     const row = table.getByRole("row").filter({ has: page.getByRole("rowheader", { name, exact: true }) });
-    await expect(row.getByRole("cell").nth(1)).toHaveText(value);
+    await expect(row.getByRole("cell")).toHaveText(value);
   }
   await expect(table.getByRole("rowheader", { name: "탄수화물 중 당류", exact: true }).locator("span").first())
     .toHaveAttribute("style", /padding-inline-start: 1em/);
@@ -516,7 +516,7 @@ test("알 수 없는 하위 영양성분을 0으로 표시하지 않는다", asy
   await expect(table.getByRole("rowheader", { name: "탄수화물 중 식이섬유", exact: true })).toHaveCount(0);
   for (const name of ["탄수화물 중 당류", "지방 중 포화지방", "지방 중 트랜스지방"]) {
     const row = table.getByRole("row").filter({ has: page.getByRole("rowheader", { name, exact: true }) });
-    await expect(row.getByRole("cell")).toHaveText(["-", "-", "-"]);
+    await expect(row.getByRole("cell")).toHaveText("-");
   }
 });
 
@@ -534,13 +534,14 @@ test("카구리 실응답의 기록 기준량과 같은 단위 환산을 영양 
   await expect(nutritionDialog.getByRole("table")).toHaveCount(1);
   await nutritionDialog.getByText("기록된 값 보기", { exact: false }).click();
   await expect(nutritionDialog.getByText("카구리 큰사발면 · 103g")).toBeVisible();
-  await expect(nutritionFacts).toContainText("기준 단위당 영양성분");
+  await expect(nutritionFacts).toContainText("100g 기준");
   await expect(nutritionDialog).toContainText("455kcal");
   await expect(nutritionFacts).toContainText("441.75kcal");
   await expect(nutritionDialog).toContainText("1,550mg");
   await expect(nutritionFacts).toContainText("1,504.85mg");
-  await expect(nutritionFacts).toContainText("100ml");
-  await expect(nutritionFacts.getByRole("columnheader", { name: "1회분", exact: true })).toBeVisible();
+  await expect(nutritionFacts.getByRole("columnheader")).toHaveText(["영양성분", "함량"]);
+  await expect(nutritionFacts).not.toContainText("100ml");
+  await expect(nutritionFacts).not.toContainText("1회분");
   await expect(nutritionFacts).not.toContainText("100serving");
   await expect(nutritionFacts).toContainText("-");
 });
