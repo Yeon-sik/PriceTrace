@@ -7,13 +7,13 @@ Mode: Experience at the home observation instrument; Operate in every working vi
 
 THESIS: Make the connection between a product, a seller, and a moment visible. The first screen contains a usable observation, rather than decorative product mockups or a feature-card grid.
 
-OWN-WORLD: Mineral-black canvas, slightly warm silver type, narrow rules, compact corners, one carefully rationed green. A self-hosted Korean sans carries the product; tabular numerals carry its measurements. No floating glass system.
+OWN-WORLD: White canvas, dark readable type, neutral dividers, compact corners, and PriceTrace green for primary actions, selection, and observation highlights. Broad surfaces do not carry the brand color. A self-hosted Korean sans carries the product; tabular numerals carry its measurements. No floating glass system.
 
 STORY: Read a source-backed price, move through its recorded moments, then open the existing full history or explore products, menus, and sellers. All facts come from the current public projection and existing grouping rules.
 
 FIRST VIEWPORT: One compact navigation bar. Large two-line Korean statement on the left; a spatial observation diagram on the right with a stable, readable data plate. The main exploration action sits below the statement. Below this, a compact source inventory and a useful recent-observation list.
 
-FORM: The user's pinned Cinematic Data Instrument direction. Concept alternatives were considered against actual task clarity; no visual-choice interview per the explicit request. Native scroll, SVG runtime data graphics, and an event-driven pointer response. No new animation runtime or continuous render loop.
+FORM: The user's 2026-10-19 white-background direction, retaining the existing observation instrument and navigation structure. Concept alternatives were considered against actual task clarity; no visual-choice interview per the explicit request. Native scroll, SVG runtime data graphics, and an event-driven pointer response. No new animation runtime or continuous render loop.
 
 FINISH: unreviewed and undocumented is unfinished; this build ends with the finish review, the verdict, DESIGN.md, and every shipping raster carrying its provenance
 

@@ -24,7 +24,7 @@ The implemented workflows support people comparing products and restaurant menus
 
 ## Brand Commitments
 
-The user specifies Cinematic Data Instrument: a near-black mineral surface, restrained PriceTrace green, a spatial first impression, and quiet working views. Avoid generic SaaS patterns, purple-blue gradients, excessive glow, nested cards, and meaningless particles.
+The user specifies a white background with PriceTrace green as a distinctive accent (2026-10-19). Green identifies primary actions, selection, and observed data; broad surfaces remain white or neutral. Preserve the spatial observation instrument and quiet working views. Avoid generic SaaS patterns, purple-blue gradients, excessive glow, nested cards, and meaningless particles.
 
 ## Evidence on Hand
 
