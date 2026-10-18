@@ -162,9 +162,11 @@ export default function Home() {
     return [...publicReceiptData.observations.filter((row) => !ownItems.has(`${row.item.receiptId}:${row.item.id}`)), ...authenticatedObservations];
   }, [authenticatedObservations]);
   const productGroups = useMemo(() => groupProductObservations(observationListings), [observationListings]);
+  // Candidate discovery belongs to the authorized admin page, never public renders.
+  const adminPageActive = page === "admin" && isAdmin;
   const approvalCandidates = useMemo(
-    () => observationListings.map(receiptObservationCandidate),
-    [observationListings],
+    () => adminPageActive ? observationListings.map(receiptObservationCandidate) : [],
+    [adminPageActive, observationListings],
   );
   const cartProducts = useMemo(() => [
     ...productGroups.map(cartProductFromGroup),
@@ -209,7 +211,7 @@ export default function Home() {
   const cartGroups = cartSummary.items;
   const cartTotal = cartSummary.totalKrw;
   const cartQuantityTotal = cartSummary.totalQuantity;
-  const officialCandidates = useMemo(() => productGroups.map((group) => {
+  const officialCandidates = useMemo(() => (adminPageActive ? productGroups : []).map((group) => {
     const receiptCandidate = receiptObservationCandidate(group.latest);
     const reviewedName = findPxProductNameReview(receiptCandidate, pxProductNameReviews);
     const reviewedListing = reviewedName
@@ -250,7 +252,7 @@ export default function Home() {
       officialImageMediaType: officialListing?.image?.mediaType,
       officialImageByteLength: officialListing?.image?.byteLength,
     };
-  }), [productGroups]);
+  }), [adminPageActive, productGroups]);
 
   function openCartModal(product: CartProduct) {
     setCartProductToAdd(product);
@@ -299,7 +301,7 @@ export default function Home() {
       {page === "products" && <ProductBrowser groups={productGroups} query={query} setQuery={setQuery} category={category} setCategory={setCategory} martType={martType} setMartType={setMartType} selectedStore={selectedStore} setSelectedStore={setSelectedStore} sort={sort} setSort={setSort} authRevision={authRevision} selectedStoreProductId={selectedStoreProductId} selectedCatalogProductId={selectedCatalogProductId} onClearIdentity={() => navigate("products", { replace: true })} onAdd={openCartModal} onTrend={setTrendGroup} onOpenStore={(store) => navigate("markets", { selectedMarket: store })} />}
       {page === "markets" && <MarketBrowser receipts={receipts} observations={observationListings} selectedStore={selectedMarket} selectedStoreId={selectedStoreId} onSelectStore={(store) => navigate("markets", { selectedMarket: store, replace: true })} onSelectStoreId={() => navigate("markets", { replace: true })} onOpenTrend={setTrendGroup} />}
       {page === "cart" && <CartPage products={cartProducts} lines={lines} onQuantityChange={updateCartQuantity} onRemove={removeCart} onClear={clearCart} onBrowse={() => navigate("products")} />}
-      {page === "admin" && isAdmin && <AdminPage candidates={officialCandidates} approvalCandidates={approvalCandidates} receipts={receipts} />}
+      {adminPageActive && <AdminPage candidates={officialCandidates} approvalCandidates={approvalCandidates} receipts={receipts} />}
     </main>
 
     <footer className={styles.footer}><strong>PriceTrace.</strong><span>출처가 있는 가격, 근거가 있는 비교.</span><a href="https://www.figma.com/community/file/1166831539721848736" target="_blank" rel="noreferrer">Icons by 480 Design · CC BY 4.0</a></footer>
