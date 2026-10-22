@@ -56,9 +56,11 @@ export interface Database {
   public: {
     Tables: {
       profiles: { Row: { id:string; display_name:string|null; created_at:string }; Insert: { id:string; display_name?:string|null }; Update: { display_name?:string|null } };
+      brand_hierarchy_write_guard: { Row: { singleton:boolean; revision:number }; Insert: { singleton?:boolean; revision?:number }; Update: { revision?:number } };
+      brand_admin_actions: { Row: { id:string; brand_id:string; action:string; payload:Json; created_by:string|null; created_at:string }; Insert: { id?:string; brand_id:string; action:string; payload:Json; created_by?:string|null; created_at?:string }; Update: { payload?:Json } };
       stores: { Row: { id:string; user_id:string; name:string; merchant_name:string|null; branch_name:string|null; business_kind:string; merchant_id:string|null; catalog_namespace:string|null; business_registration_number:string|null; address:string|null; phone:string|null; identity_fingerprint:string|null; created_at:string }; Insert: { id?:string; user_id:string; name:string; merchant_name?:string|null; branch_name?:string|null; business_kind?:string; merchant_id?:string|null; catalog_namespace?:string|null; business_registration_number?:string|null; address?:string|null; phone?:string|null; identity_fingerprint?:string|null }; Update: { name?:string; merchant_name?:string|null; branch_name?:string|null; business_kind?:string; merchant_id?:string|null; catalog_namespace?:string|null; business_registration_number?:string|null; address?:string|null; phone?:string|null; identity_fingerprint?:string|null } };
       catalog_categories: { Row: { id:string; purchase_type:string; parent_id:string|null; slug:string; display_name:string; depth:number }; Insert: { id?:string; purchase_type:string; parent_id?:string|null; slug:string; display_name:string; depth?:number }; Update: { parent_id?:string|null; display_name?:string; depth?:number } };
-      brands: { Row: { id:string; canonical_name:string; normalized_name:string; logo_url:string|null; official_site_url:string|null; status:string; created_by:string|null; created_at:string; updated_at:string }; Insert: { id?:string; canonical_name:string; logo_url?:string|null; official_site_url?:string|null; status?:string; created_by?:string|null }; Update: { canonical_name?:string; logo_url?:string|null; official_site_url?:string|null; status?:string } };
+      brands: { Row: { parent_brand_id:string|null; id:string; canonical_name:string; normalized_name:string; logo_url:string|null; official_site_url:string|null; status:string; created_by:string|null; created_at:string; updated_at:string }; Insert: { parent_brand_id?:string|null; id?:string; canonical_name:string; logo_url?:string|null; official_site_url?:string|null; status?:string; created_by?:string|null }; Update: { parent_brand_id?:string|null; canonical_name?:string; logo_url?:string|null; official_site_url?:string|null; status?:string } };
       brand_aliases: { Row: { id:string; brand_id:string; alias_name:string; normalized_alias:string; locale:string|null; created_by:string|null; created_at:string }; Insert: { id?:string; brand_id:string; alias_name:string; locale?:string|null; created_by?:string|null }; Update: { brand_id?:string; alias_name?:string; locale?:string|null } };
       standard_products: { Row: { id:string; purchase_type:string; canonical_name:string; brand_id:string|null; brand:string|null; product_reference_url:string|null; category_id:string|null; status:string; verification_status:"verified"|"unverified"; created_by:string|null; created_at:string; updated_at:string }; Insert: { id?:string; purchase_type:string; canonical_name:string; brand_id?:string|null; product_reference_url?:string|null; category_id?:string|null; status?:string; verification_status?:"verified"|"unverified"; created_by?:string|null }; Update: { canonical_name?:string; brand_id?:string|null; product_reference_url?:string|null; category_id?:string|null; status?:string; verification_status?:"verified"|"unverified" } };
       standard_product_brand_evidence: { Row: { id:string; standard_product_id:string; catalog_product_id:string|null; brand_id:string; observed_name:string; normalized_observed_name:string; source_type:"receipt"|"official_store"|"manual"|"legacy_import"; source_label:string|null; source_product_code:string|null; source_url:string|null; observed_at:string; created_by:string|null; created_at:string }; Insert: { id?:string; standard_product_id:string; catalog_product_id?:string|null; brand_id:string; observed_name:string; source_type:"receipt"|"official_store"|"manual"|"legacy_import"; source_label?:string|null; source_product_code?:string|null; source_url?:string|null; observed_at?:string; created_by?:string|null }; Update: { brand_id?:string; observed_name?:string; source_type?:"receipt"|"official_store"|"manual"|"legacy_import"; source_label?:string|null; source_product_code?:string|null; source_url?:string|null; observed_at?:string } };
@@ -894,6 +896,45 @@ export interface Database {
           standard_product_id:string;
           standard_name:string;
           brand_name:string|null;
+          content_amount:number;
+          content_unit:string;
+          package_count:number;
+          reference_unit:number;
+          coupang_listed_price_krw:number|null;
+          coupang_quantity:number|null;
+          coupang_content_amount:number|null;
+          coupang_content_unit:string|null;
+          coupang_max_bundle_quantity:number|null;
+          coupang_max_bundle_listed_price_krw:number|null;
+          coupang_product_url:string|null;
+          coupang_observed_at:string|null;
+        }[];
+      };
+      get_public_brand_catalog_v1: {
+        Args: { p_query?:string|null; p_limit?:number; p_offset?:number };
+        Returns: { brand_id:string; canonical_name:string; parent_brand_id:string|null; parent_canonical_name:string|null; matched_name:string; match_kind:string; logo_url:string|null; official_site_url:string|null }[];
+      };
+      admin_save_brand_v1: {
+        Args: { p_brand_id:string|null; p_canonical_name:string; p_parent_brand_id:string|null; p_logo_url:string|null; p_official_site_url:string|null };
+        Returns: string;
+      };
+      admin_add_brand_alias_v1: { Args: { p_brand_id:string; p_alias_name:string }; Returns:string };
+      admin_delete_brand_alias_v1: { Args: { p_brand_id:string; p_alias_id:string }; Returns:string };
+      get_public_exact_standard_product_catalog_v5: {
+        Args: Record<string, never>;
+        Returns: {
+          source_label:string;
+          source_product_code:string;
+          catalog_product_id:string;
+          standard_product_id:string;
+          standard_name:string;
+          brand_name:string|null;
+          brand_id:string|null;
+          parent_brand_id:string|null;
+          parent_brand_name:string|null;
+          standard_category_id:string;
+          standard_category_slug:string;
+          standard_category_name:string;
           content_amount:number;
           content_unit:string;
           package_count:number;

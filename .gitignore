@@ -131,3 +131,10 @@ e2e/*
 .impeccable/review/
 .impeccable/*.cjs
 .impeccable/inspect-subject.ts
+
+# Versioned brand catalog regression coverage
+!src/domain/brand-hierarchy.test.ts
+!src/domain/public-standard-catalog-v5.test.ts
+!src/repositories/public-brand.repository.test.ts
+!src/repositories/admin-brand.repository.test.ts
+!e2e/brand-hall.spec.ts

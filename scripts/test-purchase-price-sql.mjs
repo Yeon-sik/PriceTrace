@@ -37,7 +37,23 @@ try {
 
   const migrations = readdirSync(join(root, "supabase/migrations")).filter(f => f.endsWith(".sql")).sort();
   let baselineChecked = false;
+  let brandCompatibilitySnapshot;
+  let brandIdentitySnapshot;
+  const legacyBrandIdentities = async () => ({
+    brands: await db.query("select id, canonical_name from public.brands order by id"),
+    products: await db.query("select id, brand_id, brand from public.standard_products order by id"),
+  });
+  const legacyCatalogDefinitions = () => db.query(`select proname, pg_get_functiondef(oid) as definition
+    from pg_proc where pronamespace = 'public'::regnamespace and proname in (
+      'get_public_standard_product_catalog', 'get_public_exact_standard_product_catalog',
+      'get_public_exact_standard_product_catalog_v1', 'get_public_exact_standard_product_catalog_v2',
+      'get_public_exact_standard_product_catalog_v3', 'get_public_exact_standard_product_catalog_v4'
+    ) order by proname`);
   for (const file of migrations) {
+    if (file.endsWith("brand_hierarchy_public_catalog.sql")) {
+      brandCompatibilitySnapshot = await legacyCatalogDefinitions();
+      brandIdentitySnapshot = await legacyBrandIdentities();
+    }
     if (file.endsWith("purchase_price_runtime_compatibility.sql")) {
       await assert.rejects(() => db.exec(readSql("tests", "purchase_price_observation_v4.sql")),
         error => error.code === "42601" && error.internalQuery?.includes("v_legacy_kind is distinct from case v_purchase_kind"));
@@ -69,8 +85,11 @@ try {
     }
   }
   assert.ok(baselineChecked);
+  assert.deepEqual(await legacyCatalogDefinitions(), brandCompatibilitySnapshot);
+  assert.deepEqual(await legacyBrandIdentities(), brandIdentitySnapshot);
+  console.log("BRAND_LEGACY_V1_V4_DEFINITIONS_UNCHANGED_PASS");
   console.log(`MIGRATION_BOOTSTRAP_WITH_DOCUMENTED_ACCOMMODATIONS_PASS ${migrations.length}`);
-  for (const file of ["purchase_price_observation_v4.sql", "purchase_price_line_authority_response.sql", "purchase_restaurant_identity_recovery.sql", "user_confirmed_purchase_restaurants.sql", "owner_confirmed_cross_purchase.sql", "restaurant_component_parent_reads.sql", "restaurant_component_identity_resolution.sql", "purchase_public_identity_search.sql", "verified_receipt_ingestion_v2.sql"]) {
+  for (const file of ["brand_hierarchy_public_catalog.sql", "purchase_price_observation_v4.sql", "purchase_price_line_authority_response.sql", "purchase_restaurant_identity_recovery.sql", "user_confirmed_purchase_restaurants.sql", "owner_confirmed_cross_purchase.sql", "restaurant_component_parent_reads.sql", "restaurant_component_identity_resolution.sql", "purchase_public_identity_search.sql", "verified_receipt_ingestion_v2.sql"]) {
     try {
       const result = await db.exec(readSql("tests", file));
       console.log(`SQL_FIXTURE_PASS ${file}`, result.flatMap(r => r.rows).filter(r => r.result));
