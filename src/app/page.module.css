@@ -353,3 +353,6 @@
   .restaurantBoundaryNotice { align-items: flex-start; }
   .restaurantBoundaryNotice > svg { margin-top: 2px; }
 }
+
+@media(max-width:760px){.brandHallMobileNav{grid-template-columns:repeat(6,minmax(0,1fr))!important}.brandHallMobileNav button{min-width:0;min-height:48px;font-size:11px;white-space:normal;padding-left:1px;padding-right:1px}}
+@media(max-width:760px){.brandHallAccount{min-width:0;flex-shrink:1}.brandHallAccount .userMenu{min-width:0;gap:8px}.brandHallAccount .userMenu span{min-width:0;max-width:72px;white-space:nowrap}.brandHallAccount .userMenu button,.brandHallAccount .adminShortcut{flex-shrink:0}}

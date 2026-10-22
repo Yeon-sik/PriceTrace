@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { buildAppNavigationUrl, buildIdentityNavigationUrl, readAppNavigationUrl } from "./app-navigation";
 
 const noIdentity = {
+  selectedBrandId: null,
   selectedStoreId: null,
   selectedStoreProductId: null,
   selectedRestaurantMenuId: null,
@@ -9,6 +10,18 @@ const noIdentity = {
 };
 
 describe("app navigation URL", () => {
+  it("round-trips brand identities only on the brand page and clears invalid selectors", () => {
+    const brandId = "55555555-5555-4555-8555-555555555555";
+    const href = `https://example.test/PriceTrace?campaign=brand&view=brands&brandId=${brandId}#top`;
+    const state = readAppNavigationUrl(href);
+    expect(state.page).toBe("brands");
+    expect(state.selectedBrandId).toBe(brandId);
+    expect(buildAppNavigationUrl(href, state)).toBe(`/PriceTrace?campaign=brand&view=brands&brandId=${brandId}#top`);
+    expect(readAppNavigationUrl(href.replace(brandId, "빙그레")).selectedBrandId).toBeNull();
+    expect(readAppNavigationUrl(href.replace("view=brands", "view=products")).selectedBrandId).toBeNull();
+    expect(buildAppNavigationUrl(href, { ...state, page: "products" })).not.toContain("brandId");
+    expect(buildAppNavigationUrl(href, { ...state, selectedBrandId: "invalid" })).not.toContain("brandId");
+  });
   it("reads supported pages and ignores an unknown view", () => {
     expect(readAppNavigationUrl("https://example.test/PriceTrace?view=products")).toEqual({
       page: "products",

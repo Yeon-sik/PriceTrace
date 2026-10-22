@@ -1,0 +1,23 @@
+.panel { padding: 28px 0; }
+.header { display: flex; flex-wrap: wrap; align-items: flex-start; justify-content: space-between; gap: 20px; margin-bottom: 24px; }
+.header h2 { margin: 0 0 8px; font-size: 20px; }
+.header p { margin: 0; color: var(--muted); }
+.workspace { display: grid; grid-template-columns: minmax(240px, 1fr) minmax(280px, 1fr); gap: 40px; }
+.search, .editor label { display: grid; gap: 8px; }
+.search { margin-bottom: 16px; }
+.list, .aliases ul { list-style: none; padding: 0; margin: 0; }
+.list li { border-bottom: 1px solid var(--line); }
+.list button { display: grid; width: 100%; gap: 4px; text-align: left; padding: 16px 12px; background: transparent; color: var(--ink); overflow-wrap: anywhere; }
+.list button:hover, .list button[aria-pressed="true"] { background: var(--accent-soft); }
+.list span, .list small, .help { color: var(--muted); font-size: 13px; }
+.editor { min-width: 0; }
+.editor h3 { margin: 0 0 20px; font-size: 20px; }
+.editor fieldset { display: grid; gap: 20px; margin: 0; padding: 0; border: 0; min-width: 0; }
+.editor input, .editor select { width: 100%; min-height: 44px; }
+.help { margin: -8px 0 0; max-width: 65ch; }
+.error { color: var(--danger); }
+.aliases { margin-top: 36px; border-top: 1px solid var(--line); padding-top: 24px; }
+.aliases li { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 8px 0; }
+.aliases li button { background: transparent; color: var(--danger); border-color: var(--control-line); }
+.aliases form { display: grid; gap: 12px; margin-top: 20px; }
+@media (max-width: 760px) { .workspace { grid-template-columns: 1fr; gap: 32px; } }

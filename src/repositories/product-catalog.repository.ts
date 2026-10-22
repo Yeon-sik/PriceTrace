@@ -1,5 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { ProductSpecification } from "../domain/canonical-price";
+import { PublicStandardCatalogV5RowsSchema } from "../domain/public-standard-catalog-v5";
 import {
   buildPublicStandardCatalogIndex,
   publicStandardMappingKey,
@@ -94,6 +95,18 @@ type PublicRowKey = { source_label?: string; source_product_code: string; catalo
 
 export class ProductCatalogRepository {
   constructor(private readonly client: SupabaseClient) {}
+
+  /** Hierarchy consumers require v5. Never infer missing identities via v4 names.
+   * The established load() negotiation and its public return shape stay intact. */
+  async loadHierarchyRows(signal: AbortSignal) {
+    const rows = await fetchCatalogPages<PublicRowKey>(
+      (from, to) => this.client.rpc("get_public_exact_standard_product_catalog_v5", {}, { count: "exact" })
+        .order("source_label").order("source_product_code").order("catalog_product_id")
+        .range(from, to).abortSignal(signal),
+      (row) => JSON.stringify([row.source_label, row.source_product_code, row.catalog_product_id]), signal,
+    );
+    return PublicStandardCatalogV5RowsSchema.parse(rows);
+  }
 
   private async loadPublicRows(signal: AbortSignal, signedIn: boolean) {
     for (const rpc of publicRpcs) {

@@ -24,6 +24,7 @@ import { PriceTrendModal } from "./PriceTrendModal";
 import { ProductBrowser } from "./ProductBrowser";
 import { MarketBrowser } from "./MarketBrowser";
 import { RestaurantBrowser } from "./RestaurantBrowser";
+import { BrandHall } from "./BrandHall";
 import styles from "./page.module.css";
 
 const AdminPage = dynamic(() => import("./AdminPage").then((module) => module.AdminPage), {
@@ -84,6 +85,7 @@ export default function Home() {
   const [selectedStoreId, setSelectedStoreId] = useState<string | null>(null);
   const [selectedStoreProductId, setSelectedStoreProductId] = useState<string | null>(null);
   const [selectedRestaurantMenuId, setSelectedRestaurantMenuId] = useState<string | null>(null);
+  const [selectedBrandId, setSelectedBrandId] = useState<string | null>(null);
   const [selectedCatalogProductId, setSelectedCatalogProductId] = useState<string | null>(null);
   const [category, setCategory] = useState<ProductCategory>("전체");
   const [query, setQuery] = useState("");
@@ -114,6 +116,7 @@ export default function Home() {
       selectedStoreId?: string | null;
       selectedStoreProductId?: string | null;
       selectedRestaurantMenuId?: string | null;
+      selectedBrandId?: string | null;
       selectedCatalogProductId?: string | null;
       replace?: boolean;
     } = {},
@@ -126,6 +129,8 @@ export default function Home() {
     const nextStoreProductId = nextPage === "products" ? options.selectedStoreProductId ?? null : null;
     const nextRestaurantMenuId = nextPage === "restaurants" ? options.selectedRestaurantMenuId ?? null : null;
     const nextCatalogProductId = nextPage === "products" ? options.selectedCatalogProductId ?? null : null;
+    const nextBrandId = nextPage === "brands" ? options.selectedBrandId ?? null : null;
+    setSelectedBrandId(nextBrandId);
     setPage(nextPage);
     setSelectedMarket(nextMarket);
     setSelectedRestaurant(nextRestaurant);
@@ -142,6 +147,7 @@ export default function Home() {
       selectedStoreId: nextStoreId,
       selectedStoreProductId: nextStoreProductId,
       selectedRestaurantMenuId: nextRestaurantMenuId,
+      selectedBrandId: nextBrandId,
       selectedCatalogProductId: nextCatalogProductId,
     });
     const currentUrl = `${window.location.pathname}${window.location.search}${window.location.hash}`;
@@ -177,6 +183,7 @@ export default function Home() {
   useEffect(() => {
     const syncFromUrl = (closeTransientUi: boolean) => {
       const navigation = readAppNavigationUrl(window.location.href);
+      setSelectedBrandId(navigation.selectedBrandId);
       setPage(navigation.page);
       setSelectedMarket(navigation.selectedMarket);
       setSelectedRestaurant(navigation.selectedRestaurant);
@@ -286,11 +293,12 @@ export default function Home() {
         <button className={page === "home" ? styles.navActive : ""} aria-current={page === "home" ? "page" : undefined} onClick={() => navigate("home")}>홈</button>
         <button className={page === "restaurants" ? styles.navActive : ""} aria-current={page === "restaurants" ? "page" : undefined} onClick={() => navigate("restaurants")}>음식점</button>
         <button className={page === "products" ? styles.navActive : ""} aria-current={page === "products" ? "page" : undefined} onClick={() => navigate("products")}>상품 목록</button>
+        <button className={page === "brands" ? styles.navActive : ""} aria-current={page === "brands" ? "page" : undefined} onClick={() => navigate("brands")}>브랜드관</button>
         <button className={page === "cart" ? styles.navActive : ""} aria-current={page === "cart" ? "page" : undefined} onClick={() => navigate("cart")}>장바구니 <span className={styles.navBadge}>{cartQuantityTotal}</span></button>
         <button className={page === "markets" ? styles.navActive : ""} aria-current={page === "markets" ? "page" : undefined} onClick={() => navigate("markets")}>판매처 기록</button>
         {isAdmin && <button className={page === "admin" ? styles.navActive : ""} aria-current={page === "admin" ? "page" : undefined} onClick={() => navigate("admin")}>관리자</button>}
       </div></nav>
-        <div className={styles.account}>{isAdmin && <button className={styles.adminShortcut} onClick={() => navigate("admin")}>관리자</button>}<AuthPanel onChange={handleAuthChange} onOpen={() => setAuthOpen(true)} /></div>
+        <div className={`${styles.account} ${page === "brands" || page === "admin" ? styles.brandHallAccount : ""}`}>{isAdmin && <button className={styles.adminShortcut} onClick={() => navigate("admin")}>관리자</button>}<AuthPanel onChange={handleAuthChange} onOpen={() => setAuthOpen(true)} /></div>
       </div>
     </header>
 
@@ -299,6 +307,7 @@ export default function Home() {
       {page === "home" && <ObservationHome groups={publicProductGroups} receiptCount={receipts.length} cart={{ count: cartGroups.length, quantity: cartQuantityTotal, total: cartTotal }} onProducts={() => openProducts()} onRestaurants={() => navigate("restaurants")} onMarkets={() => navigate("markets")} onCart={() => navigate("cart")} onTrend={setTrendGroup} />}
       {page === "restaurants" && <RestaurantBrowser selectedRestaurant={selectedRestaurant} selectedRestaurantMenuId={selectedRestaurantMenuId} onSelectRestaurant={(restaurantId) => navigate("restaurants", { selectedRestaurant: restaurantId, replace: restaurantId === null })} onClearMenuIdentity={() => navigate("restaurants", { replace: true })} />}
       {page === "products" && <ProductBrowser groups={productGroups} query={query} setQuery={setQuery} category={category} setCategory={setCategory} martType={martType} setMartType={setMartType} selectedStore={selectedStore} setSelectedStore={setSelectedStore} sort={sort} setSort={setSort} authRevision={authRevision} selectedStoreProductId={selectedStoreProductId} selectedCatalogProductId={selectedCatalogProductId} onClearIdentity={() => navigate("products", { replace: true })} onAdd={openCartModal} onTrend={setTrendGroup} onOpenStore={(store) => navigate("markets", { selectedMarket: store })} />}
+      {page === "brands" && <BrandHall selectedBrandId={selectedBrandId} onSelect={(id) => navigate("brands", { selectedBrandId: id })} onProduct={(id) => navigate("products", { selectedCatalogProductId: id })} />}
       {page === "markets" && <MarketBrowser receipts={receipts} observations={observationListings} selectedStore={selectedMarket} selectedStoreId={selectedStoreId} onSelectStore={(store) => navigate("markets", { selectedMarket: store, replace: true })} onSelectStoreId={() => navigate("markets", { replace: true })} onOpenTrend={setTrendGroup} />}
       {page === "cart" && <CartPage products={cartProducts} lines={lines} onQuantityChange={updateCartQuantity} onRemove={removeCart} onClear={clearCart} onBrowse={() => navigate("products")} />}
       {adminPageActive && <AdminPage candidates={officialCandidates} approvalCandidates={approvalCandidates} receipts={receipts} />}
@@ -306,10 +315,11 @@ export default function Home() {
 
     <footer className={styles.footer}><strong>PriceTrace.</strong><span>출처가 있는 가격, 근거가 있는 비교.</span><a href="https://www.figma.com/community/file/1166831539721848736" target="_blank" rel="noreferrer">Icons by 480 Design · CC BY 4.0</a></footer>
     {page !== "cart" && <FloatingCartButton quantity={cartQuantityTotal} total={cartTotal} onOpen={() => navigate("cart")} />}
-    <nav className={styles.mobileNav} aria-label="모바일 주요 메뉴">
+    <nav className={`${styles.mobileNav} ${styles.brandHallMobileNav}`} aria-label="모바일 주요 메뉴">
       <button className={page === "home" ? styles.mobileNavActive : ""} aria-current={page === "home" ? "page" : undefined} onClick={() => navigate("home")}><Icon name="home" size={22} />홈</button>
       <button className={page === "restaurants" ? styles.mobileNavActive : ""} aria-current={page === "restaurants" ? "page" : undefined} onClick={() => navigate("restaurants")}><Icon name="restaurant" size={22} />음식점</button>
       <button className={page === "products" ? styles.mobileNavActive : ""} aria-current={page === "products" ? "page" : undefined} onClick={() => navigate("products")}><Icon name="product" size={22} />상품 목록</button>
+      <button className={page === "brands" ? styles.mobileNavActive : ""} aria-current={page === "brands" ? "page" : undefined} onClick={() => navigate("brands")}><Icon name="product" size={22} />브랜드관</button>
       <button className={page === "cart" ? styles.mobileNavActive : ""} aria-current={page === "cart" ? "page" : undefined} onClick={() => navigate("cart")}><Icon name="cart" size={22} />장바구니<b>{cartQuantityTotal || ""}</b></button>
       <button className={page === "markets" ? styles.mobileNavActive : ""} aria-current={page === "markets" ? "page" : undefined} onClick={() => navigate("markets")}><Icon name="store" size={22} />판매처 기록</button>
     </nav>

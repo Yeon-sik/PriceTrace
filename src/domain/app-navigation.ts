@@ -1,4 +1,4 @@
-export const APP_PAGES = ["home", "restaurants", "products", "markets", "cart", "admin"] as const;
+export const APP_PAGES = ["home", "restaurants", "products", "brands", "markets", "cart", "admin"] as const;
 
 export type AppPage = (typeof APP_PAGES)[number];
 
@@ -10,6 +10,7 @@ export type AppNavigationState = {
   selectedStoreProductId: string | null;
   selectedRestaurantMenuId: string | null;
   selectedCatalogProductId: string | null;
+  selectedBrandId: string | null;
 };
 
 export type IdentityDeepLink =
@@ -63,6 +64,9 @@ export function readAppNavigationUrl(href: string): AppNavigationState {
     ? requestedCatalogProductId
     : null;
 
+  const requestedBrandId = url.searchParams.get("brandId")?.trim() || null;
+  const selectedBrandId = page === "brands" && requestedBrandId && uuidPattern.test(requestedBrandId) ? requestedBrandId : null;
+
   return {
     page,
     selectedMarket,
@@ -71,6 +75,7 @@ export function readAppNavigationUrl(href: string): AppNavigationState {
     selectedStoreProductId,
     selectedRestaurantMenuId,
     selectedCatalogProductId,
+    selectedBrandId,
   };
 }
 
@@ -84,6 +89,7 @@ export function buildAppNavigationUrl(
     selectedStoreProductId,
     selectedRestaurantMenuId,
     selectedCatalogProductId,
+    selectedBrandId,
   }: AppNavigationState,
 ) {
   const url = new URL(href);
@@ -126,6 +132,9 @@ export function buildAppNavigationUrl(
     url.searchParams.delete("catalogProductId");
   }
 
+  if (page === "brands" && selectedBrandId && uuidPattern.test(selectedBrandId)) url.searchParams.set("brandId", selectedBrandId);
+  else url.searchParams.delete("brandId");
+
   return `${url.pathname}${url.search}${url.hash}`;
 }
 
@@ -134,6 +143,7 @@ export function buildIdentityNavigationUrl(href: string, selector: IdentityDeepL
     page: selector.type === "store"
       ? "markets"
       : selector.type === "restaurant_menu" ? "restaurants" : "products",
+    selectedBrandId: null,
     selectedMarket: null,
     selectedRestaurant: null,
     selectedStoreId: selector.type === "store" ? selector.id : null,
