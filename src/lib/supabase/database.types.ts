@@ -129,7 +129,9 @@ export interface Database {
       connect_my_identity_v1: { Args: { p_entity: "brand" | "store" | "restaurant"; p_source_id: string; p_target_id: string; p_query: string; p_user_verified: boolean }; Returns: Json };
       get_my_owner_confirmed_restaurants_v3: { Args: Record<string, never>; Returns: Json };
       set_product_candidate_brand_resolution_v1: { Args: { p_client_key:string; p_source_field:"brand"|"sub_brand"; p_observed_value:string; p_brand_id:string|null; p_user_verified:boolean }; Returns:Json };
+      set_product_candidate_brand_resolution_v2: { Args: { p_client_key:string; p_source_field:"brand"|"sub_brand"; p_observed_value:string; p_brand_id:string|null; p_user_verified:boolean }; Returns:Json };
       get_product_candidate_brand_resolutions_v1: { Args: { p_client_key:string }; Returns: { product_client_key:string; request_fingerprint:string; source_field:"brand"|"sub_brand"; observed_value:string; brand_id:string; canonical_name:string|null; brand_active:boolean; parent_brand_id:string|null; parent_canonical_name:string|null; created_at:string; updated_at:string }[] };
+      get_product_candidate_brand_resolutions_v2: { Args: { p_client_key:string }; Returns: { product_client_key:string; request_fingerprint:string; source_field:"brand"|"sub_brand"; observed_value:string; brand_id:string; canonical_name:string|null; brand_active:boolean; parent_brand_id:string|null; parent_canonical_name:string|null; created_at:string; updated_at:string; pair_relationship:"single"|"same_brand"|"descendant"|"hierarchy_conflict"; pair_relationship_valid:boolean; requires_review:boolean }[] };
       admin_register_standard_product_link_only_v1: {
         Args: StandardProductLinkOnlyRegistrationArgs;
         Returns: StandardProductLinkRegistrationReturns;

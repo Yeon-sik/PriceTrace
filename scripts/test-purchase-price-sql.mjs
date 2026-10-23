@@ -41,6 +41,8 @@ try {
   let brandCompatibilitySnapshot;
   let brandIdentitySnapshot;
   let candidateDefinition;
+  let v1ResolutionDefinitions;
+  const v1ResolutionContracts = () => db.query("select proname, pg_get_functiondef(oid) as definition from pg_proc where oid in ('public.set_product_candidate_brand_resolution_v1(text,text,text,uuid,boolean)'::regprocedure,'public.get_product_candidate_brand_resolutions_v1(text)'::regprocedure,'public.submit_product_candidate_v1(text,jsonb)'::regprocedure) order by proname");
   const legacyBrandIdentities = async () => ({
     brands: await db.query("select id, canonical_name from public.brands order by id"),
     products: await db.query("select id, brand_id, brand from public.standard_products order by id"),
@@ -58,6 +60,7 @@ try {
       await db.exec("rollback");
       console.log("BASELINE_BARCODE_HIDDEN_CONFLICT_MATCHED_FAILURE_REPRODUCED");
     }
+    if (file.endsWith("product_candidate_brand_resolution_v2.sql")) v1ResolutionDefinitions = await v1ResolutionContracts();
     if (file.endsWith("product_candidate_brand_resolution.sql")) candidateDefinition = await db.query("select pg_get_functiondef('public.submit_product_candidate_v1(text,jsonb)'::regprocedure) as definition");
     if (file.endsWith("brand_hierarchy_public_catalog.sql")) {
       brandCompatibilitySnapshot = await legacyCatalogDefinitions();
@@ -94,13 +97,15 @@ try {
     }
   }
   assert.ok(baselineChecked);
+  assert.deepEqual(await v1ResolutionContracts(), v1ResolutionDefinitions);
+  console.log("BRAND_RESOLUTION_V1_AND_INGEST_DEFINITIONS_UNCHANGED_PASS");
   assert.deepEqual(await db.query("select pg_get_functiondef('public.submit_product_candidate_v1(text,jsonb)'::regprocedure) as definition"), candidateDefinition);
   console.log("PRODUCT_CANDIDATE_INGEST_V1_DEFINITION_UNCHANGED_PASS");
   assert.deepEqual(await legacyCatalogDefinitions(), brandCompatibilitySnapshot);
   assert.deepEqual(await legacyBrandIdentities(), brandIdentitySnapshot);
   console.log("BRAND_LEGACY_V1_V4_DEFINITIONS_UNCHANGED_PASS");
   console.log(`MIGRATION_BOOTSTRAP_WITH_DOCUMENTED_ACCOMMODATIONS_PASS ${migrations.length}`);
-  for (const file of ["public_product_by_barcode_v1.sql", "brand_hierarchy_public_catalog.sql", "purchase_price_observation_v4.sql", "purchase_price_line_authority_response.sql", "purchase_restaurant_identity_recovery.sql", "user_confirmed_purchase_restaurants.sql", "owner_confirmed_cross_purchase.sql", "restaurant_component_parent_reads.sql", "restaurant_component_identity_resolution.sql", "purchase_public_identity_search.sql", "verified_receipt_ingestion_v2.sql", "shared_identity_connections.sql", "product_candidate_brand_resolution.sql", "product_candidate_ingest.sql"]) {
+  for (const file of ["public_product_by_barcode_v1.sql", "brand_hierarchy_public_catalog.sql", "purchase_price_observation_v4.sql", "purchase_price_line_authority_response.sql", "purchase_restaurant_identity_recovery.sql", "user_confirmed_purchase_restaurants.sql", "owner_confirmed_cross_purchase.sql", "restaurant_component_parent_reads.sql", "restaurant_component_identity_resolution.sql", "purchase_public_identity_search.sql", "verified_receipt_ingestion_v2.sql", "shared_identity_connections.sql", "product_candidate_brand_resolution.sql", "product_candidate_ingest.sql", "product_candidate_brand_resolution_v2.sql"]) {
     try {
       const result = await db.exec(readSql("tests", file));
       console.log(`SQL_FIXTURE_PASS ${file}`, result.flatMap(r => r.rows).filter(r => r.result));
