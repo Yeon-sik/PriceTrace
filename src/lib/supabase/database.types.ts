@@ -60,6 +60,7 @@ export interface Database {
         Insert: Record<string, never>;
         Update: Record<string, never>;
       };
+      product_candidate_brand_resolutions: { Row: { user_id:string; client_key:string; request_fingerprint:string; source_field:"brand"|"sub_brand"; observed_value:string; brand_id:string; created_at:string; updated_at:string }; Insert: Record<string,never>; Update: Record<string,never> };
       profiles: { Row: { id:string; display_name:string|null; created_at:string }; Insert: { id:string; display_name?:string|null }; Update: { display_name?:string|null } };
       brand_hierarchy_write_guard: { Row: { singleton:boolean; revision:number }; Insert: { singleton?:boolean; revision?:number }; Update: { revision?:number } };
       brand_admin_actions: { Row: { id:string; brand_id:string; action:string; payload:Json; created_by:string|null; created_at:string }; Insert: { id?:string; brand_id:string; action:string; payload:Json; created_by?:string|null; created_at?:string }; Update: { payload?:Json } };
@@ -127,6 +128,8 @@ export interface Database {
       search_my_identity_connections_v1: { Args: { p_entity: "brand" | "store" | "restaurant"; p_source_id: string; p_query: string }; Returns: Json };
       connect_my_identity_v1: { Args: { p_entity: "brand" | "store" | "restaurant"; p_source_id: string; p_target_id: string; p_query: string; p_user_verified: boolean }; Returns: Json };
       get_my_owner_confirmed_restaurants_v3: { Args: Record<string, never>; Returns: Json };
+      set_product_candidate_brand_resolution_v1: { Args: { p_client_key:string; p_source_field:"brand"|"sub_brand"; p_observed_value:string; p_brand_id:string|null; p_user_verified:boolean }; Returns:Json };
+      get_product_candidate_brand_resolutions_v1: { Args: { p_client_key:string }; Returns: { product_client_key:string; request_fingerprint:string; source_field:"brand"|"sub_brand"; observed_value:string; brand_id:string; canonical_name:string|null; brand_active:boolean; parent_brand_id:string|null; parent_canonical_name:string|null; created_at:string; updated_at:string }[] };
       admin_register_standard_product_link_only_v1: {
         Args: StandardProductLinkOnlyRegistrationArgs;
         Returns: StandardProductLinkRegistrationReturns;
