@@ -53,7 +53,7 @@ begin
       select id
       from public.catalog_categories
       where purchase_type = 'retail_product'
-        and slug = 'processed-food'
+        and slug = 'ready-meal'
       limit 1
     ),
     'verified',
@@ -71,6 +71,7 @@ begin
     content_unit,
     package_count,
     reference_unit,
+    listing_reference_url,
     specification_status,
     verification_status,
     status
@@ -85,6 +86,7 @@ begin
     'g',
     1,
     100,
+    'https://example.invalid/product-candidate-fixture',
     'verified',
     'verified',
     'active'

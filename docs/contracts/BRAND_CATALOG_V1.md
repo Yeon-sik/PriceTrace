@@ -1,5 +1,7 @@
 # PriceTrace Brand Catalog V1
 
+Private OCR fact selections use the separate [Product Candidate Brand Resolution V1](PRODUCT_CANDIDATE_BRAND_RESOLUTION_V1.md) command; public Brand Catalog remains unchanged.
+
 This is the canonical cross-system Brand Identity contract implemented by PriceTrace.
 It describes the current database and public wire contracts, not planned OCR-App or Fitness integrations.
 
