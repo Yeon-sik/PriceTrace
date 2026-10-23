@@ -31,5 +31,10 @@
 .productList > li { border-bottom: 1px solid var(--line); }
 .productLink { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; text-align: left; gap: 8px 24px; width: 100%; padding: 20px 4px; background: transparent; color: var(--ink); }
 .productLink span { color: var(--muted); font-size: 13px; }
+.productDetail { padding: 4px 4px 24px; }
+.productDetail h4 { margin: 8px 0; font-size: 20px; }
+.productDetail p, .productDetail dt { color: var(--muted); }
+.productDetail dl { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 8px 20px; }
+.productDetail dd { margin: 0; overflow-wrap: anywhere; }
 @media (max-width: 760px) { .brandList { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0 20px; } }
 @media (max-width: 520px) { .hall { padding-top: 24px; } .header { flex-wrap: wrap; gap: 16px; } .brandList { grid-template-columns: 1fr; } .productLink { display: grid; } }

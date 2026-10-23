@@ -56,12 +56,37 @@ begin
   select to_jsonb(v5) into result from public.get_public_exact_standard_product_catalog_v5() v5 where catalog_product_id = catalog;
   if result is null or legacy is null then raise exception 'verified product missing'; end if;
   if result - array['brand_id','parent_brand_id','parent_brand_name'] is distinct from legacy then raise exception 'v5 is not an exact v4 superset'; end if;
+  if exists (
+    (select to_jsonb(v5) - array['brand_id','parent_brand_id','parent_brand_name'] from public.get_public_exact_standard_product_catalog_v5() v5
+     except all select to_jsonb(v4) from public.get_public_exact_standard_product_catalog_v4() v4)
+    union all
+    (select to_jsonb(v4) from public.get_public_exact_standard_product_catalog_v4() v4
+     except all select to_jsonb(v5) - array['brand_id','parent_brand_id','parent_brand_name'] from public.get_public_exact_standard_product_catalog_v5() v5)
+  ) then raise exception 'v5 common projection differs from v4'; end if;
   if result->>'brand_id' <> child::text or result->>'brand_name' <> 'PT Fixture Renamed'
     or result->>'parent_brand_id' <> root::text or result->>'parent_brand_name' <> 'PT Fixture Root'
     or result->>'standard_category_id' <> category::text or result->>'standard_category_slug' <> 'protein-drinks' then raise exception 'v5 brand/category fields incorrect'; end if;
   if exists(select 1 from public.get_public_exact_standard_product_catalog_v3() v3 where catalog_product_id = catalog and brand_name <> 'PT Fixture Renamed') then raise exception 'v3 brand semantics changed'; end if;
   update public.standard_products set brand_id = leaf where id = standard;
   if (select parent_brand_id from public.get_public_exact_standard_product_catalog_v5() where catalog_product_id = catalog) <> child then raise exception 'v5 flattened ancestry instead of direct parent'; end if;
+  update public.standard_products set brand_id = child where id = standard;
+  -- Archive visibility must never turn an existing parent edge into root-null.
+  update public.brands set status = 'archived' where id = root;
+  select to_jsonb(v5) into result from public.get_public_exact_standard_product_catalog_v5() v5 where catalog_product_id = catalog;
+  if result->>'parent_brand_id' is distinct from root::text or result->>'parent_brand_name' is not null then
+    raise exception 'v5 lost archived parent identity or exposed archived name'; end if;
+  update public.brands set status = 'archived' where id = child;
+  select to_jsonb(v5) into result from public.get_public_exact_standard_product_catalog_v5() v5 where catalog_product_id = catalog;
+  if result->>'brand_id' is distinct from child::text or result->>'parent_brand_id' is distinct from root::text
+    or result->>'parent_brand_name' is not null then raise exception 'v5 archived brand became a root'; end if;
+  update public.brands set status = 'active' where id = root;
+  -- An archived direct brand's parent name stays private; its identity remains known.
+  if (select parent_brand_id from public.get_public_exact_standard_product_catalog_v5() where catalog_product_id = catalog) is distinct from root then
+    raise exception 'v5 archived brand parent identity missing'; end if;
+  update public.brands set status = 'active' where id = child;
+  update public.standard_products set brand_id = null where id = standard;
+  if (select brand_id from public.get_public_exact_standard_product_catalog_v5() where catalog_product_id = catalog) is not null then
+    raise exception 'v5 inferred unassigned identity'; end if;
   update public.standard_products set brand_id = child where id = standard;
   update public.brands set parent_brand_id = archived where id = root;
   if (select parent_brand_id from public.get_public_brand_catalog_v1('PT Fixture Root')) <> archived
@@ -107,6 +132,16 @@ begin
   select array_agg(brand_id) into ids from public.get_public_brand_catalog_v1('PTQZ');
   if ids <> array[a,b,c,d,e] then raise exception 'search priority incorrect: %',ids; end if;
   if (select brand_id from public.get_public_brand_catalog_v1('PT Exact Alias')) <> f then raise exception 'exact alias missing'; end if;
+end;
+$$;
+
+do $$
+begin
+  insert into public.brands(canonical_name) select 'PT Paging ' || lpad(n::text, 3, '0') from generate_series(1,205) n;
+  if (select count(*) from public.get_public_brand_catalog_v1('PT Paging',2147483647,0)) <> 200
+    or (select count(*) from public.get_public_brand_catalog_v1('PT Paging',200,200)) <> 5
+    or (select count(*) from public.get_public_brand_catalog_v1('PT Paging',null,null)) <> 50 then
+    raise exception 'public pagination upper/default bounds or offset failed'; end if;
 end;
 $$;
 do $$

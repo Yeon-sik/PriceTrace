@@ -11,10 +11,11 @@ function BrandLogo({ brand }: { brand: Brand }) {
   return brand.logoUrl ? <img className={styles.logo} src={brand.logoUrl} alt={`${brand.canonicalName} 로고`} loading="lazy" referrerPolicy="no-referrer" /> : null;
 }
 
-export function BrandHall({ selectedBrandId, onSelect, onProduct }: {
-  selectedBrandId: string | null; onSelect: (id: string | null) => void; onProduct: (id: string) => void;
+export function BrandHall({ selectedBrandId, onSelect }: {
+  selectedBrandId: string | null; onSelect: (id: string | null) => void;
 }) {
   const [query, setQuery] = useState("");
+  const [openProductId, setOpenProductId] = useState<string | null>(null);
   const state = useBrandHall(query, selectedBrandId);
   const { selected, ancestry, children, directProducts } = state;
   function brandLink(brand: BrandMatch) {
@@ -48,8 +49,18 @@ export function BrandHall({ selectedBrandId, onSelect, onProduct }: {
             <section aria-labelledby="brand-products-title"><h3 id="brand-products-title">직접 연결 상품 <span>{directProducts.length}</span></h3>
               <p className={styles.muted}>이 브랜드에 직접 연결된 공개 판매 규격입니다. 하위 브랜드의 상품은 해당 브랜드에서 확인하세요.</p>
               {directProducts.length ? <ul className={styles.productList}>{directProducts.map((product) => <li key={product.id}>
-                <button className={styles.productLink} onClick={() => onProduct(product.id)}><strong>{product.name}</strong>
+                <button className={styles.productLink} aria-expanded={openProductId === product.id}
+                  aria-controls={`brand-product-${product.id}`} onClick={() => setOpenProductId(openProductId === product.id ? null : product.id)}><strong>{product.name}</strong>
                   <span>{product.contentAmount}{product.contentUnit === "each" ? "개" : product.contentUnit} × {product.packageCount} · {product.categoryName ?? "분류 정보 없음"}</span></button>
+                {openProductId === product.id && <div id={`brand-product-${product.id}`} className={styles.productDetail} role="region" aria-label="공개 상품 정보">
+                  <h4>{product.name}</h4>
+                  <p>검증된 공개 카탈로그의 판매 규격입니다.</p>
+                  <dl><dt>브랜드</dt><dd>{product.brandName ?? "브랜드명 공개 정보 없음"}</dd>
+                    <dt>판매 규격</dt><dd>{product.contentAmount}{product.contentUnit === "each" ? "개" : product.contentUnit} × {product.packageCount}</dd>
+                    <dt>분류</dt><dd>{product.categoryName ?? "분류 정보 없음"}</dd>
+                    <dt>판매 규격 ID</dt><dd>{product.id}</dd>
+                    <dt>표준 상품 ID</dt><dd>{product.standardProductId}</dd></dl>
+                </div>}
               </li>)}</ul> : <p>직접 연결된 공개 상품이 없습니다.</p>}
             </section>
           </div>

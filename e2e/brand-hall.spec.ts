@@ -75,6 +75,10 @@ test("public brand browsing, alias search, direct products, deep links and histo
   await expect(page).toHaveURL(new RegExp(`brandId=${uuid(1)}`));
   await expect(page.getByRole("button", { name: /바나나맛 우유/ })).toBeVisible();
   await expect(page.getByRole("button", { name: /더단백 드링크 초코/ })).toHaveCount(0);
+  await page.getByRole("button", { name: /바나나맛 우유/ }).click();
+  await expect(page.getByRole("region", { name: "공개 상품 정보", exact: true })).toContainText(uuid(101));
+  await page.getByRole("button", { name: /바나나맛 우유/ }).click();
+  await expect(page.getByRole("region", { name: "공개 상품 정보", exact: true })).toHaveCount(0);
   await page.getByRole("button", { name: "더단백 상위 브랜드: 빙그레" }).click();
   await expect(page.getByRole("navigation", { name: "브랜드 경로" })).toContainText("빙그레더단백");
   await expect(page.getByRole("button", { name: /더단백 드링크 초코/ })).toBeVisible();
@@ -85,6 +89,8 @@ test("public brand browsing, alias search, direct products, deep links and histo
   await page.evaluate(() => { (document.activeElement as HTMLElement)?.blur(); window.scrollTo(0, 0); });
   await page.screenshot({ path: info.outputPath("brand-detail-desktop.png"), fullPage: true });
   await page.getByRole("button", { name: "전체 브랜드", exact: true }).click();
+  await page.getByLabel("브랜드 검색", { exact: true }).fill("더단백");
+  await expect(page.getByRole("button", { name: "더단백 상위 브랜드: 빙그레", exact: true })).toBeVisible();
   await page.getByLabel("브랜드 검색", { exact: true }).fill("protein");
   await expect(page.getByRole("button", { name: /더단백.*검색된 별칭: The Protein/ })).toBeVisible();
   await page.getByRole("button", { name: /더단백.*검색된 별칭: The Protein/ }).click();
@@ -94,9 +100,19 @@ test("public brand browsing, alias search, direct products, deep links and histo
   await expect(page.getByRole("navigation", { name: "모바일 주요 메뉴" }).getByRole("button", { name: "브랜드관", exact: true })).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   await page.screenshot({ path: info.outputPath("brand-detail-mobile.png"), fullPage: true });
+  const privateRequests: string[] = [];
+  page.on("request", (request) => {
+    if (request.url().includes("get_authenticated_identity_detail_v1")) privateRequests.push(request.url());
+  });
   await page.getByRole("button", { name: /더단백 드링크 초코/ }).click();
-  await expect(page).toHaveURL(new RegExp(`view=products&catalogProductId=${uuid(102)}`));
-  expect(new URL(page.url()).searchParams.has("brandId")).toBe(false);
+  const publicProduct = page.getByRole("region", { name: "공개 상품 정보", exact: true });
+  await expect(publicProduct).toBeVisible();
+  await expect(publicProduct).toContainText("더단백 드링크 초코");
+  await expect(publicProduct).toContainText(uuid(102));
+  await expect(page).toHaveURL(new RegExp(`view=brands&brandId=${uuid(2)}`));
+  expect(privateRequests).toEqual([]);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  await page.screenshot({ path: info.outputPath("brand-public-product-mobile.png"), fullPage: true });
   await page.goto(`/PriceTrace?view=brands&brandId=${uuid(3)}`);
   await expect(page.getByRole("navigation", { name: "브랜드 경로" })).toContainText("빙그레더단백더단백 드링크");
   await expect(page.getByRole("heading", { name: "더단백 드링크", exact: true })).toBeVisible();
