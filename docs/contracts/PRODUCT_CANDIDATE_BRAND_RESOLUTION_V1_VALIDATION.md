@@ -1,5 +1,7 @@
 # Product Candidate Brand resolution validation — 2026-10-23
 
+This records the initial delivery. See the [follow-up self-review and corrections](PRODUCT_CANDIDATE_BRAND_RESOLUTION_V1_REVIEW.md) for the subsequent OCR fixes and latest local test counts.
+
 Scope: private PriceTrace Brand resolution and the OCR Android/Desktop consumer. Brand Hall was fast-forwarded to main at `08b8b0273f3457eba4ad878f26a74e306b332411`; these integration branches remain separate from main.
 
 ## PriceTrace local checks
