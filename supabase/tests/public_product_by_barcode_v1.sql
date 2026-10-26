@@ -38,7 +38,8 @@ values ('97000000-0000-4000-8000-000000000010', 'ean', pg_temp.probe_ean('200000
        ('97000000-0000-4000-8000-000000000010', 'ean', pg_temp.probe_ean('200000000004'), 'verified', '{}'),
        ('97000000-0000-4000-8000-000000000011', 'gtin', pg_temp.probe_ean('200000000004'), 'verified', '{}'),
        ('97000000-0000-4000-8000-000000000010', 'ean', pg_temp.probe_ean('200000000005'), 'verified', '{}'),
-       ('97000000-0000-4000-8000-000000000010', 'gtin', pg_temp.probe_ean('200000000005'), 'verified', '{}');
+       ('97000000-0000-4000-8000-000000000010', 'gtin', pg_temp.probe_ean('200000000005'), 'verified', '{}'),
+       ('97000000-0000-4000-8000-000000000011', 'ean', pg_temp.probe_ean('200000000006'), 'verified', '{}');
 
 select pg_temp.barcode_check(has_function_privilege('anon', 'public.get_public_product_by_barcode_v1(text)', 'execute'), 'anon execute grant');
 select pg_temp.barcode_check(has_function_privilege('authenticated', 'public.get_public_product_by_barcode_v1(text)', 'execute'), 'authenticated execute grant');
@@ -117,12 +118,38 @@ reset role;
 update public.catalog_products set status = 'archived' where id = '97000000-0000-4000-8000-000000000010';
 set local role anon;
 select pg_temp.barcode_check(public.get_public_product_by_barcode_v1(pg_temp.probe_ean('200000000001')) ->> 'status' = 'not_linked', 'archived catalog excluded');
-select pg_temp.barcode_check(public.get_public_product_by_barcode_v1(pg_temp.probe_ean('200000000004')) ->> 'status' = 'matched', 'archived conflict candidate excluded');
+do $$ declare payload jsonb; begin
+  payload := public.get_public_product_by_barcode_v1(pg_temp.probe_ean('200000000004'));
+  perform pg_temp.barcode_check(payload ->> 'status' = 'conflict' and payload -> 'matches' = '[]'::jsonb,
+    'archived verified conflict remains conflict without candidates');
+  perform pg_temp.barcode_check(payload::text not like '%97000000-0000-4000-8000-000000000010%'
+    and payload::text not like '%__barcode_probe_variant_10%', 'archived conflict identity is not disclosed');
+  payload := public.get_public_product_by_barcode_v1(pg_temp.probe_ean('200000000005'));
+  perform pg_temp.barcode_check(payload ->> 'status' = 'not_linked' and payload -> 'matches' = '[]'::jsonb,
+    'single archived identity duplicated across schemes is not linked');
+end $$;
 reset role;
 update public.catalog_products set status = 'active' where id = '97000000-0000-4000-8000-000000000010';
+update public.catalog_products set verification_status = 'unverified' where id = '97000000-0000-4000-8000-000000000011';
+set local role anon;
+do $$ declare payload jsonb; begin
+  payload := public.get_public_product_by_barcode_v1(pg_temp.probe_ean('200000000004'));
+  perform pg_temp.barcode_check(payload ->> 'status' = 'conflict' and payload -> 'matches' = '[]'::jsonb,
+    'public plus private verified link remains conflict without candidates');
+  perform pg_temp.barcode_check(payload::text not like '%97000000-0000-4000-8000-000000000011%'
+    and payload::text not like '%__barcode_probe_variant_11%', 'private conflict identity is not disclosed');
+  payload := public.get_public_product_by_barcode_v1(pg_temp.probe_ean('200000000006'));
+  perform pg_temp.barcode_check(payload ->> 'status' = 'not_linked' and payload -> 'matches' = '[]'::jsonb,
+    'single private verified link is not linked with empty matches');
+end $$;
+reset role;
+update public.catalog_products set verification_status = 'verified' where id = '97000000-0000-4000-8000-000000000011';
 update public.standard_products set status = 'archived' where id = '97000000-0000-4000-8000-000000000002';
 set local role anon;
 select pg_temp.barcode_check(public.get_public_product_by_barcode_v1(pg_temp.probe_ean('200000000001')) ->> 'status' = 'not_linked', 'archived standard excluded');
+select pg_temp.barcode_check(public.get_public_product_by_barcode_v1(pg_temp.probe_ean('200000000004')) ->> 'status' = 'conflict'
+  and public.get_public_product_by_barcode_v1(pg_temp.probe_ean('200000000004')) -> 'matches' = '[]'::jsonb,
+  'all verified conflict identities archived remains redacted conflict');
 reset role;
 update public.standard_products set status = 'active', verification_status = 'unverified' where id = '97000000-0000-4000-8000-000000000002';
 set local role anon;
