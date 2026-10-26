@@ -15,6 +15,7 @@ const cases = [
   ["8801104671507", "matched", "1516c3eb-3dfb-4e11-8040-d23fadcdaad0"],
   ["8809375984692", "matched", "18e83c5c-86a4-4e95-a131-411381789687"],
   ["2000000000992", "not_linked", null],
+  ["8801043014830", "not_linked", null],
   ["8801104671508", "invalid", null],
 ];
 

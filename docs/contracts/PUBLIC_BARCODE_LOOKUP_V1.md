@@ -34,22 +34,65 @@ leading zeros. No numeric conversion of the whole barcode is permitted.
 NULL becomes the empty string. 8/12/14-digit values and other characters are
 `invalid`; they are not padded or converted to another barcode scheme.
 
-Lookup uses the normalized identifier value, scheme `ean` or `gtin`, and
-`verification_status = 'verified'`. Both catalog and standard product must be
-active. Existing `get_product_read_v1` public eligibility is preserved: verified
-retail family, verified exact variant and specification, and complete positive
-package fields. Private/unverified products never become public through this RPC.
+Identity ambiguity uses the normalized identifier value, scheme `ean` or `gtin`,
+and `verification_status = 'verified'`. Count **distinct catalog product IDs
+before any active/public eligibility filter**. Archived or non-public identities
+still block automatic selection when their identifier link is verified.
+
+Only the response product objects use existing `get_product_read_v1` public
+eligibility: active and verified retail family and exact variant, verified
+specification, and complete positive package fields. Private/unverified products
+never become public through this RPC. These corrected rules are implemented by
+the forward migration `20261026155036_public_barcode_verified_conflicts.sql`;
+the original applied migration is unchanged. See deployment status below.
 
 | status | Meaning | matches |
 | --- | --- | --- |
 | `invalid` | Unsupported length/characters or checksum failure. No identity lookup. | `[]` |
-| `not_linked` | No verified barcode link to an eligible public exact variant. **Does not mean PT has no such product.** | `[]` |
-| `matched` | Exactly one distinct eligible catalog product ID. | One product |
-| `conflict` | Two or more distinct eligible catalog product IDs. Caller must not choose automatically or call Nutrition with an arbitrary ID. | All candidates, ordered by catalog ID |
+| `not_linked` | Zero distinct verified links, or exactly one verified linked ID which is not publicly eligible. **Does not mean PT has no such product or identifier.** | `[]` |
+| `matched` | Exactly one distinct verified linked catalog ID, and that exact variant is publicly eligible. | One public product |
+| `conflict` | Two or more distinct verified linked catalog IDs, regardless of active/public state. Caller must not choose automatically or call Nutrition with an arbitrary ID. | All candidates ordered by catalog ID only when all are public; otherwise `[]` |
 
 The same number under `ean` and `gtin` for one catalog ID is one match. Pending
-and rejected identifiers do not participate. `checkedAt` is the server statement
+and rejected identifiers do not participate. A redacted conflict never returns
+one visible candidate, a private ID/name/brand/specification, or a private count.
+The status itself signals ambiguity; no candidate may be selected from it.
+`checkedAt` is the server statement
 time in ISO 8601 with timezone; it is not a price observation time or version.
+
+## Contract version and AR parser compatibility
+
+Keep `contractVersion: "pricetrace-barcode-lookup.v1"` and the existing four
+status values. A lone non-public verified link remains `not_linked` with `[]`;
+no `private`, `inactive`, or other new enum value is introduced. A version bump
+would make the current AR client's fixed-version check reject even the unchanged
+demo matches, so this is a v1 safety correction with an explicit cardinality
+compatibility caveat, **not a claim of full compatibility with the old parser**.
+
+The AR source was inspected read-only at
+`C:/Github/가상현실_중간/Assets/Scripts/Lookup/RemoteLookupClients.cs`:
+`PtBarcodeClient.Parse` (lines 84-99) validates the fixed contract and throws
+`FormatException("PT status/count mismatch")` for
+`status == "conflict" && matches.Count < 2`. Thus:
+
+| Corrected server response | Current AR parser |
+| --- | --- |
+| `matched` + one product | Compatible; both demo responses unchanged |
+| `not_linked` / `invalid` + `[]` | Compatible, including a single private verified link |
+| `conflict` + two public products | Compatible; existing ordering/validation retained |
+| `conflict` + `[]` because any identity is non-public | Rejected as a format error until the AR parser is updated |
+
+`ProductLookup.Lookup` in `Assets/Scripts/Lookup/ProductLookup.cs` (lines 49-59)
+catches that parser exception and returns `PtUnavailable`; it does not select
+a product, call Nutrition, or enter its OFF fallback for this error. This is
+safe against a false match but does not show the intended Conflict state.
+
+The required AR follow-up is to accept `conflict` with zero candidates as a
+redacted conflict and return `PtBarcodeReply { Status = "conflict" }`, before
+the existing count guard; keep rejecting one candidate, unknown statuses, and
+bad envelopes. This PriceTrace-only task does not edit/build the AR repository.
+There was no AR runtime/device validation. New server status values or fake
+duplicate/public-placeholder rows must not be used to bypass its count guard.
 
 ## Response
 
@@ -191,7 +234,7 @@ was absent. Both exact products were also re-read through v4 over HTTPS using
 only a publishable key, with no user Authorization header. This is a read-only
 preflight, not deployment evidence.
 
-Current deployment status: **applied after explicit user approval; anon HTTPS
+Initial deployment status: **applied after explicit user approval; anon HTTPS
 verification passed on 2026-10-27 (KST)**.
 
 The approved source commit is `23a0d25`. The migration
@@ -223,6 +266,11 @@ market listing was available in the reused public projection. Family-level
 Coupang prices were not substituted. Key values are absent from committed
 evidence, docs and logs.
 
+Root cause rechecked on 2026-10-27: each demo has one publicly eligible product
+but **zero total rows and zero verified rows in `market_price_observations` for
+its catalog ID**, so `get_product_read_v1(..., null, 1).products[0].observations`
+is empty and `latestPublicPrice` is null; no public scope was expanded.
+
 The CLI reported a failed optional local pg-delta catalog cache because Docker
 Desktop was unavailable. Remote migration history, identifier rows and real
 HTTP calls were subsequently verified successfully; this warning did not
@@ -237,7 +285,7 @@ for this function. These grants are the approved API contract; empty search path
 strict public projection, table privilege denial and RLS were verified above.
 AR device behavior and Nutrition coverage remain unverified in this repository.
 
-Local validation: `npm.cmd run lint`, `npm.cmd run typecheck`,
+Initial release local validation: `npm.cmd run lint`, `npm.cmd run typecheck`,
 `npm.cmd run test` (66 files / 589 tests), `npm.cmd run test:purchase-sql`
 (107 migration bootstrap, 34 barcode SQL checks, 8 registration checks, and
 10 existing SQL regression fixtures), and `npm.cmd run build` passed.
@@ -251,3 +299,113 @@ barcode checks were repeated against a read-only snapshot of the currently
 deployed `get_product_read_v1` definition, followed by the 8 registration checks.
 `supabase db push --linked --dry-run --workdir
 supabase/.temp/barcode-release-v1` listed only the new barcode migration.
+
+## Conflict correction and merge order (2026-10-27)
+
+Forward migration: `20261026155036_public_barcode_verified_conflicts.sql`
+uses `create or replace`; the initial migration
+`20261026150132_public_product_by_barcode_v1.sql` remains unchanged. It separates
+all verified distinct identity counts from public product projection. Existing
+public/public conflicts retain their two ordered candidates; any hidden
+conflicting identity yields `conflict` with `matches: []`. The buggy prior
+assertion that archived conflicts become matched was corrected. All other
+existing checks remain, with new archived/private/fully hidden conflict and
+single hidden-link coverage. The SQL harness first reproduces the old false
+match before installing the repair, then runs the corrected fixture.
+
+Correction deployment: **not applied yet; requires fresh user approval after
+local validation**. The earlier approval covered only initial creation and the
+two demo identifiers. This repair performs no identifier/product/price writes.
+After approval, run `node scripts/verify-public-barcode-lookup.mjs` with only
+the runtime publishable key: the two demo barcodes must remain `matched`,
+`8801043014830` must be `not_linked`, and existing synthetic not-linked / invalid
+checks and direct table SELECT denial must continue to pass. Save a separate
+post-correction response artifact; the initial verified JSON is historical.
+
+The dependency order is **brand-hall -> public-barcode-lookup**. The barcode
+branch includes `cec0223`, `673a676`, `08b8b02` and reads
+`standard_products.brand_id` plus `brands`. Those brand references predate the
+hierarchy work, and hierarchy tables/metadata must still be present before this
+branch's full migration and application changes are integrated.
+
+Actual Git refs were refreshed with `git fetch origin` and verified with
+`git ls-remote origin refs/heads/main refs/heads/feat/brand-hall`:
+
+| Ref | Current commit | Migration files | Brand-hall prerequisite |
+| --- | --- | --- | --- |
+| Local `main` | `24f73ccca1167e484670266036c155b5d9f67393` | 104 | Missing the three commits; stale local ref |
+| GitHub `main` / `origin/main` | `08b8b0273f3457eba4ad878f26a74e306b332411` | 106 | All three commits already in history |
+| `feat/brand-hall` | `08b8b0273f3457eba4ad878f26a74e306b332411` | 106 | Same commit as GitHub main |
+| `feat/public-barcode-lookup` before this repair | `835e281` | 107 | Descends from `08b8b02` |
+
+Therefore the dependency order is already satisfied on the **current remote
+main**. Do not present stale local `main` as GitHub's current branch or create a
+duplicate brand PR. No local main reset/fast-forward, remote branch push, PR
+creation, or merge was performed by this task. A read-only GitHub search found
+no PR for `head:feat/public-barcode-lookup`; creating one still requires the
+user's separate confirmation. Recheck refs at PR time; target main only after
+the brand prerequisite is present if the remote changes again.
+
+### Remote migration history vs main
+
+The read-only remote inventory has **109 applied versions** before this repair.
+Compared with GitHub `main` (`08b8b02`, 106 files), **nine remote versions are
+absent from main**, and **six main versions are absent from remote history**.
+This compares version identities, not an assertion of schema/body equivalence.
+
+Remote-only versions relative to GitHub main:
+
+| Applied version | Name |
+| --- | --- |
+| `20261011131743` | `purchase_price_runtime_compatibility` |
+| `20261011131758` | `purchase_price_line_authority_response` |
+| `20261011141817` | `purchase_restaurant_identity_recovery` |
+| `20261012055345` | `owner_verified_restaurant_purchase_reads` |
+| `20261018130323` | `shared_identity_connections` |
+| `20261021115319` | `verified_receipt_preserve_product_on_sku_miss` |
+| `20261023070322` | `product_candidate_brand_resolution` |
+| `20261023165231` | `product_candidate_brand_resolution_v2` |
+| `20261026150132` | `public_product_by_barcode_v1` (this feature's initial deployment) |
+
+Main-only file versions relative to the applied remote history:
+
+| Main file version | Name |
+| --- | --- |
+| `20261004134439` | `merchant_resolution_column_qualification` |
+| `20261005010000` | `rejected_dining_proposal_resubmission` |
+| `20261009040159` | `purchase_price_runtime_compatibility` |
+| `20261009040200` | `purchase_price_line_authority_response` |
+| `20261011140409` | `purchase_restaurant_identity_recovery` |
+| `20261012055153` | `owner_verified_restaurant_purchase_reads` |
+
+Against stale local `main` (`24f73cc`, 104 files), the remote-only list has two
+additional applied versions: `20261022041929_brand_hierarchy_public_catalog`
+and `20261022193355_preserve_archived_brand_parent_identity` (eleven remote-only
+versions total); the same six local-only versions remain. These two brand
+migrations are already in GitHub main.
+
+Several names recur under different timestamps. That alone does not establish
+equivalence or justify repair/replay. Do not bulk push this checkout or
+rewrite/squash/delete migration history. For this correction, stage copies of
+the actual 109 remote migrations plus only the new forward migration in an
+ignored release directory, verify the pending set contains exactly the repair,
+and get user approval immediately before applying it. Migration-history
+reconciliation remains separate work.
+
+Correction validation (2026-10-27): `npm.cmd run lint`, `npm.cmd run typecheck`,
+`npm.cmd run test` (66 files / 589 tests), and `npm.cmd run build` passed.
+`npm.cmd run test:purchase-sql` passed with 108 migration files, old bug
+reproduction, 40 barcode checks, 8 registration checks and 10 existing regression
+fixtures. The same 40 barcode checks passed again against the read-only deployed
+`get_product_read_v1` snapshot using `--barcode-public-read`. JavaScript syntax
+and `git diff --check` passed. The original migration SHA-256 remains
+`923a7b4b1a5327c8d47496a3a5439f7e5150746c5ef6e28b19b32e2b5621ee24`.
+
+The ignored release directory `supabase/.temp/barcode-conflict-release-v1` was
+prepared from the actual 109 remote applied migrations plus the repair.
+`supabase db push --linked --dry-run --workdir
+supabase/.temp/barcode-conflict-release-v1` passed and listed only
+`20261026155036_public_barcode_verified_conflicts.sql`. Pre-apply advisors still
+report the intentional execute-grant warnings 0028/0029 described above. No
+new remote application, web E2E, Android build or AR runtime test is claimed
+by these local checks. The new repair remains pending explicit user approval.

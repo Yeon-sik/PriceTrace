@@ -51,6 +51,12 @@ try {
       'get_public_exact_standard_product_catalog_v3', 'get_public_exact_standard_product_catalog_v4'
     ) order by proname`);
   for (const file of migrations) {
+    if (file.endsWith("public_barcode_verified_conflicts.sql")) {
+      await assert.rejects(() => db.exec(readSql("tests", "public_product_by_barcode_v1.sql")),
+        error => error.message.includes("archived verified conflict remains conflict without candidates"));
+      await db.exec("rollback");
+      console.log("BASELINE_BARCODE_HIDDEN_CONFLICT_MATCHED_FAILURE_REPRODUCED");
+    }
     if (file.endsWith("brand_hierarchy_public_catalog.sql")) {
       brandCompatibilitySnapshot = await legacyCatalogDefinitions();
       brandIdentitySnapshot = await legacyBrandIdentities();
