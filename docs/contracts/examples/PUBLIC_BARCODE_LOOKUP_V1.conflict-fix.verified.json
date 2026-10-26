@@ -1,0 +1,68 @@
+{
+  "result": "PUBLIC_BARCODE_ANON_HTTP_PASS",
+  "rpcCases": 5,
+  "directTableHttpStatus": 401,
+  "results": [
+    {
+      "status": "matched",
+      "barcode": "8801104671507",
+      "matches": [
+        {
+          "name": "더단백 크런치바 초코",
+          "brand": "빙그레",
+          "contentUnit": "g",
+          "categoryName": "육포·단백질간식",
+          "packageCount": 1,
+          "contentAmount": 40,
+          "catalogProductId": "1516c3eb-3dfb-4e11-8040-d23fadcdaad0",
+          "latestPublicPrice": null,
+          "standardProductId": "8510a217-fe6c-473b-8c14-2cba4a301e40",
+          "specificationLabel": "40g"
+        }
+      ],
+      "checkedAt": "2026-10-26T16:05:50.710133+00:00",
+      "contractVersion": "pricetrace-barcode-lookup.v1"
+    },
+    {
+      "status": "matched",
+      "barcode": "8809375984692",
+      "matches": [
+        {
+          "name": "테아닌과 밀크씨슬 활력솔루션",
+          "brand": null,
+          "contentUnit": "g",
+          "categoryName": "건강기능식품",
+          "packageCount": 1,
+          "contentAmount": 60,
+          "catalogProductId": "18e83c5c-86a4-4e95-a131-411381789687",
+          "latestPublicPrice": null,
+          "standardProductId": "f927e84d-9b57-4c6f-b1dc-80710c63f307",
+          "specificationLabel": "60g"
+        }
+      ],
+      "checkedAt": "2026-10-26T16:05:50.88775+00:00",
+      "contractVersion": "pricetrace-barcode-lookup.v1"
+    },
+    {
+      "status": "not_linked",
+      "barcode": "2000000000992",
+      "matches": [],
+      "checkedAt": "2026-10-26T16:05:51.029992+00:00",
+      "contractVersion": "pricetrace-barcode-lookup.v1"
+    },
+    {
+      "status": "not_linked",
+      "barcode": "8801043014830",
+      "matches": [],
+      "checkedAt": "2026-10-26T16:05:51.162221+00:00",
+      "contractVersion": "pricetrace-barcode-lookup.v1"
+    },
+    {
+      "status": "invalid",
+      "barcode": "8801104671508",
+      "matches": [],
+      "checkedAt": "2026-10-26T16:05:51.225992+00:00",
+      "contractVersion": "pricetrace-barcode-lookup.v1"
+    }
+  ]
+}
