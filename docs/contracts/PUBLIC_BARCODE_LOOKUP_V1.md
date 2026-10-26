@@ -61,7 +61,7 @@ exactly the ten fields shown. Unknown brand/category/price is JSON null.
   "contractVersion": "pricetrace-barcode-lookup.v1",
   "barcode": "8801104671507",
   "status": "matched",
-  "checkedAt": "2026-10-27T00:00:00+00:00",
+  "checkedAt": "2026-10-26T15:24:54.41142+00:00",
   "matches": [{
     "catalogProductId": "1516c3eb-3dfb-4e11-8040-d23fadcdaad0",
     "standardProductId": "8510a217-fe6c-473b-8c14-2cba4a301e40",
@@ -71,13 +71,15 @@ exactly the ten fields shown. Unknown brand/category/price is JSON null.
     "contentUnit": "g",
     "packageCount": 1,
     "specificationLabel": "40g",
-    "categoryName": null,
+    "categoryName": "육포·단백질간식",
     "latestPublicPrice": null
   }]
 }
 ```
 
-This is a contract example, not a claim that registration/deployment has run.
+This matched example is the actual post-deployment anon response captured on
+2026-10-27 at 00:24:54 KST. All four verified responses, including the second
+demo, are saved in [the sanitized HTTP result](examples/PUBLIC_BARCODE_LOOKUP_V1.verified.json).
 `name` is the standard family name; identity for the next call is
 `catalogProductId`. Amount/unit/count belong to that exact variant. The existing
 product-browser package label rule is reused: `40g`, `40g x 2`, `1개 x 6`.
@@ -91,7 +93,7 @@ A valid unlinked example (the fixture reserved here is not a claimed GS1 product
   "contractVersion": "pricetrace-barcode-lookup.v1",
   "barcode": "2000000000992",
   "status": "not_linked",
-  "checkedAt": "2026-10-27T00:00:00+00:00",
+  "checkedAt": "2026-10-26T15:24:54.745426+00:00",
   "matches": []
 }
 ```
@@ -189,7 +191,51 @@ was absent. Both exact products were also re-read through v4 over HTTPS using
 only a publishable key, with no user Authorization header. This is a read-only
 preflight, not deployment evidence.
 
-Current deployment status: **not applied; waiting for final user approval**.
+Current deployment status: **applied after explicit user approval; anon HTTPS
+verification passed on 2026-10-27 (KST)**.
+
+The approved source commit is `23a0d25`. The migration
+`20261026150132_public_product_by_barcode_v1.sql` was applied alone from the
+staged release directory using `supabase db push --linked --workdir
+supabase/.temp/barcode-release-v1 --yes`. Remote migration history now has 109
+rows, including version `20261026150132`, name `public_product_by_barcode_v1`.
+No unrelated migration was applied or history repaired.
+
+The approved operational SQL then committed exactly two `ean` / `verified`
+identifiers at `2026-10-26T15:24:26.42865+00:00` (2026-10-27 00:24:26 KST).
+Postflight confirmed identifier count 2, physical-package/user evidence on both
+rows, RLS enabled, anon direct table SELECT false, both RPC execute grants true,
+and SECURITY DEFINER with an empty search path.
+
+`node scripts/verify-public-barcode-lookup.mjs` passed with a modern publishable
+key supplied only in process memory and **no Authorization header/session**:
+
+| Input | HTTP | status | Catalog result |
+| --- | --- | --- | --- |
+| `8801104671507` | 200 | `matched` | `1516c3eb-3dfb-4e11-8040-d23fadcdaad0`, 40g x 1, brand 빙그레 |
+| `8809375984692` | 200 | `matched` | `18e83c5c-86a4-4e95-a131-411381789687`, 60g x 1, brand null |
+| `2000000000992` | 200 | `not_linked` | Empty matches |
+| `8801104671508` | 200 | `invalid` | Empty matches |
+| Direct `catalog_product_identifiers` SELECT | 401 | Access denied | No table rows disclosed |
+
+Both demos returned `latestPublicPrice: null`: no eligible exact-variant public
+market listing was available in the reused public projection. Family-level
+Coupang prices were not substituted. Key values are absent from committed
+evidence, docs and logs.
+
+The CLI reported a failed optional local pg-delta catalog cache because Docker
+Desktop was unavailable. Remote migration history, identifier rows and real
+HTTP calls were subsequently verified successfully; this warning did not
+prevent deployment. No Docker installation or unrelated environment changes
+were performed.
+
+The post-apply security advisor reports the intentional public/signed-in
+SECURITY DEFINER execute warnings
+[0028](https://supabase.com/docs/guides/database/database-linter?lint=0028_anon_security_definer_function_executable)
+and [0029](https://supabase.com/docs/guides/database/database-linter?lint=0029_authenticated_security_definer_function_executable)
+for this function. These grants are the approved API contract; empty search path,
+strict public projection, table privilege denial and RLS were verified above.
+AR device behavior and Nutrition coverage remain unverified in this repository.
 
 Local validation: `npm.cmd run lint`, `npm.cmd run typecheck`,
 `npm.cmd run test` (66 files / 589 tests), `npm.cmd run test:purchase-sql`
