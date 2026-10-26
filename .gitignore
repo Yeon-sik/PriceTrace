@@ -44,6 +44,8 @@ docs/*
 !docs/예외처리_*.md
 !docs/contracts/
 !docs/contracts/MERCHANT_PROFILE_V1.md
+!docs/FUTURE_BACKLOG.md
+!docs/contracts/PUBLIC_BARCODE_LOOKUP_V1.md
 !docs/integrations/
 docs/integrations/*
 !docs/integrations/product-nutrition-link.md
@@ -131,6 +133,10 @@ e2e/*
 .impeccable/review/
 .impeccable/*.cjs
 .impeccable/inspect-subject.ts
+
+# Local-only barcode preflight and editor metadata.
+/supabase/*.local.sql
+/.serena/
 
 # Versioned brand catalog regression coverage
 !src/domain/brand-hierarchy.test.ts
