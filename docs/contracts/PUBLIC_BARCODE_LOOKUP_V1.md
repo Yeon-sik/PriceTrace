@@ -313,14 +313,37 @@ existing checks remain, with new archived/private/fully hidden conflict and
 single hidden-link coverage. The SQL harness first reproduces the old false
 match before installing the repair, then runs the corrected fixture.
 
-Correction deployment: **not applied yet; requires fresh user approval after
-local validation**. The earlier approval covered only initial creation and the
-two demo identifiers. This repair performs no identifier/product/price writes.
-After approval, run `node scripts/verify-public-barcode-lookup.mjs` with only
-the runtime publishable key: the two demo barcodes must remain `matched`,
-`8801043014830` must be `not_linked`, and existing synthetic not-linked / invalid
-checks and direct table SELECT denial must continue to pass. Save a separate
-post-correction response artifact; the initial verified JSON is historical.
+Correction deployment: **applied after fresh explicit user approval on
+2026-10-27; post-correction anon HTTPS verification passed at 01:05:50-51 KST**.
+The approved source is commit `d7c1d33`; migration version `20261026155036`, name
+`public_barcode_verified_conflicts`, was applied alone with
+`supabase db push --linked --workdir supabase/.temp/barcode-conflict-release-v1
+--yes`. The earlier approval was not reused. This repair performed no
+identifier/product/price writes; the remote identifier count remains 2.
+
+`node scripts/verify-public-barcode-lookup.mjs` passed with a modern publishable
+key supplied only in process memory, no Authorization header and no user session:
+
+| Barcode / request | HTTP | Post-correction result |
+| --- | --- | --- |
+| `8801104671507` | 200 | `matched`, exact catalog `1516c3eb-3dfb-4e11-8040-d23fadcdaad0` |
+| `8809375984692` | 200 | `matched`, exact catalog `18e83c5c-86a4-4e95-a131-411381789687` |
+| `8801043014830` | 200 | `not_linked`, `matches: []` |
+| `2000000000992` | 200 | `not_linked`, `matches: []` |
+| `8801104671508` | 200 | `invalid`, `matches: []` |
+| Direct identifier table SELECT | 401 | Access denied |
+
+The complete sanitized results are preserved in
+[the post-correction verified JSON](examples/PUBLIC_BARCODE_LOOKUP_V1.conflict-fix.verified.json).
+The initial verified JSON remains historical. No keys were logged or committed.
+
+Read-only postflight confirmed that the deployed `pg_proc.prosrc` body equals
+the approved migration body after line-ending normalization; migration history
+contains the repair, `anon` / `authenticated` EXECUTE remain true, PUBLIC EXECUTE
+and anon direct table SELECT remain false, identifier RLS remains enabled, and
+SECURITY DEFINER retains an empty search path. The CLI again reported the optional
+Docker/pg-delta cache warning described above; remote history, function body and
+actual HTTP responses independently confirmed successful application.
 
 The dependency order is **brand-hall -> public-barcode-lookup**. The barcode
 branch includes `cec0223`, `673a676`, `08b8b02` and reads
@@ -384,6 +407,12 @@ and `20261022193355_preserve_archived_brand_parent_identity` (eleven remote-only
 versions total); the same six local-only versions remain. These two brand
 migrations are already in GitHub main.
 
+After the approved repair, remote history has **110 versions**. Relative to the
+same captured GitHub main (`08b8b02`), the remote-only list now has **ten** entries:
+the nine listed above plus `20261026155036_public_barcode_verified_conflicts`.
+The six main-only versions remain unchanged. No unrelated migration history
+was repaired or replayed.
+
 Several names recur under different timestamps. That alone does not establish
 equivalence or justify repair/replay. Do not bulk push this checkout or
 rewrite/squash/delete migration history. For this correction, stage copies of
@@ -405,7 +434,9 @@ The ignored release directory `supabase/.temp/barcode-conflict-release-v1` was
 prepared from the actual 109 remote applied migrations plus the repair.
 `supabase db push --linked --dry-run --workdir
 supabase/.temp/barcode-conflict-release-v1` passed and listed only
-`20261026155036_public_barcode_verified_conflicts.sql`. Pre-apply advisors still
-report the intentional execute-grant warnings 0028/0029 described above. No
-new remote application, web E2E, Android build or AR runtime test is claimed
-by these local checks. The new repair remains pending explicit user approval.
+`20261026155036_public_barcode_verified_conflicts.sql`. Pre/post-apply advisors
+report the same intentional execute-grant warnings 0028/0029 described above.
+The actual remote application and HTTP results are recorded separately above.
+Production conflict fixtures were not inserted: the archived/private conflict
+cases were tested locally, and the deployed body was verified against that
+tested migration. No web E2E, Android build or AR runtime test is claimed.
