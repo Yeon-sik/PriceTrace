@@ -3,6 +3,7 @@ import { resolve, join } from "node:path";
 import { pathToFileURL } from "node:url";
 import assert from "node:assert/strict";
 import { verifyOcrComponentContract } from "./verify-ocr-component-contract.mjs";
+import { verifyArDemoBarcodeRegistration } from "./verify-ar-demo-barcode-registration.mjs";
 
 // Optional test-only runtime, supplied externally. Never contacts a remote DB.
 const runtime = process.argv[2];
@@ -89,7 +90,7 @@ try {
   assert.deepEqual(await legacyBrandIdentities(), brandIdentitySnapshot);
   console.log("BRAND_LEGACY_V1_V4_DEFINITIONS_UNCHANGED_PASS");
   console.log(`MIGRATION_BOOTSTRAP_WITH_DOCUMENTED_ACCOMMODATIONS_PASS ${migrations.length}`);
-  for (const file of ["brand_hierarchy_public_catalog.sql", "purchase_price_observation_v4.sql", "purchase_price_line_authority_response.sql", "purchase_restaurant_identity_recovery.sql", "user_confirmed_purchase_restaurants.sql", "owner_confirmed_cross_purchase.sql", "restaurant_component_parent_reads.sql", "restaurant_component_identity_resolution.sql", "purchase_public_identity_search.sql", "verified_receipt_ingestion_v2.sql"]) {
+  for (const file of ["public_product_by_barcode_v1.sql", "brand_hierarchy_public_catalog.sql", "purchase_price_observation_v4.sql", "purchase_price_line_authority_response.sql", "purchase_restaurant_identity_recovery.sql", "user_confirmed_purchase_restaurants.sql", "owner_confirmed_cross_purchase.sql", "restaurant_component_parent_reads.sql", "restaurant_component_identity_resolution.sql", "purchase_public_identity_search.sql", "verified_receipt_ingestion_v2.sql"]) {
     try {
       const result = await db.exec(readSql("tests", file));
       console.log(`SQL_FIXTURE_PASS ${file}`, result.flatMap(r => r.rows).filter(r => r.result));
@@ -136,6 +137,15 @@ try {
       }
     }
   }
+  const barcodePublicReadArgument = process.argv.indexOf("--barcode-public-read");
+  if (barcodePublicReadArgument !== -1) {
+    const snapshot = JSON.parse(readFileSync(process.argv[barcodePublicReadArgument + 1], "utf8"));
+    assert.ok(snapshot.public_read_definition?.startsWith("CREATE OR REPLACE FUNCTION public.get_product_read_v1("));
+    await db.exec(snapshot.public_read_definition);
+    const results = await db.exec(readSql("tests", "public_product_by_barcode_v1.sql"));
+    console.log("DEPLOYED_PUBLIC_READ_BARCODE_FIXTURE_PASS", results.flatMap(result => result.rows).filter(row => row.result));
+  }
+  await verifyArDemoBarcodeRegistration(db, readSql);
 } finally {
   await db.close();
 }
