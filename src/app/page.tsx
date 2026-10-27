@@ -18,6 +18,7 @@ import { PublicOfficialChannelCatalogRepository } from "@/repositories/public-of
 import { PxProductNameReviewRepository } from "@/repositories/px-product-name-review.repository";
 import { useCartStore } from "@/stores/cart.store";
 import { AuthPanel } from "./AuthPanel";
+import { IdentityConnectionsPanel } from "./IdentityConnectionsPanel";
 import { CartNoticeModal, CartQuantityModal } from "./CartModals";
 import { CartPage } from "./CartPage";
 import { PriceTrendModal } from "./PriceTrendModal";
@@ -311,6 +312,7 @@ export default function Home() {
       {page === "markets" && <MarketBrowser receipts={receipts} observations={observationListings} selectedStore={selectedMarket} selectedStoreId={selectedStoreId} onSelectStore={(store) => navigate("markets", { selectedMarket: store, replace: true })} onSelectStoreId={() => navigate("markets", { replace: true })} onOpenTrend={setTrendGroup} />}
       {page === "cart" && <CartPage products={cartProducts} lines={lines} onQuantityChange={updateCartQuantity} onRemove={removeCart} onClear={clearCart} onBrowse={() => navigate("products")} />}
       {adminPageActive && <AdminPage candidates={officialCandidates} approvalCandidates={approvalCandidates} receipts={receipts} />}
+      {["products", "markets", "restaurants"].includes(page) && <IdentityConnectionsPanel />}
     </main>
 
     <footer className={styles.footer}><strong>PriceTrace.</strong><span>출처가 있는 가격, 근거가 있는 비교.</span><a href="https://www.figma.com/community/file/1166831539721848736" target="_blank" rel="noreferrer">Icons by 480 Design · CC BY 4.0</a></footer>

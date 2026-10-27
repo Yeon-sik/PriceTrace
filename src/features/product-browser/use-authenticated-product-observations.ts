@@ -22,7 +22,8 @@ export function useAuthenticatedProductObservations(authRevision: number, page: 
     }); };
     load();
     window.addEventListener("focus", load);
-    return () => { active = false; window.removeEventListener("focus", load); };
+    window.addEventListener("pricetrace-identity-connected", load);
+    return () => { active = false; window.removeEventListener("focus", load); window.removeEventListener("pricetrace-identity-connected", load); };
   }, [authRevision, page]);
   return { observations, error };
 }

@@ -18,7 +18,7 @@ const ownerMenuSchema = z.object({
 
 // Deliberately separate from RestaurantDirectory/RestaurantMenu/global catalogue IDs.
 export const OwnerConfirmedRestaurantReadSchema = z.object({
-  schemaVersion: z.enum(["owner-restaurant-read.v1", "owner-restaurant-read.v2"]), ownerId: z.string().uuid(),
+  schemaVersion: z.enum(["owner-restaurant-read.v1", "owner-restaurant-read.v2", "owner-restaurant-read.v3"]), ownerId: z.string().uuid(),
   restaurants: z.array(z.object({
     id: z.string().uuid(), locationId: z.string().uuid(), name: z.string().min(1),
     branchName: z.string().nullable(), authorityStatus: z.literal("owner_confirmed"),

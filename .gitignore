@@ -2,6 +2,7 @@
 private-data/
 
 # Local environment
+/.serena/
 .env
 .env.local
 .env.*.local
@@ -123,7 +124,9 @@ e2e/*
 !src/lib/supabase/nutrition-client.test.ts
 !src/repositories/authenticated-restaurant-observation.repository.test.ts
 !src/repositories/owner-confirmed-restaurant.repository.test.ts
+!src/repositories/identity-connection.repository.test.ts
 !e2e/owner-confirmed-restaurants.spec.ts
+!e2e/identity-connections.spec.ts
 # Keep the design behavior regressions; generated review artifacts stay local.
 !e2e/observation-instrument.spec.ts
 !src/features/observation-instrument/observation-selector.test.ts
