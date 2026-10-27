@@ -3,7 +3,7 @@ import { expect, test, type Page } from "@playwright/test";
 const uuid = (n: number) => `00000000-0000-4000-8000-${String(n).padStart(12, "0")}`;
 const price = (n: number, date: string, amount: number) => ({ id: uuid(n), purchaseSourceLineId: uuid(n + 100), observedOn: date,
   createdAt: `${date}T12:00:00Z`, quantity: 1, unitPriceKrw: amount, grossPriceKrw: amount, netPriceKrw: amount, discountPriceKrw: null });
-const privateProjection = { schemaVersion: "owner-restaurant-read.v2", ownerId: uuid(11), restaurants: [{
+const privateProjection = { schemaVersion: "owner-restaurant-read.v3", ownerId: uuid(11), restaurants: [{
   id: uuid(1), locationId: uuid(2), name: "한성대학교 학생식당", branchName: null, authorityStatus: "owner_confirmed",
   menus: [{ id: uuid(3), name: "돼지불백덮밥", servingLabel: null, components: [{ id: uuid(9), name: "국물", role: "complimentary_side" }], priceHistory: [price(5, "2026-11-10", 6000), price(6, "2026-10-13", 5700)] },
     { id: uuid(4), name: "어묵우동", servingLabel: null, priceHistory: [price(7, "2026-11-10", 4000), price(8, "2026-10-13", 3800)] }],
@@ -27,7 +27,7 @@ async function prepare(page: Page, owner: number | null, privateProducts: unknow
     if (path === "/auth/v1/user") data = user;
     else if (path === "/rest/v1/price_observations") data = owner === 11 ? privateProducts : [];
     else if (rpc === "get_restaurant_directory_v2") data = { schemaVersion: "restaurant-directory.v2", namespace: "pricetrace", revision: `sha256:${"a".repeat(64)}`, restaurants: [] };
-    else if (rpc === "get_my_owner_confirmed_restaurants_v2") { privateReads++; data = owner === 11 ? privateProjection : { ...privateProjection, ownerId: uuid(owner!), restaurants: [] }; }
+    else if (rpc === "get_my_owner_confirmed_restaurants_v3") { privateReads++; data = owner === 11 ? privateProjection : { ...privateProjection, ownerId: uuid(owner!), restaurants: [] }; }
     else if (path === "/auth/v1/logout") { await route.fulfill({ status: 204 }); return; }
     await route.fulfill({ contentType: "application/json", body: JSON.stringify(data) });
   });
@@ -36,6 +36,9 @@ async function prepare(page: Page, owner: number | null, privateProducts: unknow
     : null;
   await page.goto("/PriceTrace?view=restaurants");
   if (initialProductRead) await (await initialProductRead).finished();
+  const navigation = page.getByRole("navigation", { name: "주요 메뉴", exact: true });
+  await expect(navigation.getByRole("button", { name: "음식점", exact: true })).toHaveAttribute("aria-current", "page");
+  await expect(page.getByRole("button", { name: owner ? "로그아웃" : "로그인", exact: true })).toBeVisible();
   // Exercise the visible entry point after the initial owner read completes.
   await page.getByRole("button", { name: "음식점", exact: true }).click();
   return () => privateReads;
@@ -43,7 +46,7 @@ async function prepare(page: Page, owner: number | null, privateProducts: unknow
 
 async function openPrivateRestaurants(page: Page, expectRead = true) {
   const read = expectRead
-    ? page.waitForResponse(response => new URL(response.url()).pathname === "/rest/v1/rpc/get_my_owner_confirmed_restaurants_v2")
+    ? page.waitForResponse(response => new URL(response.url()).pathname === "/rest/v1/rpc/get_my_owner_confirmed_restaurants_v3")
     : null;
   await page.getByRole("button", { name: "내 확인 식당", exact: true }).click();
   if (read) await (await read).finished();
@@ -115,9 +118,16 @@ test("개인 구매 상품은 공개 홈의 관측 통계와 최근 기록에 �
   const purchaseRead = page.waitForResponse(response => new URL(response.url()).pathname === "/rest/v1/price_observations");
   await page.getByRole("button", { name: "가격 추적기 홈", exact: true }).click();
   await (await purchaseRead).finished();
-  await page.evaluate(() => new Promise<void>(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))));
+  const main = page.getByRole("main");
+  await expect(main).toBeVisible();
   const publicSummary = page.locator('dl[aria-label="공개 영수증 기록 현황"]');
+  await expect(page.getByRole("navigation", { name: "주요 메뉴", exact: true }).getByRole("button", { name: "홈", exact: true }))
+    .toHaveAttribute("aria-current", "page");
   await expect(publicSummary).toContainText("223건");
+  await expect(publicSummary).toContainText("4건");
+  await expect(publicSummary).toContainText("3곳");
   await expect(publicSummary).toContainText("2026.07.14");
-  await expect(page.locator("main")).not.toContainText("비공개 구매 상품");
+  await expect(main).not.toContainText("비공개 구매 상품");
+  await expect(main).not.toContainText("비공개 판매처");
+  await expect(page.getByRole("region", { name: "기록 탐색", exact: true })).not.toContainText("비공개 구매 상품");
 });

@@ -96,7 +96,7 @@ try {
   assert.deepEqual(await legacyBrandIdentities(), brandIdentitySnapshot);
   console.log("BRAND_LEGACY_V1_V4_DEFINITIONS_UNCHANGED_PASS");
   console.log(`MIGRATION_BOOTSTRAP_WITH_DOCUMENTED_ACCOMMODATIONS_PASS ${migrations.length}`);
-  for (const file of ["public_product_by_barcode_v1.sql", "brand_hierarchy_public_catalog.sql", "purchase_price_observation_v4.sql", "purchase_price_line_authority_response.sql", "purchase_restaurant_identity_recovery.sql", "user_confirmed_purchase_restaurants.sql", "owner_confirmed_cross_purchase.sql", "restaurant_component_parent_reads.sql", "restaurant_component_identity_resolution.sql", "purchase_public_identity_search.sql", "verified_receipt_ingestion_v2.sql"]) {
+  for (const file of ["public_product_by_barcode_v1.sql", "brand_hierarchy_public_catalog.sql", "purchase_price_observation_v4.sql", "purchase_price_line_authority_response.sql", "purchase_restaurant_identity_recovery.sql", "user_confirmed_purchase_restaurants.sql", "owner_confirmed_cross_purchase.sql", "restaurant_component_parent_reads.sql", "restaurant_component_identity_resolution.sql", "purchase_public_identity_search.sql", "verified_receipt_ingestion_v2.sql", "shared_identity_connections.sql"]) {
     try {
       const result = await db.exec(readSql("tests", file));
       console.log(`SQL_FIXTURE_PASS ${file}`, result.flatMap(r => r.rows).filter(r => r.result));
