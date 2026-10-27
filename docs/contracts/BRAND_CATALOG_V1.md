@@ -5,12 +5,30 @@ It describes the current database and public wire contracts, not planned OCR-App
 
 ## Ownership and identity
 
-PriceTrace owns canonical Brand Identity. OCR-App and Fitness must not maintain duplicate canonical Brand masters.
+PriceTrace owns canonical Brand Identity and Brand discovery/search semantics through the public Brand Catalog contract,
+including Brand name normalization, alias matching and result ranking.
+OCR-App and Fitness must not maintain duplicate canonical Brand masters.
 
 `public.brands.id` (UUID) is the identity key. `canonical_name`, an alias, manufacturer and display strings are not identity.
 An alias match resolves to the same canonical Brand ID; it does not create another brand.
 Consumers may keep their own observed/display snapshot strings alongside the canonical ID.
 An observed string or a search result alone is not authority to automatically establish a product's identity.
+
+## Display and discovery semantics
+
+`canonical_name` is the default user-facing canonical label. Consumers should use it when rendering a selected Brand.
+`brand_aliases` are alternative discovery/search expressions for the same Brand identity, not alternate canonical identities.
+`matched_name` records the text matched for the current search as context/evidence; it is not the Brand's default display name.
+`match_kind = 'alias'` means the query resolved through an alias to the same canonical `brand_id`.
+Consumers may show `matched_name` as secondary search context, for example `별칭 · 씨제이`, while using `canonical_name` as the default label.
+
+Consumers must delegate Brand name normalization, alias matching and result ranking to PriceTrace through this public contract.
+They must not duplicate these rules or maintain local alias maps such as `"씨제이" -> "CJ"`.
+These names are explanatory examples only; they do not seed or prescribe production Brand/alias data.
+
+A free-text Brand string or search hit alone does not establish canonical Brand identity.
+A consumer establishes canonical identity only when it explicitly selects/resolves the returned `brand_id` according to its UX.
+Do not automatically infer canonical Brand identity from arbitrary free text.
 
 ## Hierarchy and products
 
@@ -160,8 +178,9 @@ External consumers use the public read contracts; these admin RPCs do not grant 
 
 ## Consumer and versioning rules
 
-- Use `brand_id` as canonical identity; keep observed/display strings separately if needed.
-- Resolve canonical names and aliases through PriceTrace; do not build another canonical master.
+- Use `brand_id` as canonical identity after explicit selection/resolution; keep observed/display strings separately if needed.
+- Use `canonical_name` as a selected Brand's default label; `matched_name` is optional secondary search context.
+- Resolve canonical names and aliases through PriceTrace's public Brand Catalog contract; do not duplicate canonical masters, normalization/alias maps or ranking rules.
 - Do not infer an identity, a parent or a manufacturer relationship solely from a string.
 - Traverse parents explicitly; distinguish direct products from descendant products.
 - Preserve null/archival distinctions and handle public resolution failure explicitly.
