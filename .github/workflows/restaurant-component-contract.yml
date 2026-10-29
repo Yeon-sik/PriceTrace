@@ -22,9 +22,7 @@ jobs:
         with:
           node-version-file: .nvmrc
           cache: npm
-      - run: npm ci
-      - run: npm run lint
-      - run: npm run typecheck
-      - run: npm test -- --maxWorkers=2 --minWorkers=1
-      - run: npm run test:purchase-sql
-      - run: npm run build
+      - run: bash scripts/cloud-setup.sh
+      - run: bash scripts/cloud-check.sh
+      - run: npm exec -- playwright install --with-deps chromium
+      - run: npm run test:e2e -- --workers=2

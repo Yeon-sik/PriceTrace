@@ -3,7 +3,7 @@
 set -euo pipefail
 cd "$(dirname "${BASH_SOURCE[0]}")/.."
 task_node_version="$(tr -d '\r\n' < .nvmrc)"
-if [[ "$(node --version 2>/dev/null || true)" != "v${task_node_version}" ]] || ! command -v corepack >/dev/null 2>&1; then
+if [[ "$(node --version 2>/dev/null || true)" != "v${task_node_version}" ]]; then
   case "$(uname -s):$(uname -m)" in
     Linux:x86_64) task_node_platform=linux-x64 ;;
     Linux:aarch64) task_node_platform=linux-arm64 ;;
