@@ -109,8 +109,8 @@ function OfficialLinkedStandardCard({
    </article>;
 }
 
-export function ProductBrowser({ groups, query, setQuery, category, setCategory, martType, setMartType, selectedStore, setSelectedStore, sort, setSort, authRevision, selectedStoreProductId, selectedCatalogProductId, onClearIdentity, onAdd, onTrend, onOpenStore }: {
-  groups: ProductGroup[]; query: string; setQuery: (value: string) => void; category: ProductCategory; setCategory: (value: ProductCategory) => void; martType: MartType; setMartType: (value: MartType) => void; selectedStore: string; setSelectedStore: (value: string) => void; sort: ProductSort; setSort: (value: ProductSort) => void; authRevision: number; selectedStoreProductId: string | null; selectedCatalogProductId: string | null; onClearIdentity: () => void; onAdd: (product: CartProduct) => void; onTrend: (group: ProductGroup) => void; onOpenStore: (store: string) => void;
+export function ProductBrowser({ groups, query, setQuery, category, setCategory, martType, setMartType, selectedStore, setSelectedStore, sort, setSort, authRevision, selectedStoreProductId, selectedCatalogProductId, onClearIdentity, onAdd, onTrend, onOpenStore, onOpenOrderCapture }: {
+  groups: ProductGroup[]; query: string; setQuery: (value: string) => void; category: ProductCategory; setCategory: (value: ProductCategory) => void; martType: MartType; setMartType: (value: MartType) => void; selectedStore: string; setSelectedStore: (value: string) => void; sort: ProductSort; setSort: (value: ProductSort) => void; authRevision: number; selectedStoreProductId: string | null; selectedCatalogProductId: string | null; onClearIdentity: () => void; onAdd: (product: CartProduct) => void; onTrend: (group: ProductGroup) => void; onOpenStore: (store: string) => void; onOpenOrderCapture: () => void;
 }) {
   const { linkedByStandardProduct, standaloneListings } = useMemo(
     () => partitionOfficialChannelListingsByStandardProduct(publicPxCatalog.listings),
@@ -258,6 +258,11 @@ export function ProductBrowser({ groups, query, setQuery, category, setCategory,
           placeholder={showOfficialOnly ? "상품명, 업체명, 규격, 상품 코드 검색" : "상품명, 판매처 코드, 판매 마트 검색"}
         />
       </label>
+    </div>
+
+    <div className={styles.productImportEntry}>
+      <div><strong>인터넷 주문 상품도 등록할 수 있습니다.</strong><span>쿠팡·iHerb 주문 상세 캡처를 로컬에서 읽고, 표준 상품 후보를 확인하세요.</span></div>
+      <button type="button" onClick={onOpenOrderCapture}>주문 캡처 등록</button>
     </div>
 
     <div className={styles.catalogLayerTabs} role="group" aria-label="상품 데이터 계층">

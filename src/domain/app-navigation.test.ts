@@ -29,6 +29,12 @@ describe("app navigation URL", () => {
       selectedRestaurant: null,
       ...noIdentity,
     });
+    expect(readAppNavigationUrl("https://example.test/PriceTrace?view=order-capture")).toEqual({
+      page: "order-capture",
+      selectedMarket: null,
+      selectedRestaurant: null,
+      ...noIdentity,
+    });
     expect(readAppNavigationUrl("https://example.test/PriceTrace?view=unknown")).toEqual({
       page: "home",
       selectedMarket: null,
