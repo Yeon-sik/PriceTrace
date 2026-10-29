@@ -65,7 +65,6 @@ e2e/
 playwright.config.ts
 vitest.config.ts
 eslint.config.mjs
-src/**/*.test.ts
 !src/domain/official-product.test.ts
 !src/domain/official-product-category.test.ts
 !src/domain/public-official-channel-catalog.test.ts
@@ -103,11 +102,14 @@ e2e/*
 !src/features/product-nutrition/nutrition-presentation.test.ts
 !src/domain/price-observation-submit.test.ts
 !src/domain/price-observation-submit-migration.test.ts
+!src/domain/order-capture.test.ts
+!src/domain/order-product-link-request.test.ts
 !src/repositories/cart.repository.test.ts
 !src/repositories/admin-receipt.repository.test.ts
 !src/repositories/official-product.repository.test.ts
 !src/repositories/public-receipt.repository.test.ts
 !src/repositories/product-read.repository.test.ts
+!src/repositories/order-capture.repository.test.ts
 !src/repositories/nutrition-catalog.repository.test.ts
 !src/repositories/product-catalog.repository.test.ts
 !src/domain/restaurant-menu.test.ts
@@ -147,3 +149,15 @@ e2e/*
 !src/repositories/public-brand.repository.test.ts
 !src/repositories/admin-brand.repository.test.ts
 !e2e/brand-hall.spec.ts
+
+# Repository-local tools and independent worktrees are not product source.
+/.agents/
+/.worktrees/
+
+# Per-checkout cloud toolchain cache
+/.cloud/
+
+# Public, self-contained cloud instructions and test configuration.
+!AGENTS.md
+!vitest.config.ts
+!docs/CLOUD_DEVELOPMENT.md
