@@ -3,6 +3,7 @@ import { resolve, join } from "node:path";
 import { pathToFileURL } from "node:url";
 import assert from "node:assert/strict";
 import { verifyOcrComponentContract } from "./verify-ocr-component-contract.mjs";
+import { verifyArDemoBarcodeRegistration } from "./verify-ar-demo-barcode-registration.mjs";
 
 // Optional test-only runtime, supplied externally. Never contacts a remote DB.
 const runtime = process.argv[2];
@@ -39,6 +40,9 @@ try {
   let baselineChecked = false;
   let brandCompatibilitySnapshot;
   let brandIdentitySnapshot;
+  let candidateDefinition;
+  let v1ResolutionDefinitions;
+  const v1ResolutionContracts = () => db.query("select proname, pg_get_functiondef(oid) as definition from pg_proc where oid in ('public.set_product_candidate_brand_resolution_v1(text,text,text,uuid,boolean)'::regprocedure,'public.get_product_candidate_brand_resolutions_v1(text)'::regprocedure,'public.submit_product_candidate_v1(text,jsonb)'::regprocedure) order by proname");
   const legacyBrandIdentities = async () => ({
     brands: await db.query("select id, canonical_name from public.brands order by id"),
     products: await db.query("select id, brand_id, brand from public.standard_products order by id"),
@@ -50,9 +54,23 @@ try {
       'get_public_exact_standard_product_catalog_v3', 'get_public_exact_standard_product_catalog_v4'
     ) order by proname`);
   for (const file of migrations) {
+    if (file.endsWith("public_barcode_verified_conflicts.sql")) {
+      await assert.rejects(() => db.exec(readSql("tests", "public_product_by_barcode_v1.sql")),
+        error => error.message.includes("archived verified conflict remains conflict without candidates"));
+      await db.exec("rollback");
+      console.log("BASELINE_BARCODE_HIDDEN_CONFLICT_MATCHED_FAILURE_REPRODUCED");
+    }
+    if (file.endsWith("product_candidate_brand_resolution_v2.sql")) v1ResolutionDefinitions = await v1ResolutionContracts();
+    if (file.endsWith("product_candidate_brand_resolution.sql")) candidateDefinition = await db.query("select pg_get_functiondef('public.submit_product_candidate_v1(text,jsonb)'::regprocedure) as definition");
     if (file.endsWith("brand_hierarchy_public_catalog.sql")) {
       brandCompatibilitySnapshot = await legacyCatalogDefinitions();
       brandIdentitySnapshot = await legacyBrandIdentities();
+    }
+    if (file.endsWith("verified_receipt_preserve_product_on_sku_miss.sql")) {
+      await assert.rejects(() => db.exec(readSql("tests", "verified_receipt_sku_identity.sql")),
+        error => error.code === "23502" && error.message.includes('"product_id"'));
+      await db.exec("rollback");
+      console.log("BASELINE_RECEIPT_NEW_SKU_PRODUCT_NULL_REPRODUCED");
     }
     if (file.endsWith("purchase_price_runtime_compatibility.sql")) {
       await assert.rejects(() => db.exec(readSql("tests", "purchase_price_observation_v4.sql")),
@@ -85,11 +103,15 @@ try {
     }
   }
   assert.ok(baselineChecked);
+  assert.deepEqual(await v1ResolutionContracts(), v1ResolutionDefinitions);
+  console.log("BRAND_RESOLUTION_V1_AND_INGEST_DEFINITIONS_UNCHANGED_PASS");
+  assert.deepEqual(await db.query("select pg_get_functiondef('public.submit_product_candidate_v1(text,jsonb)'::regprocedure) as definition"), candidateDefinition);
+  console.log("PRODUCT_CANDIDATE_INGEST_V1_DEFINITION_UNCHANGED_PASS");
   assert.deepEqual(await legacyCatalogDefinitions(), brandCompatibilitySnapshot);
   assert.deepEqual(await legacyBrandIdentities(), brandIdentitySnapshot);
   console.log("BRAND_LEGACY_V1_V4_DEFINITIONS_UNCHANGED_PASS");
   console.log(`MIGRATION_BOOTSTRAP_WITH_DOCUMENTED_ACCOMMODATIONS_PASS ${migrations.length}`);
-  for (const file of ["brand_hierarchy_public_catalog.sql", "purchase_price_observation_v4.sql", "purchase_price_line_authority_response.sql", "purchase_restaurant_identity_recovery.sql", "user_confirmed_purchase_restaurants.sql", "owner_confirmed_cross_purchase.sql", "restaurant_component_parent_reads.sql", "restaurant_component_identity_resolution.sql", "purchase_public_identity_search.sql", "verified_receipt_ingestion_v2.sql"]) {
+  for (const file of ["brand_read_v1.sql", "public_product_by_barcode_v1.sql", "brand_hierarchy_public_catalog.sql", "purchase_price_observation_v4.sql", "purchase_price_line_authority_response.sql", "purchase_restaurant_identity_recovery.sql", "user_confirmed_purchase_restaurants.sql", "owner_confirmed_cross_purchase.sql", "restaurant_component_parent_reads.sql", "restaurant_component_identity_resolution.sql", "purchase_public_identity_search.sql", "verified_receipt_ingestion_v2.sql", "shared_identity_connections.sql", "product_candidate_brand_resolution.sql", "product_candidate_ingest.sql", "product_candidate_brand_resolution_v2.sql", "verified_receipt_sku_identity.sql"]) {
     try {
       const result = await db.exec(readSql("tests", file));
       console.log(`SQL_FIXTURE_PASS ${file}`, result.flatMap(r => r.rows).filter(r => r.result));
@@ -136,6 +158,15 @@ try {
       }
     }
   }
+  const barcodePublicReadArgument = process.argv.indexOf("--barcode-public-read");
+  if (barcodePublicReadArgument !== -1) {
+    const snapshot = JSON.parse(readFileSync(process.argv[barcodePublicReadArgument + 1], "utf8"));
+    assert.ok(snapshot.public_read_definition?.startsWith("CREATE OR REPLACE FUNCTION public.get_product_read_v1("));
+    await db.exec(snapshot.public_read_definition);
+    const results = await db.exec(readSql("tests", "public_product_by_barcode_v1.sql"));
+    console.log("DEPLOYED_PUBLIC_READ_BARCODE_FIXTURE_PASS", results.flatMap(result => result.rows).filter(row => row.result));
+  }
+  await verifyArDemoBarcodeRegistration(db, readSql);
 } finally {
   await db.close();
 }

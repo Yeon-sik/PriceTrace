@@ -17,6 +17,11 @@ export function useOwnerConfirmedRestaurants() {
   const [state, setState] = useState<State>(empty);
   const [revision, setRevision] = useState(0);
   useEffect(() => {
+    const reload = () => setRevision(value => value + 1);
+    window.addEventListener("pricetrace-identity-connected", reload);
+    return () => window.removeEventListener("pricetrace-identity-connected", reload);
+  }, []);
+  useEffect(() => {
     if (!client || !repository) {
       setState({ status: "signed_out", read: null, error: null });
       return;

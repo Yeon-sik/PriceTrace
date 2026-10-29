@@ -16,6 +16,16 @@ function row() {
   };
 }
 describe("authenticated OCR products", () => {
+  it("uses only owner-confirmed store connections without changing source product or price identity", () => {
+    const source = row();
+    const target = "99999999-9999-4999-8999-999999999999";
+    const binding = { user_id: owner, source_id: source.store_products.store_id, target_id: target, target_name: "기존 가게" };
+    const [original] = authenticatedProductListings([source], owner);
+    const [connected] = authenticatedProductListings([source], owner, [binding]);
+    expect(connected).toEqual({ ...original, storeLabel: "기존 가게", sellerKey: `store:${target}` });
+    expect(authenticatedProductListings([source], owner, [{ ...binding, user_id: target }])).toEqual([original]);
+    expect(source.store_products.stores.name).toBe("GS THE FRESH");
+  });
   it("shows a verified purchased product before standard/catalog mapping", () => {
     const listings = authenticatedProductListings([row()], owner);
     expect(listings).toHaveLength(1);

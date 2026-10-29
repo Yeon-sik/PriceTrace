@@ -185,11 +185,17 @@ test("전체 상품에서 공식 상품을 함께 보여 주고 상품 계층과
 });
 
 test("공유 URL과 브라우저 뒤로가기로 주요 화면 상태를 복원한다", async ({ page }) => {
+  const mainNavigation = page.getByRole("navigation", { name: "주요 메뉴" });
   await page.goto("/PriceTrace?view=products");
+  await expect(mainNavigation.getByRole("button", { name: "상품 목록", exact: true })).toHaveAttribute("aria-current", "page");
   await expect(page.getByRole("heading", { name: "상품 목록", exact: true })).toBeVisible();
   await expect(page).toHaveURL(/\?view=products$/);
 
-  const mainNavigation = page.getByRole("navigation", { name: "주요 메뉴" });
+  await page.reload();
+  await expect(mainNavigation.getByRole("button", { name: "상품 목록", exact: true })).toHaveAttribute("aria-current", "page");
+  await expect(page.getByRole("heading", { name: "상품 목록", exact: true })).toBeVisible();
+  await expect(page).toHaveURL(/\?view=products$/);
+
   await mainNavigation.getByRole("button", { name: /^장바구니/ }).click();
   await expect(page.getByRole("heading", { name: "장바구니", exact: true })).toBeVisible();
   await expect(page).toHaveURL(/\?view=cart$/);

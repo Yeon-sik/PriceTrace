@@ -1,5 +1,7 @@
 # PriceTrace Product Candidate ingest v1
 
+Explicit canonical Brand selection is separate private workflow metadata: [Product Candidate Brand Resolution V1](PRODUCT_CANDIDATE_BRAND_RESOLUTION_V1.md). It adds no fields to this ingest payload.
+
 `PRICETRACE_PRODUCT_CANDIDATE` is the canonical boundary from the
 PriceTrace OCR App to PriceTrace. PriceTrace is the only owner of PriceTrace
 product identity. OCR and GPT provide observed facts and evidence; they do not

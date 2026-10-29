@@ -1,4 +1,4 @@
-export const APP_PAGES = ["home", "restaurants", "products", "brands", "markets", "cart", "admin"] as const;
+export const APP_PAGES = ["home", "restaurants", "products", "order-capture", "brands", "markets", "cart", "admin"] as const;
 
 export type AppPage = (typeof APP_PAGES)[number];
 

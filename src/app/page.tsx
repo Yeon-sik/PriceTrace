@@ -18,11 +18,13 @@ import { PublicOfficialChannelCatalogRepository } from "@/repositories/public-of
 import { PxProductNameReviewRepository } from "@/repositories/px-product-name-review.repository";
 import { useCartStore } from "@/stores/cart.store";
 import { AuthPanel } from "./AuthPanel";
+import { IdentityConnectionsPanel } from "./IdentityConnectionsPanel";
 import { CartNoticeModal, CartQuantityModal } from "./CartModals";
 import { CartPage } from "./CartPage";
 import { PriceTrendModal } from "./PriceTrendModal";
 import { ProductBrowser } from "./ProductBrowser";
 import { MarketBrowser } from "./MarketBrowser";
+import { OrderCapturePage } from "./OrderCapturePage";
 import { RestaurantBrowser } from "./RestaurantBrowser";
 import { BrandHall } from "./BrandHall";
 import styles from "./page.module.css";
@@ -292,7 +294,7 @@ export default function Home() {
       <nav className={styles.nav} aria-label="주요 메뉴"><div className={styles.navInner}>
         <button className={page === "home" ? styles.navActive : ""} aria-current={page === "home" ? "page" : undefined} onClick={() => navigate("home")}>홈</button>
         <button className={page === "restaurants" ? styles.navActive : ""} aria-current={page === "restaurants" ? "page" : undefined} onClick={() => navigate("restaurants")}>음식점</button>
-        <button className={page === "products" ? styles.navActive : ""} aria-current={page === "products" ? "page" : undefined} onClick={() => navigate("products")}>상품 목록</button>
+        <button className={page === "products" || page === "order-capture" ? styles.navActive : ""} aria-current={page === "products" || page === "order-capture" ? "page" : undefined} onClick={() => navigate("products")}>상품 목록</button>
         <button className={page === "brands" ? styles.navActive : ""} aria-current={page === "brands" ? "page" : undefined} onClick={() => navigate("brands")}>브랜드관</button>
         <button className={page === "cart" ? styles.navActive : ""} aria-current={page === "cart" ? "page" : undefined} onClick={() => navigate("cart")}>장바구니 <span className={styles.navBadge}>{cartQuantityTotal}</span></button>
         <button className={page === "markets" ? styles.navActive : ""} aria-current={page === "markets" ? "page" : undefined} onClick={() => navigate("markets")}>판매처 기록</button>
@@ -306,11 +308,13 @@ export default function Home() {
       {page === "products" && purchasedProductError && <p className={styles.error} role="alert">내 구매 상품을 불러오지 못했습니다. 앱을 다시 활성화하면 재시도합니다.</p>}
       {page === "home" && <ObservationHome groups={publicProductGroups} receiptCount={receipts.length} cart={{ count: cartGroups.length, quantity: cartQuantityTotal, total: cartTotal }} onProducts={() => openProducts()} onRestaurants={() => navigate("restaurants")} onMarkets={() => navigate("markets")} onCart={() => navigate("cart")} onTrend={setTrendGroup} />}
       {page === "restaurants" && <RestaurantBrowser selectedRestaurant={selectedRestaurant} selectedRestaurantMenuId={selectedRestaurantMenuId} onSelectRestaurant={(restaurantId) => navigate("restaurants", { selectedRestaurant: restaurantId, replace: restaurantId === null })} onClearMenuIdentity={() => navigate("restaurants", { replace: true })} />}
-      {page === "products" && <ProductBrowser groups={productGroups} query={query} setQuery={setQuery} category={category} setCategory={setCategory} martType={martType} setMartType={setMartType} selectedStore={selectedStore} setSelectedStore={setSelectedStore} sort={sort} setSort={setSort} authRevision={authRevision} selectedStoreProductId={selectedStoreProductId} selectedCatalogProductId={selectedCatalogProductId} onClearIdentity={() => navigate("products", { replace: true })} onAdd={openCartModal} onTrend={setTrendGroup} onOpenStore={(store) => navigate("markets", { selectedMarket: store })} />}
+      {page === "products" && <ProductBrowser groups={productGroups} query={query} setQuery={setQuery} category={category} setCategory={setCategory} martType={martType} setMartType={setMartType} selectedStore={selectedStore} setSelectedStore={setSelectedStore} sort={sort} setSort={setSort} authRevision={authRevision} selectedStoreProductId={selectedStoreProductId} selectedCatalogProductId={selectedCatalogProductId} onClearIdentity={() => navigate("products", { replace: true })} onAdd={openCartModal} onTrend={setTrendGroup} onOpenStore={(store) => navigate("markets", { selectedMarket: store })} onOpenOrderCapture={() => navigate("order-capture")} />}
+      {page === "order-capture" && <OrderCapturePage authRevision={authRevision} onBack={() => navigate("products")} onRequireAuth={() => setAuthOpen(true)} />}
       {page === "brands" && <BrandHall selectedBrandId={selectedBrandId} onSelect={(id) => navigate("brands", { selectedBrandId: id })} />}
       {page === "markets" && <MarketBrowser receipts={receipts} observations={observationListings} selectedStore={selectedMarket} selectedStoreId={selectedStoreId} onSelectStore={(store) => navigate("markets", { selectedMarket: store, replace: true })} onSelectStoreId={() => navigate("markets", { replace: true })} onOpenTrend={setTrendGroup} />}
       {page === "cart" && <CartPage products={cartProducts} lines={lines} onQuantityChange={updateCartQuantity} onRemove={removeCart} onClear={clearCart} onBrowse={() => navigate("products")} />}
       {adminPageActive && <AdminPage candidates={officialCandidates} approvalCandidates={approvalCandidates} receipts={receipts} />}
+      {["products", "markets", "restaurants"].includes(page) && <IdentityConnectionsPanel />}
     </main>
 
     <footer className={styles.footer}><strong>PriceTrace.</strong><span>출처가 있는 가격, 근거가 있는 비교.</span><a href="https://www.figma.com/community/file/1166831539721848736" target="_blank" rel="noreferrer">Icons by 480 Design · CC BY 4.0</a></footer>
@@ -318,7 +322,7 @@ export default function Home() {
     <nav className={`${styles.mobileNav} ${styles.brandHallMobileNav}`} aria-label="모바일 주요 메뉴">
       <button className={page === "home" ? styles.mobileNavActive : ""} aria-current={page === "home" ? "page" : undefined} onClick={() => navigate("home")}><Icon name="home" size={22} />홈</button>
       <button className={page === "restaurants" ? styles.mobileNavActive : ""} aria-current={page === "restaurants" ? "page" : undefined} onClick={() => navigate("restaurants")}><Icon name="restaurant" size={22} />음식점</button>
-      <button className={page === "products" ? styles.mobileNavActive : ""} aria-current={page === "products" ? "page" : undefined} onClick={() => navigate("products")}><Icon name="product" size={22} />상품 목록</button>
+      <button className={page === "products" || page === "order-capture" ? styles.mobileNavActive : ""} aria-current={page === "products" || page === "order-capture" ? "page" : undefined} onClick={() => navigate("products")}><Icon name="product" size={22} />상품 목록</button>
       <button className={page === "brands" ? styles.mobileNavActive : ""} aria-current={page === "brands" ? "page" : undefined} onClick={() => navigate("brands")}><Icon name="product" size={22} />브랜드관</button>
       <button className={page === "cart" ? styles.mobileNavActive : ""} aria-current={page === "cart" ? "page" : undefined} onClick={() => navigate("cart")}><Icon name="cart" size={22} />장바구니<b>{cartQuantityTotal || ""}</b></button>
       <button className={page === "markets" ? styles.mobileNavActive : ""} aria-current={page === "markets" ? "page" : undefined} onClick={() => navigate("markets")}><Icon name="store" size={22} />판매처 기록</button>

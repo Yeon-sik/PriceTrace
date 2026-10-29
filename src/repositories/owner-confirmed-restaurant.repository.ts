@@ -8,7 +8,8 @@ export class OwnerConfirmedRestaurantRepository {
     const { data, error } = await this.client.auth.getUser();
     if (error || !data.user) return null;
     const ownerId = data.user.id;
-    let result = await this.client.rpc("get_my_owner_confirmed_restaurants_v2");
+    let result = await this.client.rpc("get_my_owner_confirmed_restaurants_v3");
+    if (result.error?.code === "PGRST202") result = await this.client.rpc("get_my_owner_confirmed_restaurants_v2");
     if (result.error?.code === "PGRST202") result = await this.client.rpc("get_my_owner_confirmed_restaurants_v1");
     if (result.error) throw new Error("내 확인 식당을 불러오지 못했습니다. 다시 시도해 주세요.");
     const read = OwnerConfirmedRestaurantReadSchema.parse(result.data);

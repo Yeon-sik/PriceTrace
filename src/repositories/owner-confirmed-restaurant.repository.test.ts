@@ -27,7 +27,7 @@ test("owner repository reads both menus and independent price history without pu
   expect(read.restaurants[0].authorityStatus).toBe("owner_confirmed");
   expect(ownerMenuPriceHistory(read.restaurants[0].menus[0]).map(row => row.unitPriceKrw)).toEqual([6000, 5700]);
   expect(latestOwnerMenuPrice(read.restaurants[0].menus[1])).toMatchObject({ observedOn: "2026-11-10", unitPriceKrw: 4000 });
-  expect(mock.rpc).toHaveBeenCalledWith("get_my_owner_confirmed_restaurants_v2");
+  expect(mock.rpc).toHaveBeenCalledWith("get_my_owner_confirmed_restaurants_v3");
   expect(mock.from).not.toHaveBeenCalled();
 });
 test("anonymous does not query private or public rows", async () => {
@@ -64,6 +64,7 @@ test("component read has no invented price and older deployments fall back only 
   expect(read.restaurants[0].menus[0].components).toEqual([{ id: id(50), name: "국물", role: "complimentary_side" }]);
   expect(read.restaurants[0].menus[0].priceHistory).toHaveLength(2);
   mock.rpc.mockReset().mockResolvedValueOnce({ data: null, error: { code: "PGRST202" } } as never)
+    .mockResolvedValueOnce({ data: null, error: { code: "PGRST202" } } as never)
     .mockResolvedValueOnce({ data: extended, error: null });
   expect((await repository(mock).load())?.schemaVersion).toBe("owner-restaurant-read.v1");
   expect(mock.rpc).toHaveBeenLastCalledWith("get_my_owner_confirmed_restaurants_v1");
