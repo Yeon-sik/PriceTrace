@@ -40,7 +40,7 @@ export function usePrivateIdentityDetail(selector: PrivateIdentitySelector | nul
     }).catch((reason: unknown) => {
       if (!active) return;
       setData(null);
-      setError(reason instanceof Error ? reason.message : "private identity 정보를 불러오지 못했습니다.");
+      setError(reason instanceof Error ? reason.message : "내 기록을 불러오지 못했습니다.");
     }).finally(() => {
       if (active) setLoading(false);
     });

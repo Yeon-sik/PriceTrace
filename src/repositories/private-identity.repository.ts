@@ -6,7 +6,7 @@ import {
 } from "../domain/private-identity-read";
 
 function errorMessage(error: { message?: string } | null) {
-  return error?.message?.trim() || "PriceTrace private identity 정보를 불러오지 못했습니다.";
+  return error?.message?.trim() || "내 기록을 불러오지 못했습니다.";
 }
 
 export class PrivateIdentityRepository {
@@ -23,7 +23,7 @@ export class PrivateIdentityRepository {
 
     const payload = PrivateIdentityReadSchema.parse(data);
     if (payload.selector.type !== selector.type || payload.selector.id !== selector.id) {
-      throw new Error("private identity RPC가 요청하지 않은 identity를 반환했습니다.");
+      throw new Error("요청하지 않은 항목이 반환되어 표시하지 않았습니다.");
     }
     return payload;
   }

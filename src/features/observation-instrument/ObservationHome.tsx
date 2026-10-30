@@ -11,7 +11,7 @@ import styles from "./observation-instrument.module.css";
 type Props = {
   groups: ProductGroup[];
   receiptCount: number;
-  cart: { count: number; quantity: number; total: number };
+  cart: { count: number; quantity: number };
   onProducts: () => void;
   onRestaurants: () => void;
   onMarkets: () => void;
@@ -58,7 +58,7 @@ export function ObservationHome({ groups, receiptCount, cart, onProducts, onRest
         <h2>비교의 다음 단계</h2>
         <button type="button" className={styles.exploreLink} onClick={onRestaurants}><Icon name="restaurant" size={25} /><span><strong>음식점과 메뉴</strong><small>지점별 관측가 · 영양성분</small></span><Icon name="arrow" size={18} /></button>
         <button type="button" className={styles.exploreLink} onClick={onMarkets}><Icon name="store" size={25} /><span><strong>판매처의 기록</strong><small>영수증 · 출처 · 관측 이력</small></span><Icon name="arrow" size={18} /></button>
-        <div className={styles.cartSummary}><div><Icon name="cart" size={20} /><h3>나의 장바구니</h3><span>{cart.quantity}</span></div>{cart.count > 0 ? <p>{cart.count}개 상품 · 예상 합계 <strong>{formatKrw(cart.total)}</strong></p> : <p>비교할 상품을 모아 예상 합계를 확인하세요.</p>}<button type="button" onClick={onCart}>장바구니 보기<Icon name="arrow" size={17} /></button></div>
+        <div className={styles.cartSummary}><div><Icon name="cart" size={20} /><h3>나의 장바구니</h3><span>{cart.quantity}</span></div>{cart.count > 0 ? <p>{cart.count}개 상품 · 총 {cart.quantity}개</p> : <p>비교할 상품을 모아 두세요.</p>}<button type="button" onClick={onCart}>장바구니 보기<Icon name="arrow" size={17} /></button></div>
       </aside>
     </section>
     <p className={styles.sourceNote}><Icon name="receipt" size={16} />관측가는 해당 시점의 구매 기록이며, 현재 판매가나 재고를 보장하지 않습니다.</p>

@@ -13,7 +13,7 @@
 - Original work: https://www.figma.com/community/file/1166831539721848736
 - Distribution: https://icon-sets.iconify.design/solar/
 - License: https://creativecommons.org/licenses/by/4.0/
-- Twelve existing icon paths embedded in `src/components/Icon.tsx`. SVG attributes converted to JSX; artwork unchanged. Attribution is also visible in the application footer. No external icon requests at runtime.
+- Thirteen icon paths embedded in `src/components/Icon.tsx` (`tag` = Solar `tag-linear`, added for the brand hall; taken from the `@iconify-json/solar` 1.2.13 distribution). SVG attributes converted to JSX; artwork unchanged. Attribution is also visible in the application footer. No external icon requests at runtime.
 
 ## Graphics
 

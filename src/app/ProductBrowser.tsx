@@ -47,7 +47,7 @@ const publicPxCatalog = new PublicOfficialChannelCatalogRepository().loadPxCatal
 export type { StandardProductGroup, StandardProductItem } from "@/features/product-browser/product-browser.selectors";
 
 function StoreInfo({ sellerCount, martTypeLabel, onOpen }: { sellerCount: number; martTypeLabel?: string; onOpen: () => void }) {
-  return <p className={styles.storeInfo}>판매처 {sellerCount}곳{martTypeLabel && <em>{martTypeLabel}</em>}<button type="button" className={styles.storeInfoButton} aria-label="판매처 정보 보기" onClick={onOpen}>›</button></p>;
+  return <button type="button" className={`${styles.storeInfo} ${styles.storeInfoRow}`} aria-label={`판매처 ${sellerCount}곳 정보 보기`} onClick={onOpen}>판매처 {sellerCount}곳{martTypeLabel && <em>{martTypeLabel}</em>}<Icon name="chevron" size={16} className={styles.storeInfoChevron} /></button>;
 }
 
 function RecordedPriceBlock({ group }: { group: ProductGroup }) {

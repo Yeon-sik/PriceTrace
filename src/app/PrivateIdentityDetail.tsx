@@ -106,7 +106,7 @@ function ProductCards({
   if (read.products.length === 0 && read.storeProducts.length === 0) return null;
   const productById = new Map(read.products.map((product) => [product.id, product]));
   return <section className={styles.privateIdentitySection} aria-labelledby="private-products-title">
-    <div className={styles.sectionHeading}><div><p className={styles.kicker}>PRIVATE PRODUCTS</p><h2 id="private-products-title">생성된 private 상품</h2></div><small>상품군과 판매처 품목 분리</small></div>
+    <div className={styles.sectionHeading}><div><p className={styles.kicker}>PRIVATE PRODUCTS</p><h2 id="private-products-title">내 계정의 상품</h2></div><small>상품군과 판매처 품목 분리</small></div>
     <div className={styles.privateIdentityCards}>
       {read.storeProducts.map((storeProduct) => <article className={styles.privateIdentityCard} key={storeProduct.id}>
         <h3>{productById.get(storeProduct.productId)?.name ?? "상품명 확인 필요"}</h3>
@@ -178,7 +178,7 @@ function ReceiptHistory({ read }: { read: PrivateIdentityRead }) {
   if (read.receipts.length === 0) return null;
   const storeProductsById = new Map(read.storeProducts.map((storeProduct) => [storeProduct.id, storeProduct]));
   return <section className={styles.privateIdentitySection} aria-labelledby="private-receipts-title">
-    <div className={styles.sectionHeading}><div><p className={styles.kicker}>PRIVATE RECEIPTS</p><h2 id="private-receipts-title">인증된 영수증 기록</h2></div><small>원본 행·품목 identity 보존</small></div>
+    <div className={styles.sectionHeading}><div><p className={styles.kicker}>PRIVATE RECEIPTS</p><h2 id="private-receipts-title">인증된 영수증 기록</h2></div><small>원본 행과 품목 연결 보존</small></div>
     <div className={styles.privateIdentityReceiptList}>
       {read.receipts.map((receipt: PrivateIdentityReceipt) => <article className={styles.privateIdentityReceipt} key={receipt.id}>
         <header><div><strong>{receipt.purchasedAt}</strong><small>영수증 ID <code>{receipt.id}</code></small></div><b>{formatKrw(receipt.totalPriceKrw)}</b></header>
@@ -220,7 +220,7 @@ function ReadContent({ read }: { read: PrivateIdentityRead }) {
     <MenuCards menus={read.restaurantMenus} />
     <ReceiptHistory read={read} />
     <PriceObservationList read={read} />
-    {read.stores.length === 0 && read.products.length === 0 && read.receipts.length === 0 && <div className={styles.privateIdentityEmpty} role="status">이 identity에 연결된 private 기록이 아직 없습니다.</div>}
+    {read.stores.length === 0 && read.products.length === 0 && read.receipts.length === 0 && <div className={styles.privateIdentityEmpty} role="status">이 항목에 연결된 내 기록이 아직 없습니다.</div>}
   </>;
 }
 
@@ -241,7 +241,7 @@ export function PrivateIdentityDetail({ selector, onBack }: Props) {
       <div>
         <p className={styles.kicker}>PRICETRACE IDENTITY DETAIL</p>
         <h1>{selectorLabel(selector)} 상세</h1>
-        <p>서버가 반환한 정확 identity와 인증된 사용자 소유의 영수증·상품·판매처 기록을 함께 표시합니다.</p>
+        <p>서버가 확인한 항목과 내 계정의 영수증·상품·판매처 기록을 함께 표시합니다.</p>
       </div>
       <div className={styles.privateIdentitySelector}>
         <span>selector {selector.type}</span>
@@ -251,11 +251,11 @@ export function PrivateIdentityDetail({ selector, onBack }: Props) {
 
     {!configured && <div className={styles.privateIdentityMessage} role="status">
       <strong>인증된 PriceTrace 조회를 준비할 수 없습니다.</strong>
-      <span>Supabase 공개 설정을 확인하고 로그인한 뒤 다시 여세요.</span>
+      <span>서버 연결을 확인하고 로그인한 뒤 다시 여세요.</span>
     </div>}
-    {configured && loading && <p className={styles.emptyState} role="status">인증된 identity 상세를 불러오는 중입니다.</p>}
+    {configured && loading && <p className={styles.emptyState} role="status">내 기록을 불러오는 중입니다.</p>}
     {configured && !loading && error && <div className={styles.privateIdentityMessage} role="alert">
-      <strong>private identity를 확인하지 못했습니다.</strong>
+      <strong>내 기록을 확인하지 못했습니다.</strong>
       <span>{error}</span>
       <span>로그인 상태와 요청한 UUID의 소유 범위를 확인하세요.</span>
     </div>}

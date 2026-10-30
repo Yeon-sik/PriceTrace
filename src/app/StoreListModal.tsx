@@ -3,6 +3,7 @@
 import { useRef } from "react";
 import { trapDialogFocus, useDialogLifecycle } from "@/hooks/use-dialog-lifecycle";
 import styles from "./page.module.css";
+import { formatObservationDate } from "@/domain/observation-date";
 
 export function StoreListModal({ title, rows, onClose, onOpenStore }: { title: string; rows: { storeLabel: string; observedAt: string }[]; onClose: () => void; onOpenStore: (store: string) => void }) {
   const closeButtonRef = useRef<HTMLButtonElement>(null);
@@ -13,7 +14,7 @@ export function StoreListModal({ title, rows, onClose, onOpenStore }: { title: s
       <button ref={closeButtonRef} type="button" className={styles.closeButton} onClick={onClose} aria-label="판매처 정보 닫기">×</button>
       <p className={styles.kicker}>SELLER INFO</p>
       <h2 id="store-list-title">{title}</h2>
-      <div className={styles.storeDetailList}>{rows.map((row, index) => <div key={`${row.storeLabel}:${row.observedAt}:${index}`}><button type="button" className={styles.textButton} onClick={() => onOpenStore(row.storeLabel)}>{row.storeLabel}</button><span>{row.observedAt}</span></div>)}</div>
+      <div className={styles.storeDetailList}>{rows.map((row, index) => <div key={`${row.storeLabel}:${row.observedAt}:${index}`}><button type="button" className={styles.textButton} onClick={() => onOpenStore(row.storeLabel)}>{row.storeLabel}</button><span>{formatObservationDate(row.observedAt) ?? row.observedAt}</span></div>)}</div>
     </section>
   </div>;
 }

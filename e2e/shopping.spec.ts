@@ -246,7 +246,7 @@ test("공개 관측 상품을 보여 주고 새로고침 뒤에도 장바구니�
   await addButton.click();
 
   const quantityDialog = page.getByRole("dialog", { name: "몇 개 담을까요?" });
-  await expect(quantityDialog).toContainText("최근 관측가 2,030원 · 2026-07-14 관측");
+  await expect(quantityDialog).toContainText("최근 관측가 2,030원 · 2026.07.14 관측");
   const quantityInput = quantityDialog.getByRole("spinbutton", { name: "추가할 수량" });
   await expect(quantityInput).toBeFocused();
   await quantityInput.fill("3");
@@ -257,32 +257,36 @@ test("공개 관측 상품을 보여 주고 새로고침 뒤에도 장바구니�
   await successDialog.getByRole("button", { name: "계속 둘러보기", exact: true }).click();
   await expect(addButton).toBeFocused();
 
+  // Cart lines may come from different sellers and dates, so no money total is shown anywhere.
   const filledFloatingCart = page.getByRole("button", {
-    name: "장바구니 열기, 담긴 아이템 3개, 총합 6,090원",
+    name: "장바구니 열기, 담긴 아이템 3개",
     exact: true,
   });
   await expect(filledFloatingCart).toBeVisible();
-  await expect(filledFloatingCart).toContainText("총합");
-  await expect(filledFloatingCart).toContainText("6,090원");
+  await expect(filledFloatingCart).not.toContainText("총합");
+  await expect(filledFloatingCart).not.toContainText("원");
   await filledFloatingCart.click();
   await expect(filledFloatingCart).toHaveCount(0);
 
-  const cartSummary = page.getByRole("complementary", { name: "장바구니 합계" });
+  const cartSummary = page.getByRole("complementary", { name: "장바구니 요약" });
   await expect(cartSummary).toContainText("총 3개");
-  await expect(cartSummary).toContainText("6,090원");
-  await expect(page.getByRole("article").filter({ hasText: "최근 관측가 (2026-07-14)" })).toBeVisible();
+  await expect(cartSummary).not.toContainText("원");
+  await expect(cartSummary).not.toContainText("예상 합계");
+  const cartLine = page.getByRole("article").filter({ hasText: "최근 관측가 (2026.07.14)" });
+  await expect(cartLine).toBeVisible();
+  await expect(cartLine).toContainText("6,090원");
   const cartQuantityInput = page.getByRole("spinbutton", { name: `${productName} 수량` });
   await cartQuantityInput.fill("1.5");
   await expect(cartQuantityInput).toHaveValue("1");
   await expect(cartSummary).toContainText("총 1개");
-  await expect(cartSummary).toContainText("2,030원");
+  await expect(cartLine).toContainText("2,030원");
 
   await page.reload();
   await page
     .getByRole("navigation", { name: "주요 메뉴" })
     .getByRole("button", { name: "장바구니 1" })
     .click();
-  await expect(page.getByRole("complementary", { name: "장바구니 합계" })).toContainText("총 1개");
+  await expect(page.getByRole("complementary", { name: "장바구니 요약" })).toContainText("총 1개");
 });
 
 test("큰 대표 이미지도 상품 이름 위의 이미지 영역을 벗어나지 않는다", async ({ page }) => {
@@ -377,7 +381,7 @@ test("개별 상품 카드의 상품명, 판매처, 가격을 촘촘하게 표�
   const card = page.getByRole("article").first();
   const [headingBox, sellerBox, priceBox] = await Promise.all([
     card.getByRole("heading").first().boundingBox(),
-    card.locator("p").first().boundingBox(),
+    card.getByRole("button", { name: /판매처 \d+곳 정보 보기/ }).boundingBox(),
     card.locator("strong").first().boundingBox(),
   ]);
 
@@ -414,6 +418,8 @@ test("상품 가격 이력에서 판매처 기준을 확인하고 판매처별 �
   await expect(page.getByRole("heading", { name: storeLabel!, exact: true })).toBeVisible();
   await expect(page.getByText("검증 공개 판매처", { exact: false })).toBeVisible();
   await expect(page.getByText("사업자등록번호:", { exact: false })).toBeVisible();
+  await expect(page.getByText("공개 판매처 ID:", { exact: false })).toBeHidden();
+  await page.getByText("식별 정보", { exact: true }).click();
   await expect(page.getByText("공개 판매처 ID:", { exact: false })).toBeVisible();
   await expect(page.getByRole("heading", { name: "상품별 가격 변동" })).toBeVisible();
   await expect(page.getByRole("searchbox", { name: "판매처 상품 검색" })).toBeVisible();

@@ -1,5 +1,5 @@
 import type { PublicOfficialChannelListing } from "./public-official-channel-catalog";
-import type { ProductCategory, ProductGroup } from "./product-browser";
+import { mergeOfficialProductGroups, type ProductCategory, type ProductGroup } from "./product-browser";
 
 export type CartProduct = {
   id: string;
@@ -13,10 +13,11 @@ export type CartProduct = {
   imageUrl?: string;
 };
 
+// No cross-line money total: lines can come from different sellers and observation dates,
+// so their sum is not a price anyone could pay at one place.
 export type CartSummary = {
   items: CartProduct[];
   quantities: Record<string, number>;
-  totalKrw: number;
   totalQuantity: number;
 };
 
@@ -40,23 +41,35 @@ export function summarizeCart(
   return {
     items,
     quantities,
-    totalKrw: items.reduce((sum, product) => sum + product.priceKrw * quantities[product.id], 0),
     totalQuantity: items.reduce((sum, product) => sum + quantities[product.id], 0),
   };
 }
 
 export function cartProductFromGroup(group: ProductGroup): CartProduct {
+  // A merged display group lists several sellers; the line price belongs to the latest observation's seller only.
   return {
     id: group.id,
     productName: group.productName,
     sourceProductCode: group.sourceProductCode,
-    storeLabel: group.storeLabel,
+    storeLabel: group.latest.storeLabel,
     category: group.category,
     priceKrw: group.latestPriceKrw,
     priceObservedAt: group.latest.observedAt,
     priceSource: "receipt-observation",
     imageUrl: group.officialProduct?.imageUrl,
   };
+}
+
+/**
+ * Every receipt-observation line the product browser can add, including the merged display
+ * groups it shows. Without the merged ids a stored cart line would be silently dropped.
+ */
+export function cartProductsFromGroups(groups: readonly ProductGroup[]): CartProduct[] {
+  const byId = new Map<string, CartProduct>();
+  for (const group of [...groups, ...mergeOfficialProductGroups([...groups])]) {
+    if (!byId.has(group.id)) byId.set(group.id, cartProductFromGroup(group));
+  }
+  return [...byId.values()];
 }
 
 export function cartProductFromOfficialListing(listing: PublicOfficialChannelListing): CartProduct {

@@ -11,15 +11,12 @@ import {
 import type { ProductCategory } from "@/domain/product-browser";
 import { formatKrw } from "@/domain/settlement";
 import styles from "./page.module.css";
+import { formatObservationDateTime } from "@/domain/observation-date";
 
 const PAGE_SIZE = 48;
 
 function formatObservedAt(value: string) {
-  return new Intl.DateTimeFormat("ko-KR", {
-    dateStyle: "medium",
-    timeStyle: "short",
-    timeZone: "Asia/Seoul",
-  }).format(new Date(value));
+  return formatObservationDateTime(value) ?? "관측일 미상";
 }
 
 function PxOfficialImage({ listing }: { listing: PublicOfficialChannelListing }) {

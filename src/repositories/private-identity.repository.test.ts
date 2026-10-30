@@ -46,7 +46,7 @@ describe("PrivateIdentityRepository", () => {
     });
     const repository = new PrivateIdentityRepository({ rpc } as unknown as SupabaseClient);
 
-    await expect(repository.read({ type: "store_product", id: storeProductId })).rejects.toThrow(/요청하지 않은 identity/);
+    await expect(repository.read({ type: "store_product", id: storeProductId })).rejects.toThrow(/요청하지 않은 항목/);
   });
 
   it("surfaces an authenticated RPC failure", async () => {

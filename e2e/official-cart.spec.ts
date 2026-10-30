@@ -22,7 +22,7 @@ test("official product cards can be added to cart", async ({ page }) => {
   await expect(noticeDialog).toContainText("장바구니에 담겼습니다");
   await noticeDialog.getByRole("button").last().click();
 
-  const cartSummary = page.getByRole("complementary", { name: "장바구니 합계" });
+  const cartSummary = page.getByRole("complementary", { name: "장바구니 요약" });
   await expect(cartSummary).toContainText("총 2개");
   await expect(page.getByRole("article").filter({ hasText: "공식 표시가" })).toBeVisible();
 });

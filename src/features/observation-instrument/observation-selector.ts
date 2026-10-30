@@ -1,4 +1,5 @@
 import { sellerIdentityKey, type ProductGroup, type ProductObservationListing } from "../../domain/product-browser";
+import { formatObservationDate } from "../../domain/observation-date";
 
 /** Presentation order only. The existing product and seller identities remain intact. */
 export function chronologicalObservations(group: ProductGroup): ProductObservationListing[] {
@@ -24,6 +25,5 @@ export function observationOverview(groups: ProductGroup[]) {
 }
 
 export function observationDate(value: string) {
-  // Preserve the published observation date; do not reinterpret date-only facts in a timezone.
-  return value.slice(0, 10).replaceAll("-", ".");
+  return formatObservationDate(value) ?? value;
 }

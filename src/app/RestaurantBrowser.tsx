@@ -21,6 +21,7 @@ import { MyPendingMerchantCandidates } from "./MyPendingMerchantCandidates";
 import { StandardProductNutritionModal } from "./StandardProductNutritionModal";
 import { OwnerConfirmedRestaurants, RestaurantScopeSwitch } from "./OwnerConfirmedRestaurants";
 import styles from "./page.module.css";
+import { formatObservationDate } from "@/domain/observation-date";
 
 type RestaurantBrowserProps = {
   selectedRestaurant: string | null;
@@ -32,11 +33,7 @@ type RestaurantBrowserProps = {
 type RestaurantDetailTab = "menus" | "info" | "locations";
 
 function formatObservedAt(value: string) {
-  return new Intl.DateTimeFormat("ko-KR", {
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-  }).format(new Date(value));
+  return formatObservationDate(value) ?? "관측일 미상";
 }
 
 function formatUpdatedAt(value: string) {
@@ -176,7 +173,7 @@ export function RestaurantBrowser({ selectedRestaurant, selectedRestaurantMenuId
 
       {!configured && <div className={styles.restaurantEmpty} role="status">
         <strong>공개 음식점 DB 연결이 필요합니다.</strong>
-        <span>PriceTrace Supabase 공개 설정이 연결되면 검증된 음식점과 메뉴 가격 기록을 표시합니다.</span>
+        <span>공개 음식점 데이터에 연결되면 검증된 음식점과 메뉴 가격 기록을 표시합니다.</span>
       </div>}
       {configured && loading && <p className={styles.emptyState} role="status">음식점 목록을 불러오는 중입니다.</p>}
       {configured && !loading && error && <div className={styles.restaurantError} role="alert">
@@ -212,7 +209,7 @@ export function RestaurantBrowser({ selectedRestaurant, selectedRestaurantMenuId
   if (!configured) {
     return <section className={styles.browser}><div className={styles.restaurantEmpty} role="status">
       <strong>공개 음식점 DB 연결이 필요합니다.</strong>
-      <span>PriceTrace Supabase 공개 설정을 연결한 뒤 이 음식점의 메뉴 기록을 확인하세요.</span>
+      <span>공개 음식점 데이터에 연결된 뒤 이 음식점의 메뉴 기록을 확인할 수 있습니다.</span>
       <button type="button" onClick={() => onSelectRestaurant(null)}>음식점 목록으로</button>
     </div></section>;
   }
@@ -402,7 +399,7 @@ export function RestaurantBrowser({ selectedRestaurant, selectedRestaurantMenuId
     </section>}
 
     {detailTab === "locations" && <section id="restaurant-panel-locations" role="tabpanel" aria-labelledby="restaurant-tab-locations" className={styles.restaurantLocations}>
-      <div className={styles.sectionHeading}><div><p className={styles.kicker}>VERIFIED SOURCES</p><h2>확인된 지점·출처</h2><p className={styles.restaurantSectionHint}>지점명과 source identity를 분리해 보관합니다.</p></div></div>
+      <div className={styles.sectionHeading}><div><p className={styles.kicker}>VERIFIED SOURCES</p><h2>확인된 지점·출처</h2><p className={styles.restaurantSectionHint}>지점명과 출처 기록을 따로 보관합니다.</p></div></div>
       {detail.locations.length === 0 && <div className={styles.restaurantEmpty} role="status"><strong>확인된 지점이 없습니다.</strong><span>식당 identity는 공개됐지만 지점 출처가 아직 연결되지 않았습니다.</span></div>}
       {detail.locations.length > 0 && <div className={styles.restaurantLocationGrid}>
         {detail.locations.map((location) => <article key={location.id}>

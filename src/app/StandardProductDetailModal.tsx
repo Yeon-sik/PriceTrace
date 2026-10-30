@@ -9,6 +9,7 @@ import { CoupangComparisonMessage } from "./CoupangComparisonMessage";
 import { StandardProductNutritionModal } from "./StandardProductNutritionModal";
 import type { StandardProductGroup, StandardProductItem } from "./ProductBrowser";
 import styles from "./page.module.css";
+import { formatObservationDate } from "@/domain/observation-date";
 
 export function StandardProductDetailModal({ standard, nutritionCatalogProductIds: nutritionCatalogProductIdsFromCatalog = [], onClose, onOpenStore }: { standard: StandardProductGroup; nutritionCatalogProductIds?: readonly string[]; onClose: () => void; onOpenStore: (store: string) => void }) {
   const [trendItem, setTrendItem] = useState<StandardProductItem | null>(null);
@@ -96,7 +97,7 @@ export function StandardProductDetailModal({ standard, nutritionCatalogProductId
 
         <div className={styles.standardSecondaryInformation} aria-label="추가 비교 정보">
           {standard.coupangPrice && <details className={styles.standardSecondaryDetails}>
-            <summary><span>쿠팡 가격 비교</span><small>{standard.coupangPrice.observedAt.slice(0, 10)} 관측</small></summary>
+            <summary><span>쿠팡 가격 비교</span><small>{formatObservationDate(standard.coupangPrice.observedAt) ?? "관측일 미상"} 관측</small></summary>
             <div className={styles.coupangPriceSection}>
               <div className={styles.coupangOfferGrid}>
                 <article><small>필수 판매 가격 · {standard.coupangPrice.requiredOffer.quantity}개</small><strong>총 {formatKrw(standard.coupangPrice.requiredOffer.listedPriceKrw)}</strong><b>개당 {formatKrw(standard.coupangPrice.requiredOffer.pricePerItemKrw)}</b>{standard.coupangPrice.requiredOffer.unitPriceKrw !== null && standard.coupangPrice.requiredOffer.referenceLabel ? <em>{standard.coupangPrice.requiredOffer.referenceLabel} {formatKrw(standard.coupangPrice.requiredOffer.unitPriceKrw)}</em> : <em>기준 용량 미입력</em>}</article>
@@ -120,7 +121,7 @@ export function StandardProductDetailModal({ standard, nutritionCatalogProductId
                   <div>
                     <strong>{listing.sourceNameRaw}</strong>
                     <small>{listing.vendorNameRaw ?? "업체명 미표시"} · {listing.specificationTextRaw ?? "규격 미표시"}</small>
-                    <small>상품코드 {listing.sourceProductCode} · {listing.officialPrice.observedAt.slice(0, 10)} 관측</small>
+                    <small>상품코드 {listing.sourceProductCode} · {formatObservationDate(listing.officialPrice.observedAt) ?? "관측일 미상"} 관측</small>
                   </div>
                   <div>
                     <small>PX 공식 사이트 표시가</small>

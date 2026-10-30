@@ -5,11 +5,10 @@ import { Icon } from "@/components/Icon";
 import { ObservationHome } from "@/features/observation-instrument/ObservationHome";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { buildAppNavigationUrl, readAppNavigationUrl, type AppPage } from "@/domain/app-navigation";
-import { cartProductFromGroup, cartProductFromOfficialListing, summarizeCart, type CartProduct } from "@/domain/cart";
+import { cartProductFromOfficialListing, cartProductsFromGroups, summarizeCart, type CartProduct } from "@/domain/cart";
 import { groupProductObservations, martTagFor, type MartType, type ProductCategory, type ProductGroup, type ProductObservationListing, type ProductSort } from "@/domain/product-browser";
 import type { OfficialProductCandidate } from "@/domain/official-product";
 import { findOfficialListingCandidate } from "@/domain/official-listing-candidate";
-import { formatKrw } from "@/domain/settlement";
 import { findPxProductNameReview } from "@/domain/px-product-name-review";
 import { useAdminAccess } from "@/hooks/use-admin-access";
 import { PublicReceiptRepository } from "@/repositories/public-receipt.repository";
@@ -177,7 +176,7 @@ export default function Home() {
     [adminPageActive, observationListings],
   );
   const cartProducts = useMemo(() => [
-    ...productGroups.map(cartProductFromGroup),
+    ...cartProductsFromGroups(productGroups),
     ...publicOfficialCatalog.listings.map(cartProductFromOfficialListing),
   ], [productGroups]);
 
@@ -218,7 +217,6 @@ export default function Home() {
   }, [adminLoading, isAdmin, navigate, page]);
   const cartSummary = useMemo(() => summarizeCart(cartProducts, lines), [cartProducts, lines]);
   const cartGroups = cartSummary.items;
-  const cartTotal = cartSummary.totalKrw;
   const cartQuantityTotal = cartSummary.totalQuantity;
   const officialCandidates = useMemo(() => (adminPageActive ? productGroups : []).map((group) => {
     const receiptCandidate = receiptObservationCandidate(group.latest);
@@ -306,7 +304,7 @@ export default function Home() {
 
     <main className={styles.main} id="main-content" tabIndex={-1}>
       {page === "products" && purchasedProductError && <p className={styles.error} role="alert">내 구매 상품을 불러오지 못했습니다. 앱을 다시 활성화하면 재시도합니다.</p>}
-      {page === "home" && <ObservationHome groups={publicProductGroups} receiptCount={receipts.length} cart={{ count: cartGroups.length, quantity: cartQuantityTotal, total: cartTotal }} onProducts={() => openProducts()} onRestaurants={() => navigate("restaurants")} onMarkets={() => navigate("markets")} onCart={() => navigate("cart")} onTrend={setTrendGroup} />}
+      {page === "home" && <ObservationHome groups={publicProductGroups} receiptCount={receipts.length} cart={{ count: cartGroups.length, quantity: cartQuantityTotal }} onProducts={() => openProducts()} onRestaurants={() => navigate("restaurants")} onMarkets={() => navigate("markets")} onCart={() => navigate("cart")} onTrend={setTrendGroup} />}
       {page === "restaurants" && <RestaurantBrowser selectedRestaurant={selectedRestaurant} selectedRestaurantMenuId={selectedRestaurantMenuId} onSelectRestaurant={(restaurantId) => navigate("restaurants", { selectedRestaurant: restaurantId, replace: restaurantId === null })} onClearMenuIdentity={() => navigate("restaurants", { replace: true })} />}
       {page === "products" && <ProductBrowser groups={productGroups} query={query} setQuery={setQuery} category={category} setCategory={setCategory} martType={martType} setMartType={setMartType} selectedStore={selectedStore} setSelectedStore={setSelectedStore} sort={sort} setSort={setSort} authRevision={authRevision} selectedStoreProductId={selectedStoreProductId} selectedCatalogProductId={selectedCatalogProductId} onClearIdentity={() => navigate("products", { replace: true })} onAdd={openCartModal} onTrend={setTrendGroup} onOpenStore={(store) => navigate("markets", { selectedMarket: store })} onOpenOrderCapture={() => navigate("order-capture")} />}
       {page === "order-capture" && <OrderCapturePage authRevision={authRevision} onBack={() => navigate("products")} onRequireAuth={() => setAuthOpen(true)} />}
@@ -318,12 +316,12 @@ export default function Home() {
     </main>
 
     <footer className={styles.footer}><strong>PriceTrace.</strong><span>출처가 있는 가격, 근거가 있는 비교.</span><a href="https://www.figma.com/community/file/1166831539721848736" target="_blank" rel="noreferrer">Icons by 480 Design · CC BY 4.0</a></footer>
-    {page !== "cart" && <FloatingCartButton quantity={cartQuantityTotal} total={cartTotal} onOpen={() => navigate("cart")} />}
+    {page !== "cart" && <FloatingCartButton quantity={cartQuantityTotal} onOpen={() => navigate("cart")} />}
     <nav className={`${styles.mobileNav} ${styles.brandHallMobileNav}`} aria-label="모바일 주요 메뉴">
       <button className={page === "home" ? styles.mobileNavActive : ""} aria-current={page === "home" ? "page" : undefined} onClick={() => navigate("home")}><Icon name="home" size={22} />홈</button>
       <button className={page === "restaurants" ? styles.mobileNavActive : ""} aria-current={page === "restaurants" ? "page" : undefined} onClick={() => navigate("restaurants")}><Icon name="restaurant" size={22} />음식점</button>
       <button className={page === "products" || page === "order-capture" ? styles.mobileNavActive : ""} aria-current={page === "products" || page === "order-capture" ? "page" : undefined} onClick={() => navigate("products")}><Icon name="product" size={22} />상품 목록</button>
-      <button className={page === "brands" ? styles.mobileNavActive : ""} aria-current={page === "brands" ? "page" : undefined} onClick={() => navigate("brands")}><Icon name="product" size={22} />브랜드관</button>
+      <button className={page === "brands" ? styles.mobileNavActive : ""} aria-current={page === "brands" ? "page" : undefined} onClick={() => navigate("brands")}><Icon name="tag" size={22} />브랜드관</button>
       <button className={page === "cart" ? styles.mobileNavActive : ""} aria-current={page === "cart" ? "page" : undefined} onClick={() => navigate("cart")}><Icon name="cart" size={22} />장바구니<b>{cartQuantityTotal || ""}</b></button>
       <button className={page === "markets" ? styles.mobileNavActive : ""} aria-current={page === "markets" ? "page" : undefined} onClick={() => navigate("markets")}><Icon name="store" size={22} />판매처 기록</button>
     </nav>
@@ -335,14 +333,8 @@ export default function Home() {
   </div>;
 }
 
-function FloatingCartButton({ quantity, total, onOpen }: { quantity: number; total: number; onOpen: () => void }) {
-  const totalLabel = formatKrw(total);
-  const accessibleLabel = quantity > 0
-    ? `장바구니 열기, 담긴 아이템 ${quantity}개, 총합 ${totalLabel}`
-    : "장바구니 열기, 담긴 아이템 0개";
-
-  return <button type="button" className={styles.floatingCart} onClick={onOpen} aria-label={accessibleLabel}>
-    {quantity > 0 && <span className={styles.floatingCartTotal} aria-hidden="true"><small>총합</small><strong>{totalLabel}</strong></span>}
+function FloatingCartButton({ quantity, onOpen }: { quantity: number; onOpen: () => void }) {
+  return <button type="button" className={styles.floatingCart} onClick={onOpen} aria-label={`장바구니 열기, 담긴 아이템 ${quantity}개`}>
     <span className={styles.floatingCartIcon} aria-hidden="true">
       <svg viewBox="0 0 24 24" focusable="false">
         <path d="M3 4h2.2l1.9 9.1a2 2 0 0 0 2 1.6h7.8a2 2 0 0 0 1.9-1.4L20.5 7H6.1M9.5 19a.75.75 0 1 1-1.5 0 .75.75 0 0 1 1.5 0Zm8 0a.75.75 0 1 1-1.5 0 .75.75 0 0 1 1.5 0Z" />

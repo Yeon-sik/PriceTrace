@@ -8,6 +8,7 @@ import type { Receipt } from "@/domain/types";
 import { formatKrw } from "@/domain/settlement";
 import { PrivateIdentityDetail } from "./PrivateIdentityDetail";
 import styles from "./page.module.css";
+import { formatObservationDate } from "@/domain/observation-date";
 
 type Market = {
   id: string | null;
@@ -101,7 +102,7 @@ export function MarketBrowser({ receipts, observations, selectedStore, selectedS
             <span className={styles.marketCardEyebrow}>{verifiedPublic ? "검증 공개 영수증" : "로컬 영수증"}</span>
             <small>영수증 {entry.receipts.length}건 · 상품 {groups.length}개 · 변동 추적 {trackedCount}개</small>
             <span>{entry.address ?? "주소 정보 없음"}</span>
-            <span>최근 관측 {latestObservedAt || "정보 없음"} · {entry.phone ?? "연락처 정보 없음"}</span>
+            <span>최근 관측 {formatObservationDate(latestObservedAt) ?? "정보 없음"} · {entry.phone ?? "연락처 정보 없음"}</span>
           </button>;
         })}
       </div>
@@ -144,7 +145,7 @@ export function MarketBrowser({ receipts, observations, selectedStore, selectedS
       <div><span>기록 상품</span><strong>{productInsights.length}개</strong></div>
       <div><span>2회 이상 추적</span><strong>{trackedCount}개</strong></div>
       <div><span>직전 대비 변동</span><strong>{changedCount}개</strong></div>
-      <div><span>최근 관측</span><strong>{latestObservedAt ?? "-"}</strong></div>
+      <div><span>최근 관측</span><strong>{latestObservedAt ? formatObservationDate(latestObservedAt) ?? latestObservedAt : "-"}</strong></div>
     </section>
 
     <section className={styles.marketInfo}>
@@ -153,8 +154,11 @@ export function MarketBrowser({ receipts, observations, selectedStore, selectedS
       <span>마트 연락처: {market.phone ?? "정보 없음"}</span>
       <span>사업자등록번호: {market.businessRegistrationNumber ?? "정보 없음"}</span>
       <span>업종: {formatBusinessKind(market.businessKind)}</span>
-      <span>공개 판매처 ID: {market.id ?? "정보 없음"}</span>
-      {market.merchantId && <span>판매처 표기 ID: {market.merchantId}</span>}
+      <details className={styles.marketIdentifiers}>
+        <summary>식별 정보</summary>
+        <span>공개 판매처 ID: {market.id ?? "정보 없음"}</span>
+        {market.merchantId && <span>판매처 표기 ID: {market.merchantId}</span>}
+      </details>
       <small>표시 가격은 영수증·공개 기록의 관측가이며 실시간 판매가는 아닙니다.</small>
     </section>
 
@@ -164,7 +168,7 @@ export function MarketBrowser({ receipts, observations, selectedStore, selectedS
         {[...new Set(marketObservations.map((observation) => observation.observedAt))].map((month) => {
           const monthly = marketObservations.filter((observation) => observation.observedAt === month);
           return <article key={month}>
-            <span><strong>{month}</strong><small>{monthly.length}건 관측</small></span>
+            <span><strong>{formatObservationDate(month) ?? month}</strong><small>{monthly.length}건 관측</small></span>
             <b>{groupProductObservations(monthly).length}개 상품</b>
           </article>;
         })}
@@ -173,7 +177,7 @@ export function MarketBrowser({ receipts, observations, selectedStore, selectedS
       <h2 id="market-receipt-history-title">영수증 기록</h2>
       <div>
         {receiptHistory.map((receipt) => <article key={receipt.id}>
-          <span><strong>{receipt.purchasedAt}</strong><small>공개 ID {receipt.id} · {receipt.items.length}개 품목</small></span>
+          <span><strong>{formatObservationDate(receipt.purchasedAt) ?? receipt.purchasedAt}</strong><small>공개 ID {receipt.id} · {receipt.items.length}개 품목</small></span>
           <b>{formatKrw(receipt.totalPriceKrw)}</b>
         </article>)}
       </div>
@@ -193,7 +197,7 @@ export function MarketBrowser({ receipts, observations, selectedStore, selectedS
         {visibleInsights.map(({ group, summary }) => <article key={group.id}>
           <div>
             <strong>{group.productName}</strong>
-            <small>상품 코드 {group.sourceProductCode || "없음"} · 최근 {summary.latestObservedAt} · 관측 {summary.observationCount}건</small>
+            <small>상품 코드 {group.sourceProductCode || "없음"} · 최근 {formatObservationDate(summary.latestObservedAt) ?? summary.latestObservedAt} · 관측 {summary.observationCount}건</small>
             <small>{formatConfidenceCoverage(summary.highConfidenceRatio)} · 범위 {formatKrw(summary.minimumPriceKrw)}~{formatKrw(summary.maximumPriceKrw)}</small>
           </div>
           <div className={styles.marketPriceChange}>

@@ -10,10 +10,12 @@ import {
   type PricePointSource,
   type SellerPricePoint,
 } from "@/domain/seller-price-insights";
+import { formatObservationDate, observationTimePositions } from "@/domain/observation-date";
 import { formatKrw } from "@/domain/settlement";
 import { trapDialogFocus, useDialogLifecycle } from "@/hooks/use-dialog-lifecycle";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import styles from "./page.module.css";
+import { Icon } from "@/components/Icon";
 
 type TrendPoint = SellerPricePoint;
 
@@ -24,7 +26,7 @@ export function PriceTrendModal({ group, onClose, onOpenStore, onBack }: { group
   const [points, setPoints] = useState<TrendPoint[]>(initialPoints);
   const [selectedSeller, setSelectedSeller] = useState(group.latest.storeLabel);
   const [loading, setLoading] = useState(Boolean(client && group.officialProduct));
-  const [message, setMessage] = useState(group.officialProduct ? "" : `${group.latest.storeLabel}의 동일 상품 관측을 표시합니다. 판매처 비교는 검증된 공통 상품 연결이 있을 때 확장됩니다.`);
+  const [message, setMessage] = useState("");
 
   useDialogLifecycle({ onClose, initialFocusRef: closeButtonRef });
 
@@ -32,7 +34,7 @@ export function PriceTrendModal({ group, onClose, onOpenStore, onBack }: { group
     setPoints(initialPoints);
     setSelectedSeller(group.latest.storeLabel);
     setLoading(Boolean(client && group.officialProduct));
-    setMessage(group.officialProduct ? "" : `${group.latest.storeLabel}의 동일 상품 관측을 표시합니다. 판매처 비교는 검증된 공통 상품 연결이 있을 때 확장됩니다.`);
+    setMessage("");
   }, [client, group, initialPoints]);
 
   useEffect(() => {
@@ -92,6 +94,10 @@ export function PriceTrendModal({ group, onClose, onOpenStore, onBack }: { group
   }, [selectedSeller, sellerSummaries]);
 
   const selectedSummary = sellerSummaries.find((summary) => summary.sellerLabel === selectedSeller) ?? sellerSummaries[0] ?? null;
+  // Browsing order only: this group may be a display grouping, so sellers are not ranked by price here.
+  const sellerTabs = useMemo(() => [...sellerSummaries].sort((left, right) =>
+    right.latestObservedAt.localeCompare(left.latestObservedAt)
+    || left.sellerLabel.localeCompare(right.sellerLabel, "ko-KR")), [sellerSummaries]);
   const ordered = useMemo(
     () => points
       .filter((point) => point.sellerLabel === selectedSummary?.sellerLabel)
@@ -106,11 +112,13 @@ export function PriceTrendModal({ group, onClose, onOpenStore, onBack }: { group
       {onBack && <button type="button" className={styles.backButton} onClick={onBack} aria-label="이전 화면으로 돌아가기">‹ 뒤로</button>}
       <button ref={closeButtonRef} className={styles.closeButton} onClick={onClose} aria-label="가격 이력 창 닫기">×</button>
       <h2 id="trend-title">{title}</h2>
+      {sellerTabs.length > 1 && <div className={`${styles.filters} ${styles.trendSellerTabs}`} role="group" aria-label="판매처별 관측 기록">
+        {sellerTabs.map((summary) => <button key={summary.sellerLabel} type="button" aria-pressed={summary.sellerLabel === selectedSummary?.sellerLabel} className={summary.sellerLabel === selectedSummary?.sellerLabel ? styles.filterActive : ""} onClick={() => setSelectedSeller(summary.sellerLabel)}>{summary.sellerLabel} <span>{summary.observationCount}</span></button>)}
+      </div>}
       {selectedSummary && <>
         <div className={styles.productDetailMeta}>
           <span>판매처</span>
-          <strong>{selectedSummary.sellerLabel}</strong>
-          <button type="button" className={styles.storeInfoButton} aria-label={`${selectedSummary.sellerLabel} 판매처 정보 보기`} onClick={() => onOpenStore(selectedSummary.sellerLabel)}>›</button>
+          <button type="button" className={styles.trendSellerLink} aria-label={`${selectedSummary.sellerLabel} 판매처 정보 보기`} onClick={() => onOpenStore(selectedSummary.sellerLabel)}><strong>{selectedSummary.sellerLabel}</strong><Icon name="chevron" size={16} /></button>
           <small>코드 {group.sourceProductCode}</small>
         </div>
         <div className={styles.trendStats}>
@@ -127,13 +135,14 @@ export function PriceTrendModal({ group, onClose, onOpenStore, onBack }: { group
       {group.latest.storeProductId && <ReceiptProductNutritionPanel storeProductId={group.latest.storeProductId} />}
       {loading && <p className={styles.trendNote}>저장된 관측을 확인하고 있습니다.</p>}
       {message && <p className={styles.trendNote}>{message}</p>}
+      {!group.officialProduct && selectedSummary && <p className={styles.trendNote}>{selectedSummary.sellerLabel}의 관측을 표시합니다. 판매처 비교는 검증된 공통 상품 연결이 있을 때 확장됩니다.</p>}
 
       {selectedSummary && <section className={styles.changeSection}>
         <h3>변동 이력</h3>
         <div className={styles.trendTable}>
           <div className={styles.trendTableHeader}><span>관측일</span><span>데이터 출처</span><span>관측가</span><span>직전 대비</span></div>
           {[...changes].reverse().map((point, index) => <div key={`${point.sellerLabel}:${point.observedAt}:${point.source}:${index}`}>
-            <span>{point.observedAt}</span>
+            <span>{formatObservationDate(point.observedAt) ?? point.observedAt}</span>
             <span>{formatSource(point.source)}</span>
             <strong>{formatKrw(point.priceKrw)}</strong>
             <em className={priceChangeClass(point.differenceKrw)}>{formatPriceChange(point.differenceKrw, point.differencePercent)}</em>
@@ -161,7 +170,7 @@ function calculateTrendChanges(points: TrendPoint[]) {
 
 function formatPriceChange(amount: number | null, percent: number | null) {
   if (amount === null) return "첫 관측";
-  if (amount === 0) return "변화 없음";
+  if (amount === 0) return "직전과 같음";
   const sign = amount > 0 ? "+" : "";
   return `${sign}${formatKrw(amount)} (${sign}${percent?.toFixed(1) ?? "0.0"}%)`;
 }
@@ -178,18 +187,25 @@ function priceChangeClass(amount: number | null) {
 }
 
 function TrendGraph({ points }: { points: TrendPoint[] }) {
-  if (points.length < 2) return <div className={styles.graphEmpty}>이 판매처의 가격 변화 그래프를 만들려면 서로 다른 시점의 관측이 2건 이상 필요합니다.</div>;
-  const prices = points.map((point) => point.priceKrw);
+  const positions = observationTimePositions(points.map((point) => point.observedAt));
+  const plotted = points
+    .map((point, index) => ({ point, position: positions[index] }))
+    .filter((entry): entry is { point: TrendPoint; position: number } => entry.position !== null);
+  if (new Set(plotted.map((entry) => entry.point.observedAt.slice(0, 10))).size < 2) return <div className={styles.graphEmpty}>이 판매처의 가격 변화 그래프를 만들려면 서로 다른 시점의 관측이 2건 이상 필요합니다.</div>;
+  const prices = plotted.map((entry) => entry.point.priceKrw);
   const min = Math.min(...prices);
   const max = Math.max(...prices);
   const range = Math.max(max - min, 1);
-  const path = points.map((point, index) => `${index === 0 ? "M" : "L"} ${12 + (index / (points.length - 1)) * 276} ${92 - ((point.priceKrw - min) / range) * 68}`).join(" ");
+  // x follows observation dates; y follows observed prices. Points are the facts; the dashed
+  // connector is only a visual guide and does not claim the price between observations.
+  const coordinates = plotted.map(({ point, position }) => ({ point, x: 12 + position * 276, y: 92 - ((point.priceKrw - min) / range) * 68 }));
+  const path = coordinates.map(({ x, y }, index) => `${index === 0 ? "M" : "L"} ${x} ${y}`).join(" ");
   return <div className={styles.graphWrap}>
-    <svg viewBox="0 0 300 110" role="img" aria-label={`${points[0].sellerLabel} 가격 관측 변화 그래프`}>
+    <svg viewBox="0 0 300 110" role="img" aria-label={`${plotted[0].point.sellerLabel} 가격 관측 ${plotted.length}건, 관측일 간격에 비례해 표시`}>
       <path className={styles.graphBase} d="M 12 92 H 288" />
       <path className={styles.graphLine} d={path} />
-      {points.map((point, index) => <circle key={`${point.observedAt}:${point.priceKrw}:${index}`} cx={12 + (index / (points.length - 1)) * 276} cy={92 - ((point.priceKrw - min) / range) * 68} r="4" />)}
+      {coordinates.map(({ point, x, y }, index) => <circle key={`${point.observedAt}:${point.priceKrw}:${index}`} cx={x} cy={y} r="4" />)}
     </svg>
-    <div><span>{points[0].observedAt}</span><span>{points.at(-1)?.observedAt}</span></div>
+    <div><span>{formatObservationDate(plotted[0].point.observedAt)}</span><span>{formatObservationDate(plotted.at(-1)!.point.observedAt)}</span></div>
   </div>;
 }
