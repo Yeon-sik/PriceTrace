@@ -51,3 +51,6 @@ Application conformance uses the shared accepted/rejected fixtures. `scripts/ver
 Run sequentially: `npm run lint`, `npm run typecheck`, `npm run test`, `npm run build`, `npm run test:purchase-sql`, and `npm run test:e2e -- e2e/information-inbox.spec.ts`.
 
 Read-only hosted preflight on 2026-11-06 used the existing linked checkout's `node_modules/.bin/supabase.cmd db query --linked`. It reported migration version `20261106121138`, 114 history entries, 113 catalog products, 3 price observations, 6 purchase sources, 2 product candidates, and no inbox table. Several historical local versions are absent or differently versioned in hosted history. Do not bulk-push local migrations to deliver this inbox. Apply only the reviewed additive migration with its history entry, verify grants/RLS/functions, and recheck these native counts. Hosted application and deployment are separate from source and local validation.
+# Native price application extension
+
+Private import remains separate from publication. See [INFORMATION_PRICE_PROJECTION_V1.md](INFORMATION_PRICE_PROJECTION_V1.md) for the receiving user's explicit retail price mapping, seller evidence review, publication approval, atomic receipts and public price history reader.

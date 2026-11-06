@@ -5,6 +5,8 @@ import assert from "node:assert/strict";
 import { verifyOcrComponentContract } from "./verify-ocr-component-contract.mjs";
 import { verifyArDemoBarcodeRegistration } from "./verify-ar-demo-barcode-registration.mjs";
 import { verifyInformationInbox } from "./verify-information-inbox.mjs";
+import { verifyInformationProjection } from "./verify-information-projection.mjs";
+import { verifyInformationSellerReview } from "./verify-information-seller-review.mjs";
 
 // Optional test-only runtime, supplied externally. Never contacts a remote DB.
 const runtime = process.argv[2];
@@ -105,6 +107,8 @@ try {
   }
   assert.ok(baselineChecked);
   await verifyInformationInbox(db, root);
+  await verifyInformationProjection(db, root);
+  await verifyInformationSellerReview(db, root);
   assert.deepEqual(await v1ResolutionContracts(), v1ResolutionDefinitions);
   console.log("BRAND_RESOLUTION_V1_AND_INGEST_DEFINITIONS_UNCHANGED_PASS");
   assert.deepEqual(await db.query("select pg_get_functiondef('public.submit_product_candidate_v1(text,jsonb)'::regprocedure) as definition"), candidateDefinition);
