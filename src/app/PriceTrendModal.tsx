@@ -24,7 +24,10 @@ export function PriceTrendModal({ group, onClose, onOpenStore, onBack }: { group
   const [points, setPoints] = useState<TrendPoint[]>(initialPoints);
   const [selectedSeller, setSelectedSeller] = useState(group.latest.storeLabel);
   const [loading, setLoading] = useState(Boolean(client && group.officialProduct));
-  const [message, setMessage] = useState(group.officialProduct ? "" : `${group.latest.storeLabel}의 동일 상품 관측을 표시합니다. 판매처 비교는 검증된 공통 상품 연결이 있을 때 확장됩니다.`);
+  const initialMessage = group.latest.catalogNamespace === "public-price"
+    ? `${group.latest.storeLabel}에서 공개한 정확한 상품의 가격 관측입니다. 개인 구매 기록과 합산하지 않습니다.`
+    : group.officialProduct ? "" : `${group.latest.storeLabel}의 동일 상품 관측을 표시합니다. 판매처 비교는 검증된 공통 상품 연결이 있을 때 확장됩니다.`;
+  const [message, setMessage] = useState(initialMessage);
 
   useDialogLifecycle({ onClose, initialFocusRef: closeButtonRef });
 
@@ -32,8 +35,8 @@ export function PriceTrendModal({ group, onClose, onOpenStore, onBack }: { group
     setPoints(initialPoints);
     setSelectedSeller(group.latest.storeLabel);
     setLoading(Boolean(client && group.officialProduct));
-    setMessage(group.officialProduct ? "" : `${group.latest.storeLabel}의 동일 상품 관측을 표시합니다. 판매처 비교는 검증된 공통 상품 연결이 있을 때 확장됩니다.`);
-  }, [client, group, initialPoints]);
+    setMessage(initialMessage);
+  }, [client, group, initialPoints, initialMessage]);
 
   useEffect(() => {
     let active = true;
@@ -111,7 +114,7 @@ export function PriceTrendModal({ group, onClose, onOpenStore, onBack }: { group
           <span>판매처</span>
           <strong>{selectedSummary.sellerLabel}</strong>
           <button type="button" className={styles.storeInfoButton} aria-label={`${selectedSummary.sellerLabel} 판매처 정보 보기`} onClick={() => onOpenStore(selectedSummary.sellerLabel)}>›</button>
-          <small>코드 {group.sourceProductCode}</small>
+          {group.latest.catalogNamespace !== "public-price" && <small>코드 {group.sourceProductCode}</small>}
         </div>
         <div className={styles.trendStats}>
           <div><span>최근 관측가</span><strong>{formatKrw(selectedSummary.latestPriceKrw)}</strong></div>

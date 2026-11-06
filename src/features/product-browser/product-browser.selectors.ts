@@ -154,6 +154,7 @@ export function selectProductCatalogGroups({
   });
 
   for (const group of groups) {
+    if (group.latest.catalogNamespace === "public-price") { regular.push(group); continue; }
     const key = officialProductCandidateKey(group);
     const withOfficial = officialProducts[key]
       ? { ...group, officialProduct: officialProducts[key] }

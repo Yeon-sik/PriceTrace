@@ -35,6 +35,12 @@ export function useInformationInbox(authRevision: number) {
     return () => { generation.current += 1; };
   }, [authRevision, reload]);
 
+  useEffect(() => {
+    const refreshApplied = () => { void reload(); };
+    window.addEventListener("pricetrace-information-applied", refreshApplied);
+    return () => window.removeEventListener("pricetrace-information-applied", refreshApplied);
+  }, [reload]);
+
   const save = async (text: string) => {
     const current = generation.current;
     setBusy(true); setError(""); setNotice("");

@@ -8,10 +8,13 @@ const raw = JSON.stringify(fixture, null, 2).replace('"nested": [', '"huge": 900
 const owner = "00000000-0000-4000-8000-000000000011";
 type Row = { record_id: string; user_id: string; payload_text: string; state: string; received_at: string; content_fingerprint: string };
 
-async function prepare(page: Page) {
+async function prepare(page: Page, projection = false) {
   let signedIn = false;
   const rows: Row[] = [];
-  const user = { id: owner, email: "inbox@example.invalid", role: "authenticated", aud: "authenticated", app_metadata: {}, user_metadata: {}, created_at: "2026-11-06T00:00:00Z" };
+  const user = { id: owner, email: "inbox@example.invalid", role: "authenticated", aud: "authenticated", app_metadata: projection ? { role: "admin" } : {}, user_metadata: {}, created_at: "2026-11-06T00:00:00Z" };
+  const productId = "99000000-0000-4000-8000-000000000002", storeId = "99000000-0000-4000-8000-000000000003";
+  const publicPrices: unknown[] = [], reviews: Record<string, unknown>[] = [];
+  let receipt: Record<string, unknown> | null = null, preparedSeller = false;
   await page.route("https://pricetrace.example.test/**", async route => {
     const url = new URL(route.request().url()); const resource = url.pathname.split("/").at(-1);
     if (resource === "token") {
@@ -22,6 +25,41 @@ async function prepare(page: Page) {
     }
     if (resource === "user") { await route.fulfill({ status: signedIn ? 200 : 401, json: signedIn ? user : { message: "No session" } }); return; }
     if (resource === "logout") { signedIn = false; await route.fulfill({ json: {} }); return; }
+    if (resource === "get_price_observation_sources_v1") { await route.fulfill({ json: preparedSeller ? [{ store_id: storeId, display_name: "검증판매점", location_label: "확인지점" }] : [] }); return; }
+    if (resource === "pricetrace_information_projection_receipts") { await route.fulfill({ json: receipt }); return; }
+    if (resource === "pricetrace_seller_review_requests") { await route.fulfill({ json: reviews }); return; }
+    if (resource === "submit_pricetrace_seller_review_v1") {
+      const input = route.request().postDataJSON(); expect(input.p_expected_user_id).toBe(owner);
+      const review = { request_id: input.p_request_id, user_id: owner, source_record_id: input.p_source_record_id, details: input.p_details, input_digest: "d".repeat(64), state: "pending", store_id: null, review_note: null, created_at: "2026-11-06T12:00:00Z" };
+      reviews.push(review); await route.fulfill({ json: review }); return;
+    }
+    if (resource === "review_pricetrace_seller_v1") {
+      const input = route.request().postDataJSON(); expect(input.p_approve).toBe(true); expect(input.p_expected_digest).toBe("d".repeat(64));
+      Object.assign(reviews[0], { state: "approved", store_id: storeId, review_note: input.p_review_note }); preparedSeller = true;
+      await route.fulfill({ json: reviews[0] }); return;
+    }
+    if (resource === "get_information_public_prices_v1") { await route.fulfill({ json: publicPrices }); return; }
+    if (resource === "get_product_read_v1" && projection) {
+      const revision = `sha256:${"a".repeat(64)}`, updatedAt = "2026-11-06T00:00:00Z";
+      await route.fulfill({ json: { schemaVersion: "product-read.v1", namespace: "pricetrace", revision, products: [{ revision,
+        standardProduct: { id: productId, name: "검증상품", brand: null, updatedAt },
+        catalogProduct: { id: productId, name: "검증상품 40g", specificationText: "40 g", contentAmount: 40, contentUnit: "g", packageCount: 1, referenceUnit: 100, listingReferenceUrl: null, updatedAt }, sellerProducts: [], observations: [] }] } }); return;
+    }
+    if (resource === "preview_pricetrace_information_price_v1" || resource === "apply_pricetrace_information_price_v1") {
+      const input = route.request().postDataJSON(); const source = rows.find(row => row.record_id === input.p_record_id)!;
+      expect(input.p_expected_user_id).toBe(owner); expect(input.p_source_fingerprint).toBe(source.content_fingerprint);
+      expect(input.p_mapping).toEqual({ catalog_product_id: productId, store_id: storeId, price_field: "price", date_field: "day" });
+      const result = { status: "ready", account_id: owner, record_id: source.record_id, source_fingerprint: source.content_fingerprint, mapping_digest: "b".repeat(64),
+        impact: { catalog_product_id: productId, product_name: "검증상품 40g", specification: "40 g", store_id: storeId, store_name: "검증판매점", location_label: "확인지점", observed_on: "2026-11-06", unit_price_krw: 1200, visibility: "public", additional_observations: 1, observation_count_before: 0, minimum_before: null, minimum_after: 1200 } };
+      if (resource.startsWith("apply")) {
+        expect(input.p_publication_approved).toBe(true); expect(input.p_mapping_digest).toBe("b".repeat(64));
+        const applied = { ...result, status: "applied", observation_id: productId, applied_at: "2026-11-06T12:00:00Z", replayed: false };
+        receipt = { result: applied, mapping: input.p_mapping }; source.state = "reviewed";
+        if (!publicPrices.length) publicPrices.push({ observation_id: productId, catalog_product_id: productId, product_name: "검증상품 40g", store_id: storeId, store_name: "검증판매점", location_label: "확인지점", observed_on: "2026-11-06", unit_price_krw: 1200 });
+        await route.fulfill({ json: applied }); return;
+      }
+      await route.fulfill({ json: result }); return;
+    }
     if (resource === "ingest_pricetrace_information_record_v1") {
       const input = route.request().postDataJSON(); expect(input.p_expected_user_id).toBe(owner);
       const payload = JSON.parse(input.p_payload_text); const existing = rows.find(row => row.record_id === payload.record_id);
@@ -89,6 +127,51 @@ test("private import, duplicate, conflict, export and account isolation", async 
   await page.screenshot({ path: ".impeccable/review/information-desktop.png", fullPage: true });
   await page.getByRole("button", { name: "로그아웃", exact: true }).click();
   await expect(page.getByRole("heading", { name: fixture.title })).not.toBeVisible();
+});
+
+test("mobile seller review, explicit public price approval, durable receipt and native price display", async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  const rows = await prepare(page, true);
+  const record = { ...fixture, title: "직접 전달 가격 관측", record_type: "pricetrace.observation", fields: [{ key: "price", value_type: "decimal", unit: "KRW", value: "1200.00" }, { key: "day", value_type: "date", value: "2026-11-06" }] };
+  const original = JSON.stringify(record); await importRecord(page, original);
+  await page.getByRole("button", { name: /직접 전달 가격 관측/ }).click();
+  await expect(page.getByText("아직 승인된 공개 판매처가 없습니다.", { exact: false })).toBeVisible();
+  await page.getByText("판매처 등록 신청·관리자 검토", { exact: true }).click();
+  await page.getByLabel("정확한 판매처명", { exact: true }).fill("검증판매점");
+  await page.getByLabel("지점·주소 또는 온라인 판매자 식별", { exact: true }).fill("확인지점");
+  await page.getByLabel("공개 확인 URL (HTTPS)", { exact: true }).fill("https://example.test/exact-store");
+  await page.getByLabel("판매처 확인 근거", { exact: true }).fill("비공개 판매처 근거");
+  await page.getByRole("checkbox", { name: "정확한 판매처 식별과 근거를 확인했으며 관리자에게 이 신청을 보냅니다." }).check();
+  await page.getByRole("button", { name: "판매처 검토 신청", exact: true }).click();
+  const seller = page.getByRole("article", { name: "판매처 신청 검증판매점" });
+  await expect(seller.getByText("관리자 검토 대기", { exact: true })).toBeVisible();
+  await expect(seller.getByRole("button", { name: "이 판매처 공개 승인" })).toBeDisabled();
+  await seller.getByLabel("관리자 검토 사유").fill("정확한 판매점 및 지점의 공개 식별 근거 확인");
+  await seller.getByRole("checkbox").check(); await seller.getByRole("button", { name: "이 판매처 공개 승인" }).click();
+  await expect(seller.getByText("승인됨 · 공개 판매처 목록에서 선택 가능")).toBeVisible();
+  await page.getByText("판매처 등록 신청·관리자 검토", { exact: true }).click();
+  await page.getByLabel("정확한 상품 검색").fill("검증상품"); await page.getByRole("button", { name: "검증된 상품 찾기" }).click();
+  await page.getByRole("combobox", { name: "원문에서 확인한 상품", exact: true }).selectOption("99000000-0000-4000-8000-000000000002");
+  await page.getByRole("combobox", { name: "원문에서 확인한 판매처", exact: true }).selectOption("99000000-0000-4000-8000-000000000003");
+  await page.getByRole("combobox", { name: "선택한 상품 포장 1개의 가격 항목" }).selectOption("price"); await page.getByRole("combobox", { name: "관측일로 사용할 원문 항목" }).selectOption("day");
+  await page.getByRole("button", { name: "반영 영향 미리보기" }).click();
+  await expect(page.getByText("이 상품·판매처·날짜·가격은 로그인하지 않은 사람도 볼 수 있습니다.", { exact: false })).toBeVisible();
+  await expect(page.getByRole("button", { name: "승인한 공개 가격 반영" })).toBeDisabled();
+  expect(rows[0].state).toBe("pending"); expect(rows[0].payload_text).toBe(original);
+  await page.getByRole("checkbox", { name: "위 계정과 원문 항목, 상품·판매처를 직접 확인했고 이 가격 정보의 공개 반영을 승인합니다." }).check();
+  mkdirSync(".impeccable/review", { recursive: true }); await page.getByRole("region", { name: "공개 가격으로 반영", exact: true }).screenshot({ path: ".impeccable/review/projection-mobile-preview.png" });
+  await page.getByRole("button", { name: "승인한 공개 가격 반영" }).click();
+  await expect(page.getByText("반영 완료 · 관측 ID", { exact: false })).toBeVisible(); expect(rows[0].state).toBe("reviewed"); expect(rows[0].payload_text).toBe(original);
+  await page.reload(); await page.getByRole("button", { name: /직접 전달 가격 관측/ }).click();
+  await expect(page.getByRole("heading", { name: "반영 영수증" })).toBeVisible(); await expect(page.getByRole("button", { name: "승인한 공개 가격 반영" })).not.toBeVisible();
+  await page.getByRole("link", { name: "상품 가격·통계에서 보기" }).click();
+  await expect(page.getByText("공개 가격 관측 · 1건", { exact: true }).first()).toBeVisible();
+  await expect(page.getByText("검증상품 40g", { exact: false }).first()).toBeVisible();
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+  await page.getByText("공개 가격 관측 · 1건", { exact: true }).first().locator("xpath=ancestor::article[1]").screenshot({ path: ".impeccable/review/projection-mobile-products.png" });
+  await page.getByRole("button", { name: "검증상품 40g 가격 이력 보기", exact: true }).click();
+  await expect(page.getByRole("dialog")).toContainText("1,200");
+  await page.screenshot({ path: ".impeccable/review/projection-mobile-trend.png" });
 });
 
 test("mobile direct service record keeps decimal, units and sources", async ({ page }) => {

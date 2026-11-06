@@ -4,6 +4,7 @@ import { useRef, useState, type FormEvent } from "react";
 import { INFORMATION_RECORD_MAX_BYTES, parseInformationRecordText, type InformationField, type InformationRecord } from "@/domain/information-record";
 import { useInformationInbox } from "@/features/information-inbox/use-information-inbox";
 import { exportInformationRecord } from "@/lib/information-export";
+import { InformationPriceProjection } from "@/features/information-inbox/InformationPriceProjection";
 import styles from "./InformationInboxPage.module.css";
 
 type DraftField = { id: string; key: string; label: string; type: InformationField["value_type"]; value: string; unit: string };
@@ -136,6 +137,7 @@ export function InformationInboxPage({ authRevision, onRequireAuth }: { authRevi
       <div className={styles.actions}><button type="button" disabled={exportBusy} onClick={() => void download(detail.payload_text, detail.record_id)}>{exportBusy ? "파일 내보내는 중…" : "원본 JSON 내보내기"}</button>
         <label>검토 상태<select value={detail.state} disabled={inbox.busy} onChange={event => void inbox.setState(detail.record_id, event.target.value as typeof detail.state)}>{Object.entries(stateLabels).map(([value, label]) => <option value={value} key={value}>{label}</option>)}</select></label></div>
       <details open><summary>출처·항목·참조 원문 전체</summary><pre>{detail.payload_text}</pre></details>
+      <InformationPriceProjection key={`${authRevision}:${detail.record_id}`} entry={detail} />
     </section>}
   </section>;
 }
