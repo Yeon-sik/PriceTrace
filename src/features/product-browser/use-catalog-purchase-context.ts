@@ -32,7 +32,7 @@ export function useCatalogPurchaseContext(catalogIds: readonly string[], query: 
   const [result, setResult] = useState<PurchaseResult | null>(null);
   const [retryRevision, setRetryRevision] = useState(0);
   const ids = catalogIds.join(",");
-  const key = JSON.stringify([ids, query, authRevision, retryRevision]);
+  const key = JSON.stringify([ids, query, authRevision]);
 
   useEffect(() => {
     if (!ids || query === "") return;
@@ -60,11 +60,14 @@ export function useCatalogPurchaseContext(catalogIds: readonly string[], query: 
         if (!signal.aborted) setResult({ key, status: "error", rows: [] });
       });
     }, query === null ? 0 : 250);
+    const refresh = () => setRetryRevision((revision) => revision + 1);
+    if (query === null) window.addEventListener("focus", refresh);
     return () => {
+      window.removeEventListener("focus", refresh);
       window.clearTimeout(timer);
       controller.abort();
     };
-  }, [ids, key, query]);
+  }, [ids, key, query, retryRevision]);
 
   return {
     result: result?.key === key ? result : null,

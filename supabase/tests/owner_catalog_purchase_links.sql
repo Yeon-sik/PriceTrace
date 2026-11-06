@@ -11,6 +11,10 @@ declare
   v_other_catalog uuid;
   v_original_line jsonb;
   v_context jsonb;
+  v_repeat_source uuid;
+  v_product_id uuid;
+  v_key text;
+  v_spec text;
 begin
   if has_function_privilege('anon', 'public.get_my_catalog_purchase_context_v1(uuid[],text)', 'EXECUTE')
     or has_function_privilege('anon', 'public.set_my_catalog_purchase_link_v1(uuid,uuid,boolean)', 'EXECUTE')
@@ -82,6 +86,46 @@ begin
   perform public.set_my_catalog_purchase_link_v1(v_catalog, v_line, false);
   if exists (select 1 from public.get_my_catalog_purchase_context_v1(array[v_catalog])) then
     raise exception 'Unlink failed';
+  end if;
+
+  insert into public.purchase_price_sources (
+    user_id, schema_version, contract_version, source_app, kind, purchase_kind, platform_name,
+    order_status, ordered_on, payment_status, payment_method, payment_total_price_krw,
+    source_fingerprint, source_payload, transaction_state
+  ) values (v_owner, 'purchase-price-observation.v4', 'purchase-price.v4', 'pricetrace_ocr_app',
+    'retail_purchase', 'retail', '주문 채널', 'delivered', '2025-03-01', 'paid', 'card', 23000,
+    repeat('b', 64), '{}', 'settled')
+  returning id into v_repeat_source;
+  for v_key, v_spec in values ('fixture-product-key','120정'), ('repeat-key','120정'), ('different-key','240정') loop
+    insert into public.product_identity_candidates (
+      user_id, schema_version, contract_version, source_app, candidate_type, product_name, client_key,
+      identifiers, evidence, provenance, request_payload
+    ) values (v_owner, 'PRICETRACE_PRODUCT_CANDIDATE', 'product-candidate.v1', 'pricetrace_ocr_app',
+      'retail_product', 'Fixture ' || v_spec, v_key, '[]', '[]', '{}', '{}')
+    returning id into v_product_id;
+    insert into public.product_candidate_authority_projections (
+      user_id, client_key, request_fingerprint, candidate_id, resolution_status, source_payload
+    ) values (v_owner, v_key, repeat('a', 64), v_product_id, 'private_unverified_candidate_created', '{}');
+  end loop;
+  insert into public.purchase_price_source_lines (
+    user_id, purchase_source_id, line_ordinal, source_line_key, product_client_key, product_name,
+    price_status, quantity, unit_price_krw, observation_status, observation_reason, line_payload
+  ) values
+    (v_owner, v_repeat_source, 1, 'line-2', 'repeat-key', 'OCR 120정 구매', 'itemized', 2, 11500, 'not_created', 'seller_unknown', '{}'),
+    (v_owner, v_repeat_source, 2, 'line-3', 'different-key', 'OCR 120정 구매', 'itemized', 1, 15000, 'not_created', 'seller_unknown', '{}');
+  perform public.set_my_catalog_purchase_link_v1(v_catalog, v_line, true);
+  select to_jsonb(row) into strict v_context from public.get_my_catalog_purchase_context_v1(array[v_catalog]) as row
+    where product_client_key = 'repeat-key';
+  if v_context ->> 'unit_price_krw' <> '11500' or v_context ->> 'order_line_count' <> '2'
+    or exists (select 1 from public.get_my_catalog_purchase_context_v1(array[v_catalog]) where product_client_key = 'different-key')
+    or (select count(*) from public.owner_catalog_purchase_links where user_id = v_owner) <> 1
+  then raise exception 'Repeat order lost its own prices or reused a different variant'; end if;
+  if (select count(*) from public.get_my_catalog_purchase_context_v1(array[v_catalog], '120정')) <> 1 then
+    raise exception 'Only the unmatched variant should require a manual selection';
+  end if;
+  perform public.set_my_catalog_purchase_link_v1(v_catalog, v_line, false);
+  if exists (select 1 from public.get_my_catalog_purchase_context_v1(array[v_catalog])) then
+    raise exception 'Removing the owner confirmation must revoke automatic reuse';
   end if;
 end;
 $test$;

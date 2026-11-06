@@ -152,7 +152,7 @@ export function ProductBrowser({ groups, query, setQuery, category, setCategory,
   const ownerSearchQuery = catalogView === "all" && !selectedStoreProductId && !selectedCatalogProductId ? query.trim() : "";
   const { result: ownerSearch, retry: retryOwnerSearch } = useOwnerOcrProductSearch(ownerSearchQuery, authRevision);
   const manufacturerSearchQuery = catalogView !== "official" && !selectedStoreProductId && !selectedCatalogProductId
-    && category === "전체" && martType === "all" && selectedStore === "all" ? query.trim() : "";
+    && category === "전체" && martType === "all" && selectedStore === "all" ? query.trim() : null;
   const { result: manufacturerSearch, retry: retryManufacturerSearch } = useManufacturerProductSearch(manufacturerSearchQuery);
   const [filtersOpen, setFiltersOpen] = useState(false);
   const filterPanelId = useId();
@@ -347,7 +347,7 @@ export function ProductBrowser({ groups, query, setQuery, category, setCategory,
       </div>
     </section>}
     <div className={styles.resultBar}><p>{hasOwnerProducts ? "카탈로그·가격 상품" : "상품"} {resultCount.toLocaleString("ko-KR")}개</p>{(query || category !== "전체" || martType !== "all" || selectedStore !== "all" || showStandardOnly || showOfficialOnly) && <button onClick={() => { setQuery(""); setCategory("전체"); setMartType("all"); setSelectedStore("all"); setCatalogView("all"); }}>필터 초기화</button>}</div>
-    {manufacturerSearch?.status === "error" && <div className={styles.dataNotice} role="status">
+    {manufacturerSearchQuery && manufacturerSearch?.status === "error" && <div className={styles.dataNotice} role="status">
       제조사 상품을 불러오지 못했습니다.
       <button type="button" onClick={retryManufacturerSearch}>제조사 상품 다시 검색</button>
     </div>}

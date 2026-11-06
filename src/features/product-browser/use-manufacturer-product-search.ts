@@ -18,13 +18,13 @@ type SearchResult = {
   products: ManufacturerCatalogProduct[];
 };
 
-export function useManufacturerProductSearch(query: string) {
+export function useManufacturerProductSearch(query: string | null) {
   const [result, setResult] = useState<SearchResult | null>(null);
   const [retryRevision, setRetryRevision] = useState(0);
-  const key = `${retryRevision}:${query}`;
+  const key = JSON.stringify(query);
 
   useEffect(() => {
-    if (!query) return;
+    if (query === null) return;
     const client = getSupabaseBrowserClient();
     if (!client) return;
 
@@ -32,7 +32,7 @@ export function useManufacturerProductSearch(query: string) {
     const { signal } = controller;
     const search = async () => {
       const { data, error } = await client.rpc("search_public_manufacturer_products_v1", {
-        p_query: query, p_limit: 20,
+        p_query: query, p_limit: query ? 20 : 50,
       }).abortSignal(signal);
       if (signal.aborted) return;
       if (error) throw error;
@@ -43,11 +43,14 @@ export function useManufacturerProductSearch(query: string) {
         if (!signal.aborted) setResult({ key, status: "error", products: [] });
       });
     }, 250);
+    const refresh = () => setRetryRevision((revision) => revision + 1);
+    window.addEventListener("focus", refresh);
     return () => {
+      window.removeEventListener("focus", refresh);
       window.clearTimeout(timer);
       controller.abort();
     };
-  }, [query, key]);
+  }, [query, key, retryRevision]);
 
   return {
     result: result?.key === key ? result : null,
