@@ -261,8 +261,12 @@
   .search { min-width: 245px; }
 }
 @media (max-width: 760px) {
-  .headerInner { display: flex; height: 68px; padding: 0 22px; }
-  .logo { font-size: 21px; }
+  .headerInner { display: flex; gap: 12px; height: 68px; padding: 0 22px; }
+  .logo { flex-shrink: 0; font-size: 21px; }
+  .account { flex-shrink: 1; min-width: 0; }
+  .userMenu { min-width: 0; gap: 8px; }
+  .userMenu > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .account > button, .userMenu > button { flex-shrink: 0; white-space: nowrap; }
   .brandMark { transform: scale(.85) skewY(-18deg); margin-right: 8px; }
   .nav { display: none; }
   .main { padding: 22px 22px 92px; }
@@ -309,6 +313,20 @@
 .catalogLayerTabs { border-radius: 5px; padding: 4px; margin: 22px 0 18px; }
 .catalogLayerTabs button { min-height: 36px; padding: 8px 12px; }
 .catalogLayerTabs .catalogLayerTabActive { color: var(--ink); background: var(--surface-raised); box-shadow: inset 0 -2px var(--accent); }
+.catalogSearchResults {
+  margin: 18px 0;
+  padding: 14px 16px;
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  background: var(--surface);
+  overflow-wrap: anywhere;
+}
+.catalogSearchResults h2 { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 12px; margin: 0; font-size: 15px; }
+.catalogSearchResults ul { margin: 10px 0 0; padding: 0; list-style: none; }
+.catalogSearchResults li { display: grid; gap: 3px; padding: 9px 0; border-top: 1px solid var(--line); font-size: 15px; }
+.catalogSearchResults li:last-child { padding-bottom: 0; }
+.catalogSearchResults span { color: var(--muted); font-size: 13px; font-weight: 500; }
+.catalogSearchResults a { justify-self: start; padding: 4px 0; color: var(--accent); font-size: 13px; text-decoration: underline; }
 .productInfo h2 { font-size: 15px; line-height: 1.5; font-weight: 550; letter-spacing: -.01em; }
 .floatingCart { filter: none; right: 24px; }
 .floatingCart:hover { transform: none; filter: none; background: var(--surface); }
