@@ -85,23 +85,36 @@ export type InformationRecord = z.infer<typeof InformationRecordSchema>;
 export type InformationField = InformationRecord["fields"][number];
 export type InformationInboxState = "pending" | "reviewed" | "archived";
 
-function checkJsonDepth(text: string) {
-  let depth = 0; let inString = false; let escaped = false;
-  for (const character of text) {
+function checkJsonStructure(text: string) {
+  const containers: Array<Set<string> | null> = [];
+  let inString = false; let escaped = false; let stringStart = 0;
+  for (let index = 0; index < text.length; index += 1) {
+    const character = text[index];
     if (inString) {
       if (escaped) escaped = false;
       else if (character === "\\") escaped = true;
-      else if (character === '"') inString = false;
-    } else if (character === '"') inString = true;
+      else if (character === '"') {
+        inString = false;
+        let next = index + 1;
+        while (next < text.length && /[\t\n\r ]/.test(text[next])) next += 1;
+        const keys = containers.at(-1);
+        if (text[next] === ":" && keys) {
+          // Compare decoded names so "a" and "\u0061" cannot hide different values.
+          const key: string = JSON.parse(text.slice(stringStart, index + 1));
+          if (keys.has(key)) throw new Error("같은 JSON 객체에 중복된 키가 있습니다.");
+          keys.add(key);
+        }
+      }
+    } else if (character === '"') { inString = true; stringStart = index; }
     else if (character === "{" || character === "[") {
-      depth += 1;
-      if (depth > INFORMATION_RECORD_MAX_DEPTH) throw new Error("JSON 중첩은 64단계 이하여야 합니다.");
-    } else if (character === "}" || character === "]") depth -= 1;
+      containers.push(character === "{" ? new Set() : null);
+      if (containers.length > INFORMATION_RECORD_MAX_DEPTH) throw new Error("JSON 중첩은 64단계 이하여야 합니다.");
+    } else if (character === "}" || character === "]") containers.pop();
   }
 }
 
 export function parseInformationRecord(input: unknown, expectedOwner: InformationOwner): InformationRecord {
-  checkJsonDepth(JSON.stringify(input));
+  checkJsonStructure(JSON.stringify(input));
   const record = InformationRecordSchema.parse(input);
   if (record.owner_app !== expectedOwner) throw new Error(`${expectedOwner} 소유 정보만 가져올 수 있습니다.`);
   if (new TextEncoder().encode(JSON.stringify(record)).byteLength > INFORMATION_RECORD_MAX_BYTES) throw new Error("정보 파일은 1 MiB 이하여야 합니다.");
@@ -110,7 +123,7 @@ export function parseInformationRecord(input: unknown, expectedOwner: Informatio
 
 export function parseInformationRecordText(text: string, expectedOwner: InformationOwner): InformationRecord {
   if (new TextEncoder().encode(text).byteLength > INFORMATION_RECORD_MAX_BYTES) throw new Error("정보 파일은 1 MiB 이하여야 합니다.");
-  checkJsonDepth(text);
+  checkJsonStructure(text);
   return parseInformationRecord(JSON.parse(text), expectedOwner);
 }
 

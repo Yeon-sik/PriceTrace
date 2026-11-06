@@ -9,6 +9,7 @@ Users can create product, menu, place, service, raw-material, property or other 
 - `pricetrace_information_inbox` is private review storage. It does not create catalog products, verified identities, published prices, receipt lines, payments, nutrition or health facts.
 - Original JSON text is immutable. Exact decimal strings, arbitrary JSON numeric tokens, empty strings, false and JSON null survive reload/export. The parsed JavaScript projection is only for validation and display labels; it must never be serialized over the original text.
 - Canonicalization sorts object keys, preserves array order and raw numeric token spelling, and normalizes JSON string escaping. Key order and insignificant whitespace are ignored for duplicate detection. `1`, `1.0`, and `1e0` remain distinct numeric representations.
+- Duplicate object member names are rejected at every nesting depth before parsing can hide earlier values. Decoded names are compared (`a` and `\u0061` collide); the same key in separate objects is valid.
 - At most 1 MiB and 64 nested containers are accepted. Raw NaN/Infinity are invalid JSON. A valid arbitrary JSON numeric token such as `1e999999` is preserved as text without conversion to JavaScript or PostgreSQL numeric for storage or comparison.
 - A repeated account/record ID with the same canonical source is a successful duplicate. Changed content is a conflict. Corrections use a new ID and can name `supersedes_record_id` in an imported record.
 - `pending`, `reviewed`, `archived` and `received_at` are receiver metadata. Reviewing a record does not assert that sources, hashes or foreign references have been independently verified.
@@ -26,6 +27,8 @@ On 2026-11-06, emulator `emulator-5584` exercised the actual APK's export contro
 ## Database and API
 
 Migration: `supabase/migrations/20261106122747_pricetrace_information_inbox.sql`.
+
+Forward validation fix: `supabase/migrations/20261106131954_reject_duplicate_information_keys.sql`. This replaces the canonical helper's duplicate-key guard without changing the previously applied migration, table data, function grants, or fingerprints of valid records. Both RPC and direct table insertion invoke the guard.
 
 `ingest_pricetrace_information_record_v1(p_payload_text text, p_expected_user_id uuid)` runs as the caller and checks the expected signed-in identity before inserting. This closes an account-switch race between client preparation and submission. Ownership still comes from `auth.uid()`; the expected ID cannot grant access.
 

@@ -3,8 +3,15 @@ import { describe, expect, it } from "vitest";
 import { canonicalInformationJson, parseInformationRecord, parseInformationRecordText, type InformationOwner } from "./information-record";
 
 const cases = JSON.parse(readFileSync(new URL("../../contracts/information-record.v1.cases.json", import.meta.url), "utf8"));
+const rawCases = JSON.parse(readFileSync(new URL("../../contracts/information-record.v1.raw-cases.json", import.meta.url), "utf8"));
 
 describe("information-record.v1 conformance", () => {
+  for (const entry of rawCases.accepted) it(`accepts raw ${entry.name}`, () => {
+    expect(() => parseInformationRecordText(entry.text, entry.owner)).not.toThrow();
+  });
+  for (const entry of rawCases.rejected) it(`rejects raw ${entry.name}`, () => {
+    expect(() => parseInformationRecordText(entry.text, entry.owner)).toThrow("중복된 키");
+  });
   for (const entry of cases.accepted) it(`accepts ${entry.name}`, () => {
     expect(parseInformationRecord(entry.record, entry.record.owner_app)).toEqual(entry.record);
   });

@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 
 export async function verifyInformationInbox(db, root) {
   const vectors = JSON.parse(readFileSync(`${root}/contracts/information-record.v1.cases.json`, "utf8"));
+  const rawVectors = JSON.parse(readFileSync(`${root}/contracts/information-record.v1.raw-cases.json`, "utf8"));
   const sample = vectors.accepted.find(entry => entry.record.owner_app === "pricetrace").record;
   const ownerA = "00000000-0000-4000-8000-000000000011";
   const ownerB = "00000000-0000-4000-8000-000000000022";
@@ -18,6 +19,19 @@ export async function verifyInformationInbox(db, root) {
   const ingest = text => db.query("select public.ingest_pricetrace_information_record_v1($1,$2::uuid) result", [text, currentOwner]);
   try {
     await auth(ownerA);
+    for (const entry of rawVectors.accepted) {
+      assert.equal((await db.query("select public.pricetrace_information_record_valid($1) valid", [entry.text])).rows[0].valid,
+        entry.owner === "pricetrace", entry.name);
+    }
+    for (const entry of rawVectors.rejected) {
+      // Check all raw cases as PriceTrace without parsing (which would discard duplicates).
+      const text = entry.text.replaceAll(`"${entry.owner}"`, '"pricetrace"').replaceAll(`${entry.owner}.observation`, "pricetrace.observation");
+      assert.equal((await db.query("select public.pricetrace_information_record_valid($1) valid", [text])).rows[0].valid, false, entry.name);
+      await assert.rejects(() => db.query("select public.pricetrace_information_canonical($1::json)", [text]), error => error.code === "22023", entry.name);
+      await assert.rejects(() => ingest(text), error => error.code === "22023", entry.name);
+      await assert.rejects(() => db.query("insert into public.pricetrace_information_inbox(user_id,record_id,payload_text) values($1,$2,$3)",
+        [ownerA, sample.record_id, text]), entry.name);
+    }
     for (const entry of vectors.accepted) {
       const { rows } = await db.query("select public.pricetrace_information_record_valid($1) valid", [JSON.stringify(entry.record)]);
       assert.equal(rows[0].valid, entry.record.owner_app === "pricetrace", entry.name);
