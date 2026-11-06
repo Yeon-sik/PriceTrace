@@ -3,6 +3,7 @@
 import { useRef, useState, type FormEvent } from "react";
 import { INFORMATION_RECORD_MAX_BYTES, parseInformationRecordText, type InformationField, type InformationRecord } from "@/domain/information-record";
 import { useInformationInbox } from "@/features/information-inbox/use-information-inbox";
+import { exportInformationRecord } from "@/lib/information-export";
 import styles from "./InformationInboxPage.module.css";
 
 type DraftField = { id: string; key: string; label: string; type: InformationField["value_type"]; value: string; unit: string };
@@ -28,6 +29,8 @@ export function InformationInboxPage({ authRevision, onRequireAuth }: { authRevi
   const [fields, setFields] = useState<DraftField[]>([]);
   const [reviewed, setReviewed] = useState(false);
   const [formError, setFormError] = useState("");
+  const [exportBusy, setExportBusy] = useState(false);
+  const [exportNotice, setExportNotice] = useState("");
   const [imported, setImported] = useState<{ text: string; record: InformationRecord; name: string } | null>(null);
   const [selected, setSelected] = useState<string | null>(null);
   const [referenceApp, setReferenceApp] = useState("cashos");
@@ -41,7 +44,7 @@ export function InformationInboxPage({ authRevision, onRequireAuth }: { authRevi
   }
 
   async function create(event: FormEvent) {
-    event.preventDefault(); setFormError("");
+    event.preventDefault(); setFormError(""); setExportNotice("");
     try {
       if (!reviewed) throw new Error("PriceTrace가 소유할 정보인지 확인해 주세요.");
       draftIdentity.current ??= { id: crypto.randomUUID(), capturedAt: new Date().toISOString() };
@@ -59,18 +62,19 @@ export function InformationInboxPage({ authRevision, onRequireAuth }: { authRevi
 
   async function readFile(file?: File) {
     if (!file) return;
-    setFormError(""); setImported(null); setReviewed(false);
+    setFormError(""); setExportNotice(""); setImported(null); setReviewed(false);
     try {
       if (file.size > INFORMATION_RECORD_MAX_BYTES) throw new Error("정보 파일은 1 MiB 이하여야 합니다.");
-      const text = await file.text();
+      const text = new TextDecoder("utf-8", { fatal: true, ignoreBOM: true }).decode(await file.arrayBuffer());
       setImported({ text, record: parseInformationRecordText(text, "pricetrace"), name: file.name });
     } catch (failure) { setFormError(failure instanceof Error ? failure.message : "JSON 파일을 확인하세요."); }
   }
 
-  function download(text: string, id: string) {
-    const url = URL.createObjectURL(new Blob([text], { type: "application/json;charset=utf-8" }));
-    const anchor = document.createElement("a"); anchor.href = url; anchor.download = `${id}.information-record.json`; anchor.click();
-    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  async function download(text: string, id: string) {
+    setExportBusy(true); setFormError(""); setExportNotice("");
+    try { await exportInformationRecord(text, id); setExportNotice("내보내기를 완료했습니다. 선택한 파일 또는 브라우저 다운로드를 확인하세요."); }
+    catch (failure) { setFormError(failure instanceof Error ? failure.message : "파일을 내보내지 못했습니다."); }
+    finally { setExportBusy(false); }
   }
 
   return <section className={styles.page} aria-labelledby="information-title">
@@ -84,7 +88,7 @@ export function InformationInboxPage({ authRevision, onRequireAuth }: { authRevi
       <button type="button" disabled={inbox.busy} onClick={() => void inbox.reload()}>목록 새로고침</button>
     </div>
     {(formError || inbox.error) && <p className={styles.error} role="alert">{formError || inbox.error}</p>}
-    {inbox.notice && <p className={styles.notice} role="status">{inbox.notice}</p>}
+    {(exportNotice || inbox.notice) && <p className={styles.notice} role="status">{exportNotice || inbox.notice}</p>}
     {inbox.busy && <p role="status">처리 중…</p>}
     {imported ? <section className={styles.editor} aria-labelledby="import-title">
       <h2 id="import-title">가져올 기록 확인</h2><p>{imported.record.title} · {imported.name}</p>
@@ -129,7 +133,7 @@ export function InformationInboxPage({ authRevision, onRequireAuth }: { authRevi
     {detail && <section className={styles.detail} aria-labelledby="detail-title"><h2 id="detail-title">{detail.record.title}</h2>
       <dl><dt>캡처 시각</dt><dd>{detail.record.captured_at}</dd><dt>관측 시각</dt><dd>{detail.record.occurred_at ?? "기록되지 않음"}</dd><dt>출처</dt><dd>{detail.record.sources.map(source => source.name ?? source.source_id).join(", ")}</dd></dl>
       <p>출처·연결은 입력자가 제시한 정보이며, 파일 해시와 대상 기록은 자동 검증하지 않습니다.</p>
-      <div className={styles.actions}><button type="button" onClick={() => download(detail.payload_text, detail.record_id)}>원본 JSON 내보내기</button>
+      <div className={styles.actions}><button type="button" disabled={exportBusy} onClick={() => void download(detail.payload_text, detail.record_id)}>{exportBusy ? "파일 내보내는 중…" : "원본 JSON 내보내기"}</button>
         <label>검토 상태<select value={detail.state} disabled={inbox.busy} onChange={event => void inbox.setState(detail.record_id, event.target.value as typeof detail.state)}>{Object.entries(stateLabels).map(([value, label]) => <option value={value} key={value}>{label}</option>)}</select></label></div>
       <details open><summary>출처·항목·참조 원문 전체</summary><pre>{detail.payload_text}</pre></details>
     </section>}

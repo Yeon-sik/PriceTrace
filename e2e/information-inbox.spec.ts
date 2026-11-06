@@ -68,6 +68,7 @@ test("private import, duplicate, conflict, export and account isolation", async 
   const download = page.waitForEvent("download");
   await page.getByRole("button", { name: "원본 JSON 내보내기" }).click();
   expect(readFileSync((await (await download).path())!, "utf8")).toBe(raw);
+  await expect(page.getByRole("status")).toContainText("내보내기를 완료했습니다");
   await page.getByRole("combobox", { name: "검토 상태", exact: true }).selectOption("reviewed");
   await expect(page.getByRole("combobox", { name: "검토 상태", exact: true })).toHaveValue("reviewed");
   await importRecord(page, raw);
@@ -77,6 +78,9 @@ test("private import, duplicate, conflict, export and account isolation", async 
   await page.getByRole("button", { name: "취소", exact: true }).click();
   await page.getByLabel("정보 파일 가져오기").setInputFiles({ name: "foreign.json", mimeType: "application/json", buffer: Buffer.from(JSON.stringify(vectors.accepted[0].record)) });
   await expect(page.getByRole("region", { name: "내 정보 보관함", exact: true }).getByRole("alert")).toContainText("pricetrace 소유 정보"); expect(rows).toHaveLength(1);
+  await page.getByLabel("정보 파일 가져오기").setInputFiles({ name: "bad-utf8.json", mimeType: "application/json", buffer: Buffer.from([0xc3, 0x28]) });
+  await expect(page.getByRole("region", { name: "내 정보 보관함", exact: true }).getByRole("alert")).toBeVisible();
+  expect(rows).toHaveLength(1);
   await page.reload();
   await page.getByRole("button", { name: new RegExp(fixture.title) }).click();
   await expect(page.locator("pre")).toContainText("12345678901234567890.0010");

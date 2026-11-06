@@ -13,6 +13,15 @@ Users can create product, menu, place, service, raw-material, property or other 
 - A repeated account/record ID with the same canonical source is a successful duplicate. Changed content is a conflict. Corrections use a new ID and can name `supersedes_record_id` in an imported record.
 - `pending`, `reviewed`, `archived` and `received_at` are receiver metadata. Reviewing a record does not assert that sources, hashes or foreign references have been independently verified.
 - Source URLs are not fetched; file bytes remain in the originating OCR archive. Source text is displayed as text, never executed.
+- File import requires valid UTF-8; malformed bytes and a leading BOM are rejected instead of silently replacing or dropping source bytes.
+
+## Android delivery
+
+`npm run android:debug` builds a Capacitor static export, synchronizes Android assets, and produces `android/app/build/outputs/apk/debug/app-debug.apk`. A checkout must have the existing public Supabase URL/publishable-key build configuration before this command; a successful build without those values cannot sign in. Never embed service-role credentials.
+
+Android export uses `InformationExportPlugin` and the system document picker. It writes the unchanged UTF-8 payload to the user-selected document, reports cancellation or write failure, and keeps browser downloads as the web fallback. The pending payload lives in app-private cache while the picker is open; only its temporary filename enters saved Activity state, avoiding Android's Binder transaction limit. Pending files are removed after completion or cancellation. The plugin adds no storage permission and does not perform network requests.
+
+On 2026-11-06, emulator `emulator-5584` exercised the actual APK's export control and Android Save/Back controls. The saved 1,331-byte JSON matched the original SHA-256 `443cad059a9a4a13fe84c90fce53e3507107ca51716828efa238eaa81523796b`; cancellation appeared in the UI without an export-success message, and temporary files were cleared. The WebView test intercepted nonlocal network requests with fixtures, so this proves native file handoff rather than hosted authentication or ingestion. The physical device was not installed or changed.
 
 ## Database and API
 
