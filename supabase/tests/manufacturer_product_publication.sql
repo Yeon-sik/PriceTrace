@@ -93,6 +93,9 @@ $test$;
 set local role anon;
 do $test$
 begin
+  if (select count(*) from public.search_public_manufacturer_products_v1('', 50)) < 1 then
+    raise exception 'anonymous standard catalog browsing without search failed';
+  end if;
   if (select count(*) from public.search_public_manufacturer_products_v1('제조사 공개 검증', 10)) <> 1 then
     raise exception 'anonymous manufacturer search failed';
   end if;

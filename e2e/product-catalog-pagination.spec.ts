@@ -122,9 +122,12 @@ async function signIn(page: Page, account: "A" | "B") {
 test("비로그인 검색에서 제조사 규격을 표준 상품 카드와 상품 정보에 표시한다", async ({ page }) => {
   await prepare(page);
   await page.route("https://pricetrace.example.test/rest/v1/rpc/search_public_manufacturer_products_v1", async (route) => {
-    expect(route.request().postDataJSON()).toEqual({ p_query: "제조사 검증", p_limit: 20 });
+    const { p_query } = route.request().postDataJSON();
+    expect(route.request().postDataJSON()).toEqual(p_query
+      ? { p_query: "제조사 검증", p_limit: 20 }
+      : { p_query: "", p_limit: 50 });
     await route.fulfill({ json: [{
-      catalog_product_id: catalogId,
+      catalog_product_id: rowId(98765),
       product_name: "제조사 검증 상품",
       brand_name: "Fixture Brand",
       specification: "120정",
@@ -132,7 +135,10 @@ test("비로그인 검색에서 제조사 규격을 표준 상품 카드와 상�
       manufacturer_url: "https://manufacturer.example/products/test-120",
     }] });
   });
-  await page.getByRole("searchbox", { name: "상품 검색" }).fill("제조사 검증");
+  const browseRequest = page.waitForRequest((request) =>
+    request.url().endsWith("/search_public_manufacturer_products_v1") && request.postDataJSON().p_query === "");
+  await page.reload();
+  await browseRequest;
   const card = page.getByRole("article").filter({ has: page.getByRole("heading", { name: "제조사 검증 상품", exact: true }) });
   await expect(card.getByText("표준 상품", { exact: true })).toBeVisible();
   await expect(card).toContainText("120정");
