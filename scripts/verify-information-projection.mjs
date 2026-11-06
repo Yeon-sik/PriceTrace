@@ -22,6 +22,12 @@ export async function verifyInformationProjection(db, root) {
     await auth(owner);
     const record=sample(); const source=await ingest(record); const p=await preview(record,source);
     assert.equal(p.status,"ready"); assert.equal(p.impact.additional_observations,1); assert.equal(p.impact.minimum_after,1200);
+    await db.query("update public.pricetrace_information_inbox set state='archived' where record_id=$1",[record.record_id]);
+    assert.equal((await preview(record,source)).status,"blocked","archived source cannot preview a new application");
+    await rejects(()=>apply(record,source,p),error=>error.code==="22023");
+    assert.equal((await db.query("select count(*)::int count from public.pricetrace_information_projection_receipts")).rows[0].count,0);
+    assert.equal((await db.query("select state from public.pricetrace_information_inbox where record_id=$1",[record.record_id])).rows[0].state,"archived");
+    await db.query("update public.pricetrace_information_inbox set state='pending' where record_id=$1",[record.record_id]);
     await rejects(()=>apply(record,source,p,false),error=>error.code==="22023");
     await rejects(()=>apply(record,source,{...p,mapping_digest:"0".repeat(64)}),error=>error.code==="23505");
     await rejects(()=>preview(record,{...source,content_fingerprint:"0".repeat(64)}),error=>error.code==="23505");
@@ -52,6 +58,10 @@ export async function verifyInformationProjection(db, root) {
     const result=await apply(record,source,p); assert.equal(result.status,"applied");
     assert.equal((await apply(record,source,p)).observation_id,result.observation_id);
     assert.equal((await apply(record,source,p)).replayed,true);
+    await db.query("update public.pricetrace_information_inbox set state='archived' where record_id=$1",[record.record_id]);
+    assert.equal((await apply(record,source,p)).replayed,true,"existing receipt remains readable after archive");
+    assert.equal((await db.query("select state from public.pricetrace_information_inbox where record_id=$1",[record.record_id])).rows[0].state,"archived");
+
     await rejects(()=>apply(record,source,p,true,{...mapping,date_field:"changed"}),error=>error.code==="23505");
     const duplicate=sample(); const duplicateSource=await ingest(duplicate); const dp=await preview(duplicate,duplicateSource);
     assert.equal(dp.impact.additional_observations,0); assert.equal((await apply(duplicate,duplicateSource,dp)).observation_id,result.observation_id);

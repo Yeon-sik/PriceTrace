@@ -35,12 +35,22 @@ begin
  mapping:=jsonb_build_object('catalog_product_id',current_setting('information_smoke.product'),'store_id',seller->>'store_id','price_field','price','date_field','day');
  preview:=public.preview_pricetrace_information_price_v1(fixture_record,uid,source->>'content_fingerprint',mapping);
  if preview->>'status'<>'ready' then raise exception 'Price preview failed: %',preview->>'reason'; end if;
+ update public.pricetrace_information_inbox set state='archived' where user_id=uid and record_id=fixture_record;
+ if public.preview_pricetrace_information_price_v1(fixture_record,uid,source->>'content_fingerprint',mapping)->>'status'<>'blocked' then raise exception 'Archived preview bypass'; end if;
+ begin
+  perform public.apply_pricetrace_information_price_v1(fixture_record,uid,source->>'content_fingerprint',mapping,preview->>'mapping_digest',true);
+  raise exception 'Archived stale preview bypass';
+ exception when invalid_parameter_value then null; end;
+ if exists(select 1 from public.pricetrace_information_projection_receipts where user_id=uid and record_id=fixture_record) then raise exception 'Archived source created receipt'; end if;
+ update public.pricetrace_information_inbox set state='pending' where user_id=uid and record_id=fixture_record;
+
  begin
   perform public.apply_pricetrace_information_price_v1(fixture_record,uid,source->>'content_fingerprint',mapping,preview->>'mapping_digest',false);
   raise exception 'Missing approval accepted';
  exception when invalid_parameter_value then null; end;
  applied:=public.apply_pricetrace_information_price_v1(fixture_record,uid,source->>'content_fingerprint',mapping,preview->>'mapping_digest',true);
  if applied->>'status'<>'applied' then raise exception 'Native price application failed'; end if;
+ update public.pricetrace_information_inbox set state='archived' where user_id=uid and record_id=fixture_record;
  if (public.apply_pricetrace_information_price_v1(fixture_record,uid,source->>'content_fingerprint',mapping,preview->>'mapping_digest',true)->>'observation_id') is distinct from applied->>'observation_id' then raise exception 'Native replay failed'; end if;
  if (select payload_text from public.pricetrace_information_inbox where user_id=uid and record_id=fixture_record) is distinct from payload then raise exception 'Original changed'; end if;
  begin update public.pricetrace_information_projection_receipts set adapter='changed'; raise exception 'Receipt mutable'; exception when insufficient_privilege then null; end;

@@ -26,6 +26,11 @@ export function InformationPriceProjection({ entry }: { entry: InformationInboxE
   const priceFields = entry.record.fields.filter(field => field.value_type === "decimal" && field.unit === "KRW");
   const dateFields = entry.record.fields.filter(field => field.value_type === "date" || field.value_type === "datetime");
   const project = process.env.NEXT_PUBLIC_SUPABASE_URL ? new URL(process.env.NEXT_PUBLIC_SUPABASE_URL).hostname : "서버 미설정";
+  if (entry.state === "archived" && preview?.status !== "applied") return <section aria-labelledby="price-projection-title" className={styles.editor}>
+    <h2 id="price-projection-title">공개 가격으로 반영</h2>
+    <p role="status">보관한 자료는 검토 대기로 변경한 뒤 공개 반영하세요.</p>
+    {error && <p role="alert" className={styles.error}>{error}</p>}
+  </section>;
   return <section aria-labelledby="price-projection-title" className={styles.editor}>
     <h2 id="price-projection-title">공개 가격으로 반영</h2>
     <p>기존의 검증된 상품과 승인된 판매처에 가격 관측을 연결합니다. 서비스·메뉴·미상 정보는 원문 그대로 보관합니다.</p>

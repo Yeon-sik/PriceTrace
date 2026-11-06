@@ -202,3 +202,18 @@ test("mobile direct service record keeps decimal, units and sources", async ({ p
   await page.getByRole("button", { name: "상품·서비스 정보 보관함", exact: true }).click();
   await expect(page.getByRole("heading", { name: "내 정보 보관함" })).toBeVisible();
 });
+
+
+test("archived source requires reopening before public projection", async ({ page }) => {
+  const rows = await prepare(page, true);
+  await importRecord(page, raw);
+  await page.getByRole("button", { name: new RegExp(fixture.title) }).click();
+  const state = page.getByRole("combobox", { name: "검토 상태", exact: true });
+  await state.selectOption("archived");
+  await expect(page.getByText("보관한 자료는 검토 대기로 변경한 뒤 공개 반영하세요.")).toBeVisible();
+  await expect(page.getByRole("button", { name: "반영 영향 미리보기" })).toHaveCount(0);
+  expect(rows[0].payload_text).toBe(raw);
+  await state.selectOption("pending");
+  await expect(page.getByRole("button", { name: "반영 영향 미리보기" })).toBeVisible();
+  expect(rows[0].payload_text).toBe(raw);
+});
