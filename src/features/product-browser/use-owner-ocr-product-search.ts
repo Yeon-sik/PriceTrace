@@ -3,7 +3,7 @@ import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import type { Database } from "@/lib/supabase/database.types";
 
 type Product = Pick<Database["public"]["Tables"]["product_identity_candidates"]["Row"],
-  "id" | "product_name" | "brand" | "specification">;
+  "id" | "client_key" | "product_name" | "brand" | "specification">;
 
 type SearchResult = {
   key: string;
@@ -30,7 +30,7 @@ export function useOwnerOcrProductSearch(query: string, authRevision: number) {
 
       setResult({ key, status: "loading", products: [] });
       const { data, error } = await client.from("product_identity_candidates")
-        .select("id,product_name,brand,specification")
+        .select("id,client_key,product_name,brand,specification")
         .eq("user_id", session.user.id)
         .eq("candidate_type", "retail_product")
         .neq("review_status", "rejected")
