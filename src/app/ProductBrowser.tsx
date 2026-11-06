@@ -373,7 +373,7 @@ export function ProductBrowser({ groups, query, setQuery, category, setCategory,
                 <strong>공식 표시가 {formatKrw(Math.min(...entry.standard.officialListings.map((listing) => listing.officialPrice.amountKrw)))} ~</strong>
               </div>}
               <div className={styles.productActions}>
-                <button aria-label={`${entry.standard.name} 정보 보기`} onClick={() => setOpenStandardId(entry.standard.id)}>상품 정보</button>
+                <button aria-label={`${entry.standard.name} 정보 보기`} onClick={() => setOpenStandardId(entry.standard.id)}>정보 보기</button>
                 <button type="button" aria-label={`${entry.standard.name} 장바구니에 담기`} onClick={() => onAdd({
                   ...cartProductFromGroup(entry.standard.items[0]),
                   category: entry.standard.category,
@@ -395,7 +395,7 @@ export function ProductBrowser({ groups, query, setQuery, category, setCategory,
           </div>
           <div className={styles.productActions}>
             <button type="button" aria-label={`${product.product_name} 정보 보기`}
-              onClick={() => setOpenStandardId(`manufacturer:${product.catalog_product_id}`)}>상품 정보</button>
+              onClick={() => setOpenStandardId(`manufacturer:${product.catalog_product_id}`)}>정보 보기</button>
           </div>
         </StandardProductCard>;
       })}
