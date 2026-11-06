@@ -10,11 +10,12 @@ const resultSchema = z.array(z.object({
   manufacturer_sku: z.string().min(1),
   manufacturer_url: z.string().url().startsWith("https://"),
 }));
+export type ManufacturerCatalogProduct = z.infer<typeof resultSchema>[number];
 
 type SearchResult = {
   key: string;
   status: "ready" | "error";
-  products: z.infer<typeof resultSchema>;
+  products: ManufacturerCatalogProduct[];
 };
 
 export function useManufacturerProductSearch(query: string) {

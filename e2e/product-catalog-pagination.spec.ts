@@ -119,7 +119,7 @@ async function signIn(page: Page, account: "A" | "B") {
   await expect(dialog).not.toBeVisible();
 }
 
-test("비로그인 상품 검색에 판매가 없이 공개한 제조사 상품을 표시한다", async ({ page }) => {
+test("비로그인 검색에서 제조사 규격을 표준 상품 카드와 상품 정보에 표시한다", async ({ page }) => {
   await prepare(page);
   await page.route("https://pricetrace.example.test/rest/v1/rpc/search_public_manufacturer_products_v1", async (route) => {
     expect(route.request().postDataJSON()).toEqual({ p_query: "제조사 검증", p_limit: 20 });
@@ -133,11 +133,69 @@ test("비로그인 상품 검색에 판매가 없이 공개한 제조사 상품�
     }] });
   });
   await page.getByRole("searchbox", { name: "상품 검색" }).fill("제조사 검증");
-  const results = page.getByRole("region", { name: "제조사 확인 상품" });
-  await expect(results.getByText("제조사 검증 상품", { exact: true })).toBeVisible();
-  await expect(results).toContainText("120정");
-  await expect(results.getByRole("link", { name: "제조사 상품 정보" })).toHaveAttribute("href", "https://manufacturer.example/products/test-120");
+  const card = page.getByRole("article").filter({ has: page.getByRole("heading", { name: "제조사 검증 상품", exact: true }) });
+  await expect(card.getByText("표준 상품", { exact: true })).toBeVisible();
+  await expect(card).toContainText("120정");
+  await card.getByRole("button", { name: "제조사 검증 상품 정보 보기" }).click();
+  const detail = page.getByRole("dialog", { name: "제조사 검증 상품", exact: true });
+  await expect(detail.getByRole("link", { name: "제조사 상품 정보" })).toHaveAttribute("href", "https://manufacturer.example/products/test-120");
+  await expect(detail.getByRole("region", { name: "내 구매 기록" })).toContainText("로그인하면");
   await expect(page.getByRole("region", { name: "내 OCR 상품" })).toHaveCount(0);
+});
+
+test("표준 상품 정보에서 OCR 구매를 연결하면 원본 단가와 주문 결제액을 구분한다", async ({ page }, info) => {
+  await prepare(page);
+  await signIn(page, "A");
+  const line = {
+    purchase_source_line_id: rowId(777), product_client_key: "fixture-ocr-key",
+    product_name: "OCR 검증용 상품", option_text: null, quantity: 1, platform_name: "검증용 구매 채널",
+    seller_name: null, ordered_on: "2025-01-02", paid_on: null, unit_price_krw: 13000,
+    item_net_price_krw: null, order_total_krw: 10000, order_line_count: 1,
+  };
+  let connected = false;
+  await page.route("https://pricetrace.example.test/rest/v1/rpc/search_public_manufacturer_products_v1", (route) =>
+    route.fulfill({ json: [{
+      catalog_product_id: catalogId, product_name: "카탈로그 검증 상품", brand_name: "Fixture Brand",
+      specification: "120정", manufacturer_sku: "TEST-120",
+      manufacturer_url: "https://manufacturer.example/products/test-120",
+    }] }));
+  await page.route("https://pricetrace.example.test/rest/v1/rpc/get_my_catalog_purchase_context_v1", async (route) => {
+    const args = route.request().postDataJSON();
+    expect(args.p_catalog_product_ids).toEqual([catalogId]);
+    const rows = args.p_query
+      ? (connected ? [] : [{ ...line, catalog_product_id: null, owner_connected: false }])
+      : (connected ? [{ ...line, catalog_product_id: catalogId, owner_connected: true }] : []);
+    await route.fulfill({ json: rows });
+  });
+  await page.route("https://pricetrace.example.test/rest/v1/rpc/set_my_catalog_purchase_link_v1", async (route) => {
+    expect(route.request().postDataJSON()).toEqual({
+      p_catalog_product_id: catalogId, p_purchase_source_line_id: line.purchase_source_line_id, p_connected: true,
+    });
+    connected = true;
+    await route.fulfill({ json: true });
+  });
+
+  await page.getByRole("searchbox", { name: "상품 검색" }).fill("카탈로그 검증");
+  const card = page.getByRole("article").filter({ has: page.getByRole("heading", { name: "카탈로그 검증 상품", exact: true }) });
+  await card.getByRole("button", { name: "카탈로그 검증 상품 정보 보기" }).click();
+  const detail = page.getByRole("dialog", { name: "카탈로그 검증 상품", exact: true });
+  const history = detail.getByRole("region", { name: "내 구매 기록" });
+  await history.getByRole("button", { name: "정보 연결", exact: true }).click();
+  await history.getByRole("searchbox", { name: "내 OCR 구매 상품 검색" }).fill("검증용");
+  await history.getByRole("button", { name: "연결할 구매 선택" }).click();
+  await history.getByRole("button", { name: "이 상품으로 연결 확인" }).click();
+  await expect(history).toContainText("품목 표시 단가");
+  await expect(history).toContainText("13,000원");
+  await expect(history).toContainText("주문 결제액");
+  await expect(history).toContainText("10,000원");
+  await expect(history).toContainText("판매처 확인 대기");
+  await history.screenshot({ path: info.outputPath("connected-purchase-desktop.png") });
+  await page.setViewportSize({ width: 390, height: 844 });
+  await expect(history.getByText("10,000원", { exact: true })).toBeVisible();
+  await history.screenshot({ path: info.outputPath("connected-purchase-mobile.png") });
+  await detail.getByRole("button", { name: "표준 상품 상세 닫기" }).click();
+  await expect(card).toContainText("내 주문 결제액");
+  await expect(card).toContainText("10,000원");
 });
 
 test("상품명 검색에 로그인한 계정의 OCR 후보만 별도로 표시한다", async ({ page }, info) => {
@@ -152,14 +210,14 @@ test("상품명 검색에 로그인한 계정의 OCR 후보만 별도로 표시�
     const owner = params.get("user_id");
     ownerReads.push(owner);
     expect(params.get("product_name")).toBe("ilike.%마그네슘%");
-    expect(params.get("select")).toBe("id,product_name,brand,specification");
+    expect(params.get("select")).toBe("id,client_key,product_name,brand,specification");
     if (!failedFirstRead && owner === `eq.${ownerA}`) {
       failedFirstRead = true;
       await route.fulfill({ status: 503, json: { message: "Temporary failure" } });
       return;
     }
     await route.fulfill({ json: owner === `eq.${ownerA}`
-      ? [{ id: rowId(90001), product_name: candidateName, brand: null, specification: null }]
+      ? [{ id: rowId(90001), client_key: "fixture-ocr-key", product_name: candidateName, brand: null, specification: null }]
       : [] });
   });
 

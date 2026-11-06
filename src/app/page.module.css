@@ -321,12 +321,22 @@
   background: var(--surface);
   overflow-wrap: anywhere;
 }
-.catalogSearchResults h2 { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 12px; margin: 0; font-size: 15px; }
-.catalogSearchResults ul { margin: 10px 0 0; padding: 0; list-style: none; }
-.catalogSearchResults li { display: grid; gap: 3px; padding: 9px 0; border-top: 1px solid var(--line); font-size: 15px; }
-.catalogSearchResults li:last-child { padding-bottom: 0; }
-.catalogSearchResults span { color: var(--muted); font-size: 13px; font-weight: 500; }
-.catalogSearchResults a { justify-self: start; padding: 4px 0; color: var(--accent); font-size: 13px; text-decoration: underline; }
+.catalogSearchResults > h2 { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 12px; margin: 0 0 12px; font-size: 15px; }
+.catalogSearchResults > h2 span { color: var(--muted); font-size: 13px; font-weight: 500; }
+.purchaseVariantSelect, .purchaseLinkSearch label { display: grid; gap: 6px; font-size: 13px; }
+.purchaseVariantSelect select, .purchaseLinkSearch input {
+  width: 100%; min-height: 40px; padding: 8px 12px; border: 1px solid var(--control-line);
+  border-radius: 5px; background: var(--surface); color: var(--ink); font: inherit;
+}
+.purchaseLinkHeader, .purchaseLinkRow { display: flex; flex-wrap: wrap; align-items: flex-start; justify-content: space-between; gap: 8px 16px; }
+.purchaseLinkRow { padding: 12px 0; border-top: 1px solid var(--line); }
+.purchaseLinkFacts { display: grid; flex: 1; gap: 5px; min-width: 0; overflow-wrap: anywhere; }
+.purchaseLinkFacts small { color: var(--muted); }
+.purchaseLinkFacts dl { display: flex; flex-wrap: wrap; gap: 8px 16px; margin: 0; }
+.purchaseLinkFacts dl div { display: grid; gap: 2px; }
+.purchaseLinkFacts dt { color: var(--muted); font-size: 13px; }
+.purchaseLinkFacts dd { margin: 0; font-variant-numeric: tabular-nums; font-weight: 600; }
+.purchaseLinkSearch { display: grid; gap: 8px; margin-top: 8px; }
 .productInfo h2 { font-size: 15px; line-height: 1.5; font-weight: 550; letter-spacing: -.01em; }
 .floatingCart { filter: none; right: 24px; }
 .floatingCart:hover { transform: none; filter: none; background: var(--surface); }

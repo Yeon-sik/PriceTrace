@@ -4,15 +4,45 @@ import { useCallback, useMemo, useRef, useState } from "react";
 import { summarizeSellerPrices } from "@/domain/seller-price-insights";
 import { formatKrw } from "@/domain/settlement";
 import { trapDialogFocus, useDialogLifecycle } from "@/hooks/use-dialog-lifecycle";
+import type { ManufacturerCatalogProduct } from "@/features/product-browser/use-manufacturer-product-search";
+import { CatalogPurchaseConnection } from "./CatalogPurchaseConnection";
 import { PriceTrendModal } from "./PriceTrendModal";
 import { CoupangComparisonMessage } from "./CoupangComparisonMessage";
 import { StandardProductNutritionModal } from "./StandardProductNutritionModal";
 import type { StandardProductGroup, StandardProductItem } from "./ProductBrowser";
 import styles from "./page.module.css";
 
-export function StandardProductDetailModal({ standard, nutritionCatalogProductIds: nutritionCatalogProductIdsFromCatalog = [], onClose, onOpenStore }: { standard: StandardProductGroup; nutritionCatalogProductIds?: readonly string[]; onClose: () => void; onOpenStore: (store: string) => void }) {
+type DetailProps = {
+  nutritionCatalogProductIds?: readonly string[];
+  authRevision: number;
+  onPurchaseConnectionChanged: () => void;
+  onClose: () => void;
+  onOpenStore: (store: string) => void;
+} & (
+  { standard: StandardProductGroup; manufacturerProduct?: never }
+  | { standard?: never; manufacturerProduct: ManufacturerCatalogProduct }
+);
+
+const emptyItems: StandardProductItem[] = [];
+
+export function StandardProductDetailModal({
+  standard: observedStandard, manufacturerProduct,
+  nutritionCatalogProductIds: nutritionCatalogProductIdsFromCatalog = [],
+  authRevision, onPurchaseConnectionChanged, onClose, onOpenStore,
+}: DetailProps) {
+  const standard = observedStandard ?? {
+    name: manufacturerProduct.product_name,
+    items: emptyItems,
+    sellerCount: 0,
+    unitPriceLabel: "",
+    coupangPrice: null,
+    coupangComparison: null,
+    officialListings: [],
+    priceHistory: [],
+  };
   const [trendItem, setTrendItem] = useState<StandardProductItem | null>(null);
   const [nutritionOpen, setNutritionOpen] = useState(false);
+  const [selectedCatalogId, setSelectedCatalogId] = useState("");
   const closeButtonRef = useRef<HTMLButtonElement>(null);
   const nutritionButtonRef = useRef<HTMLButtonElement>(null);
   const nutritionOpenRef = useRef(nutritionOpen);
@@ -38,11 +68,18 @@ export function StandardProductDetailModal({ standard, nutritionCatalogProductId
   }))), [standard.items]);
   const nutritionCatalogProductIds = useMemo(
     () => [...new Set([
+      ...(manufacturerProduct ? [manufacturerProduct.catalog_product_id] : []),
       ...nutritionCatalogProductIdsFromCatalog,
       ...standard.items.map((item) => item.catalogProductId),
     ])],
-    [nutritionCatalogProductIdsFromCatalog, standard.items],
+    [manufacturerProduct, nutritionCatalogProductIdsFromCatalog, standard.items],
   );
+  const purchaseVariants = manufacturerProduct
+    ? [{ id: manufacturerProduct.catalog_product_id, label: manufacturerProduct.specification }]
+    : [...new Map(standard.items.map((item) => [
+      item.catalogProductId, { id: item.catalogProductId, label: `${item.productName} · ${item.packageLabel}` },
+    ])).values()];
+  const purchaseCatalogId = purchaseVariants.length === 1 ? purchaseVariants[0].id : selectedCatalogId;
   const lowestItem = useMemo(() => [...standard.items].sort((left, right) => left.unitPriceKrw - right.unitPriceKrw || right.latest.observedAt.localeCompare(left.latest.observedAt))[0] ?? null, [standard.items]);
 
   if (trendItem) return <PriceTrendModal group={trendItem} onClose={onClose} onBack={() => setTrendItem(null)} onOpenStore={onOpenStore} />;
@@ -60,7 +97,23 @@ export function StandardProductDetailModal({ standard, nutritionCatalogProductId
       >
         <button ref={closeButtonRef} type="button" className={styles.closeButton} onClick={onClose} aria-label="표준 상품 상세 닫기">×</button>
         <h2 id="standard-detail-title">{standard.name}</h2>
-        <p className={styles.storeInfo}>판매처 {standard.sellerCount}곳 · 하위 상품 {standard.items.length}개</p>
+        {!manufacturerProduct && <p className={styles.storeInfo}>판매처 {standard.sellerCount}곳 · 하위 상품 {standard.items.length}개</p>}
+
+        {manufacturerProduct && <section className={styles.standardPriceRecords} aria-label="상품 정보">
+          <h3>상품 정보</h3>
+          <p>{[manufacturerProduct.brand_name, manufacturerProduct.specification, manufacturerProduct.manufacturer_sku].filter(Boolean).join(" · ")}</p>
+          <a href={manufacturerProduct.manufacturer_url} target="_blank" rel="noopener noreferrer">제조사 상품 정보</a>
+        </section>}
+        {purchaseVariants.length > 1 && <label className={styles.purchaseVariantSelect}>내 구매 기록의 상품 규격
+          <select value={selectedCatalogId} onChange={(event) => setSelectedCatalogId(event.target.value)}>
+            <option value="">정확 규격 선택</option>
+            {purchaseVariants.map((variant) => <option key={variant.id} value={variant.id}>{variant.label}</option>)}
+          </select>
+        </label>}
+        {purchaseCatalogId && <CatalogPurchaseConnection
+          key={`${purchaseCatalogId}:${authRevision}`} catalogProductId={purchaseCatalogId} authRevision={authRevision}
+          onChange={onPurchaseConnectionChanged}
+        />}
 
         {sellerOffers.length > 0 && <section className={styles.standardSellerComparison} aria-labelledby="standard-seller-comparison-title">
           <div className={styles.sectionHeading}>
@@ -87,6 +140,7 @@ export function StandardProductDetailModal({ standard, nutritionCatalogProductId
 
         <section className={styles.standardPriceRecords} aria-labelledby="standard-price-records-title">
           <h3 id="standard-price-records-title">판매 규격별 최근 가격</h3>
+          {standard.items.length === 0 && <p>판매 가격 확인 대기</p>}
           <div className={styles.standardDetailList}>{standard.items.map((item) => <div className={styles.standardDetailRow} key={item.id}>
             <div><strong>{item.officialProduct?.officialName ?? item.productName}</strong><small>{item.storeLabel} · {item.packageLabel} · {item.unitPriceLabel} {formatKrw(item.unitPriceKrw)}</small></div>
             <strong className={styles.standardDetailPrice}>{formatKrw(item.latestPriceKrw)}</strong>

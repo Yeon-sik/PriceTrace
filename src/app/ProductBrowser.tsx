@@ -1,7 +1,7 @@
 "use client";
 import { Icon } from "@/components/Icon";
 
-import { useId, useMemo, useState } from "react";
+import { useId, useMemo, useState, type ComponentProps, type ReactNode } from "react";
 import { cartProductFromGroup, cartProductFromOfficialListing, type CartProduct } from "@/domain/cart";
 import { productNameWithoutBrand } from "@/domain/brand";
 import {
@@ -33,6 +33,7 @@ import {
   type OfficialLinkedStandardSummary,
 } from "@/features/product-browser/product-browser.selectors";
 import { useProductCatalog } from "@/features/product-browser/use-product-catalog";
+import { useCatalogPurchaseContext } from "@/features/product-browser/use-catalog-purchase-context";
 import { useManufacturerProductSearch } from "@/features/product-browser/use-manufacturer-product-search";
 import { useOwnerOcrProductSearch } from "@/features/product-browser/use-owner-ocr-product-search";
 import { PublicOfficialChannelCatalogRepository } from "@/repositories/public-official-channel-catalog.repository";
@@ -61,6 +62,21 @@ function StandardProductName({ brand, name }: { brand: string | null; name: stri
     {brand && <small>{brand}</small>}
     <h2>{productNameWithoutBrand(name, brand)}</h2>
   </div>;
+}
+
+function StandardProductCard({
+  brand, name, image, children, badge = "표준 상품",
+}: { brand: string | null; name: string; image: ComponentProps<typeof ProductImage>; children: ReactNode; badge?: string }) {
+  return <article className={styles.productCard}>
+    <div className={styles.productVisual} data-testid="product-image-slot">
+      <ProductImage {...image} />
+      <span className={styles.standardProductBadge}>{badge}</span>
+    </div>
+    <div className={styles.productInfo}>
+      <StandardProductName brand={brand} name={name} />
+      {children}
+    </div>
+  </article>;
 }
 
 function OfficialLinkedStandardCard({
@@ -135,11 +151,9 @@ export function ProductBrowser({ groups, query, setQuery, category, setCategory,
   const [catalogView, setCatalogView] = useState<CatalogView>("all");
   const ownerSearchQuery = catalogView === "all" && !selectedStoreProductId && !selectedCatalogProductId ? query.trim() : "";
   const { result: ownerSearch, retry: retryOwnerSearch } = useOwnerOcrProductSearch(ownerSearchQuery, authRevision);
-  const hasOwnerProducts = Boolean(ownerSearch?.products.length);
   const manufacturerSearchQuery = catalogView !== "official" && !selectedStoreProductId && !selectedCatalogProductId
     && category === "전체" && martType === "all" && selectedStore === "all" ? query.trim() : "";
   const { result: manufacturerSearch, retry: retryManufacturerSearch } = useManufacturerProductSearch(manufacturerSearchQuery);
-  const manufacturerProducts = manufacturerSearch?.products ?? [];
   const [filtersOpen, setFiltersOpen] = useState(false);
   const filterPanelId = useId();
   const [openStandardId, setOpenStandardId] = useState<string | null>(null);
@@ -208,6 +222,17 @@ export function ProductBrowser({ groups, query, setQuery, category, setCategory,
     sort,
   }), [visibleStandardGroups, visibleGroups, visibleLinkedStandardSummaries, catalogView, sort]);
 
+  const representedCatalogIds = new Set(gridEntries.flatMap((entry) => entry.kind === "standard"
+    ? entry.standard.items.map((item) => item.catalogProductId) : []));
+  const manufacturerProducts = manufacturerSearch?.products ?? [];
+  const catalogOnlyProducts = manufacturerProducts.filter((product) => !representedCatalogIds.has(product.catalog_product_id));
+  const { result: catalogPurchases, retry: reloadCatalogPurchases } = useCatalogPurchaseContext(
+    manufacturerProducts.map((product) => product.catalog_product_id), null, authRevision,
+  );
+  const linkedClientKeys = new Set(catalogPurchases?.rows.map((row) => row.product_client_key) ?? []);
+  const unconnectedOcrProducts = ownerSearch?.products.filter((product) => !product.client_key || !linkedClientKeys.has(product.client_key)) ?? [];
+  const hasOwnerProducts = unconnectedOcrProducts.length > 0;
+
   const standaloneOfficialListingCount = useMemo(
     () => officialListingsEligible
       ? filterAndSortOfficialChannelListings(standaloneListings, query, "price-asc", category).length
@@ -217,6 +242,7 @@ export function ProductBrowser({ groups, query, setQuery, category, setCategory,
   const openStandard = visibleStandardGroups.find((standard) => standard.id === openStandardId)
     ?? standardGroups.find((standard) => standard.id === openStandardId)
     ?? null;
+  const openManufacturer = manufacturerProducts.find((product) => `manufacturer:${product.catalog_product_id}` === openStandardId);
   const nutritionCatalogProductIds = useMemo(() => {
     if (!openStandard) return [];
     const standardProductId = openStandard.id.replace("standard:", "");
@@ -232,7 +258,7 @@ export function ProductBrowser({ groups, query, setQuery, category, setCategory,
   const officialProductDisplayCount = standaloneListings.length + linkedByStandardProduct.size;
   const resultCount = gridEntries.length
     + (showStandaloneOfficialListings ? standaloneOfficialListingCount : 0)
-    + manufacturerProducts.length;
+    + catalogOnlyProducts.length;
   const changeCatalogView = (nextView: CatalogView) => {
     setCatalogView(nextView);
     if (nextView === "official") {
@@ -311,29 +337,20 @@ export function ProductBrowser({ groups, query, setQuery, category, setCategory,
     </div>}
     {ownerSearch && hasOwnerProducts && <section className={styles.catalogSearchResults} aria-label="내 OCR 상품" aria-live="polite">
       <h2>내 OCR 상품 <span>내 계정에서만 표시</span></h2>
-      <ul>
-        {ownerSearch.products.map((product) => <li key={product.id}>
-          <strong>{product.product_name}</strong>
-          {(product.brand || product.specification) && <span>{[product.brand, product.specification].filter(Boolean).join(" · ")}</span>}
-        </li>)}
-      </ul>
+      <div className={styles.productGrid}>
+        {unconnectedOcrProducts.map((product) => <StandardProductCard key={product.id} badge="검수 상품"
+          brand={product.brand} name={product.product_name} image={{ productName: product.product_name, category: "미분류" }}>
+          {product.specification && <p className={styles.storeInfo}>{product.specification}</p>}
+          <div className={styles.standardPriceBlock}><small>표준 상품 연결 대기</small></div>
+          <div className={styles.productActions}><button type="button" onClick={() => changeCatalogView("standard")}>표준 상품 찾기</button></div>
+        </StandardProductCard>)}
+      </div>
     </section>}
     <div className={styles.resultBar}><p>{hasOwnerProducts ? "카탈로그·가격 상품" : "상품"} {resultCount.toLocaleString("ko-KR")}개</p>{(query || category !== "전체" || martType !== "all" || selectedStore !== "all" || showStandardOnly || showOfficialOnly) && <button onClick={() => { setQuery(""); setCategory("전체"); setMartType("all"); setSelectedStore("all"); setCatalogView("all"); }}>필터 초기화</button>}</div>
     {manufacturerSearch?.status === "error" && <div className={styles.dataNotice} role="status">
       제조사 상품을 불러오지 못했습니다.
       <button type="button" onClick={retryManufacturerSearch}>제조사 상품 다시 검색</button>
     </div>}
-    {manufacturerProducts.length > 0 && <section className={styles.catalogSearchResults} aria-label="제조사 확인 상품" aria-live="polite">
-      <h2>제조사 확인 상품</h2>
-      <ul>
-        {manufacturerProducts.map((product) => <li key={product.catalog_product_id}>
-          <strong>{product.product_name}</strong>
-          <span>{[product.brand_name, product.specification, product.manufacturer_sku].filter(Boolean).join(" · ")}</span>
-          <a href={product.manufacturer_url} target="_blank" rel="noopener noreferrer">제조사 상품 정보</a>
-        </li>)}
-      </ul>
-    </section>}
-
     <div className={styles.productGrid} aria-live="polite">{gridEntries.map((entry) => entry.kind === "official-standard"
       ? <OfficialLinkedStandardCard
           key={entry.standard.id}
@@ -347,13 +364,8 @@ export function ProductBrowser({ groups, query, setQuery, category, setCategory,
           })}
         />
       : entry.kind === "standard"
-        ? <article className={styles.productCard} key={entry.standard.id}>
-            <div className={styles.productVisual} data-testid="product-image-slot">
-              <ProductImage item={entry.standard.items[0].latest.item} category={entry.standard.category} imageUrl={entry.standard.imageUrl} />
-              <span className={styles.standardProductBadge}>표준 상품</span>
-            </div>
-            <div className={styles.productInfo}>
-              <StandardProductName brand={entry.standard.brand} name={entry.standard.name} />
+        ? <StandardProductCard key={entry.standard.id} brand={entry.standard.brand} name={entry.standard.name}
+            image={{ item: entry.standard.items[0].latest.item, category: entry.standard.category, imageUrl: entry.standard.imageUrl }}>
               <StoreInfo sellerCount={entry.standard.sellerCount} onOpen={() => setStoreListTarget({ title: `${entry.standard.name} 판매처`, rows: latestSellerRows(entry.standard.items.flatMap((item) => item.observations)) })} />
               <div className={styles.standardPriceBlock}><strong>{formatKrw(entry.standard.lowestPriceKrw)} ~</strong><small>{entry.standard.unitPriceLabel} {formatKrw(entry.standard.lowestUnitPriceKrw)} ~ {formatKrw(entry.standard.highestUnitPriceKrw)}</small>{entry.standard.coupangComparison && <CoupangComparisonMessage compact unitPriceLabel={entry.standard.unitPriceLabel} comparison={entry.standard.coupangComparison} />}</div>
               {entry.standard.officialListings.length > 0 && <div className={styles.standardOfficialSource}>
@@ -361,21 +373,42 @@ export function ProductBrowser({ groups, query, setQuery, category, setCategory,
                 <strong>공식 표시가 {formatKrw(Math.min(...entry.standard.officialListings.map((listing) => listing.officialPrice.amountKrw)))} ~</strong>
               </div>}
               <div className={styles.productActions}>
-                <button aria-label={`${entry.standard.name} 정보 보기`} onClick={() => setOpenStandardId(entry.standard.id)}>정보 보기</button>
+                <button aria-label={`${entry.standard.name} 정보 보기`} onClick={() => setOpenStandardId(entry.standard.id)}>상품 정보</button>
                 <button type="button" aria-label={`${entry.standard.name} 장바구니에 담기`} onClick={() => onAdd({
                   ...cartProductFromGroup(entry.standard.items[0]),
                   category: entry.standard.category,
                 })}>최저 관측가 담기</button>
               </div>
-            </div>
-          </article>
-        : <article className={styles.productCard} key={entry.group.id}><div className={styles.productVisual} data-testid="product-image-slot"><ProductImage item={entry.group.latest.item} category={entry.group.category} imageUrl={entry.group.officialProduct?.imageUrl} /></div><div className={styles.productInfo}><h2>{entry.group.officialProduct?.officialName ?? entry.group.productName}</h2><StoreInfo sellerCount={distinctSellerCount(entry.group.observations)} onOpen={() => setStoreListTarget({ title: `${entry.group.productName} 판매처`, rows: latestSellerRows(entry.group.observations) })} /><RecordedPriceBlock group={entry.group} /><div className={styles.productActions}><button className={styles.trendButton} aria-label={`${entry.group.productName} 가격 이력 보기`} onClick={() => onTrend(entry.group)}>{entry.group.latest.storeProductId ? "가격·영양 보기" : "가격 이력"}</button><button aria-label={`${entry.group.productName} 장바구니에 담기`} onClick={() => onAdd(cartProductFromGroup(entry.group))}>+ 담기</button></div></div></article>)}</div>
+          </StandardProductCard>
+        : <article className={styles.productCard} key={entry.group.id}><div className={styles.productVisual} data-testid="product-image-slot"><ProductImage item={entry.group.latest.item} category={entry.group.category} imageUrl={entry.group.officialProduct?.imageUrl} /></div><div className={styles.productInfo}><h2>{entry.group.officialProduct?.officialName ?? entry.group.productName}</h2><StoreInfo sellerCount={distinctSellerCount(entry.group.observations)} onOpen={() => setStoreListTarget({ title: `${entry.group.productName} 판매처`, rows: latestSellerRows(entry.group.observations) })} /><RecordedPriceBlock group={entry.group} /><div className={styles.productActions}><button className={styles.trendButton} aria-label={`${entry.group.productName} 가격 이력 보기`} onClick={() => onTrend(entry.group)}>{entry.group.latest.storeProductId ? "가격·영양 보기" : "가격 이력"}</button><button aria-label={`${entry.group.productName} 장바구니에 담기`} onClick={() => onAdd(cartProductFromGroup(entry.group))}>+ 담기</button></div></div></article>)}
+      {catalogOnlyProducts.map((product) => {
+        const latestPurchase = catalogPurchases?.rows.find((row) => row.catalog_product_id === product.catalog_product_id);
+        const payment = latestPurchase?.item_net_price_krw
+          ?? (latestPurchase?.order_line_count === 1 ? latestPurchase.order_total_krw : null);
+        return <StandardProductCard key={product.catalog_product_id} brand={product.brand_name} name={product.product_name}
+          image={{ productName: product.product_name, category: "미분류" }}>
+          <p className={styles.storeInfo}>{product.specification}</p>
+          <div className={styles.standardPriceBlock}>
+            {payment === null
+              ? <small>판매 가격 확인 대기</small>
+              : <><small>{latestPurchase?.item_net_price_krw == null ? "내 주문 결제액" : "내 품목 결제액"}</small><strong>{formatKrw(payment)}</strong></>}
+          </div>
+          <div className={styles.productActions}>
+            <button type="button" aria-label={`${product.product_name} 정보 보기`}
+              onClick={() => setOpenStandardId(`manufacturer:${product.catalog_product_id}`)}>상품 정보</button>
+          </div>
+        </StandardProductCard>;
+      })}
+    </div>
     {resultCount === 0 && !hasOwnerProducts && !(showOfficialOnly && !officialListingsEligible) && <div className={styles.noResult}><strong>조건에 맞는 상품이 없습니다.</strong></div>}
 
     {showStandaloneOfficialListings && <PxOfficialProductBrowser catalog={publicPxCatalog} listings={standaloneListings} query={query} category={category} onAdd={(listing) => onAdd(cartProductFromOfficialListing(listing))} />}
     {showOfficialOnly && !officialListingsEligible && <div className={styles.noResult}><strong>{selectedStore !== "all" ? "공식 상품은 특정 지점의 판매·재고로 확인할 수 없습니다." : "일반 마트 조건에 해당하는 공식 상품 컬렉션이 없습니다."}</strong><p>판매처 유형을 전체 또는 PX로 선택하고, 판매 마트는 전체 마트로 두세요.</p></div>}
 
-    {openStandard && <StandardProductDetailModal standard={openStandard} nutritionCatalogProductIds={nutritionCatalogProductIds} onClose={() => setOpenStandardId(null)} onOpenStore={onOpenStore} />}
+    {openStandard && <StandardProductDetailModal standard={openStandard} nutritionCatalogProductIds={nutritionCatalogProductIds}
+      authRevision={authRevision} onPurchaseConnectionChanged={reloadCatalogPurchases} onClose={() => setOpenStandardId(null)} onOpenStore={onOpenStore} />}
+    {openManufacturer && <StandardProductDetailModal manufacturerProduct={openManufacturer}
+      authRevision={authRevision} onPurchaseConnectionChanged={reloadCatalogPurchases} onClose={() => setOpenStandardId(null)} onOpenStore={onOpenStore} />}
     {storeListTarget && !showOfficialOnly && <StoreListModal title={storeListTarget.title} rows={storeListTarget.rows} onClose={() => setStoreListTarget(null)} onOpenStore={onOpenStore} />}
   </section>;
 }
