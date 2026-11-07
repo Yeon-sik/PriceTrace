@@ -51,3 +51,10 @@ The fourth migration was applied to the hosted database without editing the firs
 Final checks: lint 0 errors/one pre-existing img warning; typecheck; 715 tests/88 files; 123-migration PGlite harness; four Playwright flows; Next production and Android debug builds. The historical harness still documents pre-existing bootstrap/test accommodations; it is not a clean replay claim for every old migration. Browser HTTP is fixture-controlled, distinct from hosted SQL. Node 22.19.0 was used, below the repository's 22.22.0 recommendation.
 
 APK SHA-256: `5AC86E88C1B49112DC58ED8A576C020A25020BE6C4E75A1A657379653E8E9C39`. No physical-device installation, web deployment or push was performed.
+
+
+## 실기기 후속 검증 — 2026-11-07
+
+Galaxy A25 / Android 16에서 OCR 수신 → 판매처 신청 → 기존 관리자 승인 → 상품/판매처/원문 가격/과거 날짜 선택 → 별도 공개 승인 → 상품 목록·가격 이력을 검증했다. 기존 verified 시장가 관측의 행복한콩 국산콩 순두부 330g, 쿠팡, 2026-07-28, 1,800원을 사용했다. 현재 가격 재확인으로 간주하지 않는다. 실제 공개 관측 1건과 판매처를 유지했으며 기존 catalog113/private price3/market price1 전체 해시는 동일하다. 익명 hosted 응답은 공개 8개 열만 반환했다. 재전송 후 공개 가격과 반영 영수증은 각 1건이다.
+
+통합 실기기 결과와 제한·잔여 감사 이력은 OCR 저장소 `docs/validation/2026-11-07-physical-device-information-flow.md` 참조. 앞선 “물리 기기 미검증” 설명은 이전 검증 시점에 해당한다.
