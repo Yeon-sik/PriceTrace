@@ -14,6 +14,7 @@ import { findPxProductNameReview } from "@/domain/px-product-name-review";
 import { useAdminAccess } from "@/hooks/use-admin-access";
 import { PublicReceiptRepository } from "@/repositories/public-receipt.repository";
 import { useAuthenticatedProductObservations } from "@/features/product-browser/use-authenticated-product-observations";
+import { usePublicPriceObservations } from "@/features/product-browser/use-public-price-observations";
 import { PublicOfficialChannelCatalogRepository } from "@/repositories/public-official-channel-catalog.repository";
 import { PxProductNameReviewRepository } from "@/repositories/px-product-name-review.repository";
 import { useCartStore } from "@/stores/cart.store";
@@ -25,6 +26,7 @@ import { PriceTrendModal } from "./PriceTrendModal";
 import { ProductBrowser } from "./ProductBrowser";
 import { MarketBrowser } from "./MarketBrowser";
 import { OrderCapturePage } from "./OrderCapturePage";
+import { InformationInboxPage } from "./InformationInboxPage";
 import { RestaurantBrowser } from "./RestaurantBrowser";
 import { BrandHall } from "./BrandHall";
 import styles from "./page.module.css";
@@ -165,15 +167,16 @@ export default function Home() {
 
   const receipts = publicReceiptData.receipts;
   const { observations: authenticatedObservations, error: purchasedProductError } = useAuthenticatedProductObservations(authRevision, page);
+  const { observations: publicPriceObservations, error: publicPriceError } = usePublicPriceObservations(page);
   const observationListings = useMemo(() => {
     const ownItems = new Set(authenticatedObservations.map((row) => `${row.item.receiptId}:${row.item.id}`));
-    return [...publicReceiptData.observations.filter((row) => !ownItems.has(`${row.item.receiptId}:${row.item.id}`)), ...authenticatedObservations];
-  }, [authenticatedObservations]);
+    return [...publicReceiptData.observations.filter((row) => !ownItems.has(`${row.item.receiptId}:${row.item.id}`)), ...authenticatedObservations, ...publicPriceObservations];
+  }, [authenticatedObservations, publicPriceObservations]);
   const productGroups = useMemo(() => groupProductObservations(observationListings), [observationListings]);
   // Candidate discovery belongs to the authorized admin page, never public renders.
   const adminPageActive = page === "admin" && isAdmin;
   const approvalCandidates = useMemo(
-    () => adminPageActive ? observationListings.map(receiptObservationCandidate) : [],
+    () => adminPageActive ? observationListings.filter(row => row.catalogNamespace !== "public-price").map(receiptObservationCandidate) : [],
     [adminPageActive, observationListings],
   );
   const cartProducts = useMemo(() => [
@@ -298,6 +301,7 @@ export default function Home() {
         <button className={page === "brands" ? styles.navActive : ""} aria-current={page === "brands" ? "page" : undefined} onClick={() => navigate("brands")}>브랜드관</button>
         <button className={page === "cart" ? styles.navActive : ""} aria-current={page === "cart" ? "page" : undefined} onClick={() => navigate("cart")}>장바구니 <span className={styles.navBadge}>{cartQuantityTotal}</span></button>
         <button className={page === "markets" ? styles.navActive : ""} aria-current={page === "markets" ? "page" : undefined} onClick={() => navigate("markets")}>판매처 기록</button>
+        <button className={page === "information-inbox" ? styles.navActive : ""} aria-current={page === "information-inbox" ? "page" : undefined} onClick={() => navigate("information-inbox")}>내 정보</button>
         {isAdmin && <button className={page === "admin" ? styles.navActive : ""} aria-current={page === "admin" ? "page" : undefined} onClick={() => navigate("admin")}>관리자</button>}
       </div></nav>
         <div className={`${styles.account} ${page === "brands" || page === "admin" ? styles.brandHallAccount : ""}`}>{isAdmin && <button className={styles.adminShortcut} onClick={() => navigate("admin")}>관리자</button>}<AuthPanel onChange={handleAuthChange} onOpen={() => setAuthOpen(true)} /></div>
@@ -305,11 +309,14 @@ export default function Home() {
     </header>
 
     <main className={styles.main} id="main-content" tabIndex={-1}>
+      {page === "products" && <p><button type="button" onClick={() => navigate("information-inbox")}>상품·서비스 정보 보관함</button></p>}
       {page === "products" && purchasedProductError && <p className={styles.error} role="alert">내 구매 상품을 불러오지 못했습니다. 앱을 다시 활성화하면 재시도합니다.</p>}
+      {page === "products" && publicPriceError && <p className={styles.error} role="alert">{publicPriceError} 앱을 다시 활성화하면 재시도합니다.</p>}
       {page === "home" && <ObservationHome groups={publicProductGroups} receiptCount={receipts.length} cart={{ count: cartGroups.length, quantity: cartQuantityTotal, total: cartTotal }} onProducts={() => openProducts()} onRestaurants={() => navigate("restaurants")} onMarkets={() => navigate("markets")} onCart={() => navigate("cart")} onTrend={setTrendGroup} />}
       {page === "restaurants" && <RestaurantBrowser selectedRestaurant={selectedRestaurant} selectedRestaurantMenuId={selectedRestaurantMenuId} onSelectRestaurant={(restaurantId) => navigate("restaurants", { selectedRestaurant: restaurantId, replace: restaurantId === null })} onClearMenuIdentity={() => navigate("restaurants", { replace: true })} />}
       {page === "products" && <ProductBrowser groups={productGroups} query={query} setQuery={setQuery} category={category} setCategory={setCategory} martType={martType} setMartType={setMartType} selectedStore={selectedStore} setSelectedStore={setSelectedStore} sort={sort} setSort={setSort} authRevision={authRevision} selectedStoreProductId={selectedStoreProductId} selectedCatalogProductId={selectedCatalogProductId} onClearIdentity={() => navigate("products", { replace: true })} onAdd={openCartModal} onTrend={setTrendGroup} onOpenStore={(store) => navigate("markets", { selectedMarket: store })} onOpenOrderCapture={() => navigate("order-capture")} />}
       {page === "order-capture" && <OrderCapturePage authRevision={authRevision} onBack={() => navigate("products")} onRequireAuth={() => setAuthOpen(true)} />}
+      {page === "information-inbox" && <InformationInboxPage key={authRevision} authRevision={authRevision} onRequireAuth={() => setAuthOpen(true)} />}
       {page === "brands" && <BrandHall selectedBrandId={selectedBrandId} onSelect={(id) => navigate("brands", { selectedBrandId: id })} />}
       {page === "markets" && <MarketBrowser receipts={receipts} observations={observationListings} selectedStore={selectedMarket} selectedStoreId={selectedStoreId} onSelectStore={(store) => navigate("markets", { selectedMarket: store, replace: true })} onSelectStoreId={() => navigate("markets", { replace: true })} onOpenTrend={setTrendGroup} />}
       {page === "cart" && <CartPage products={cartProducts} lines={lines} onQuantityChange={updateCartQuantity} onRemove={removeCart} onClear={clearCart} onBrowse={() => navigate("products")} />}

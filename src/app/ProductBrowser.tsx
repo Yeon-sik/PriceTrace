@@ -54,7 +54,7 @@ function StoreInfo({ sellerCount, martTypeLabel, onOpen }: { sellerCount: number
 }
 
 function RecordedPriceBlock({ group }: { group: ProductGroup }) {
-  return <div className={styles.listedPrice}><strong>{formatKrw(group.latestPriceKrw)}</strong></div>;
+  return <div className={styles.listedPrice}><strong>{formatKrw(group.latestPriceKrw)}</strong>{group.latest.catalogNamespace === "public-price" && <small>공개 가격 관측 · {group.observations.length}건</small>}</div>;
 }
 
 function StandardProductName({ brand, name }: { brand: string | null; name: string }) {
@@ -282,7 +282,7 @@ export function ProductBrowser({ groups, query, setQuery, category, setCategory,
       <div>
         <p className={styles.kicker}>PRODUCT CATALOG</p>
         <h1>상품 목록</h1>
-        <p>표준 상품, 유통채널 공식 판매상품, 영수증 가격 관측을 출처별로 구분합니다.</p>
+        <p>표준 상품, 유통채널 공식 판매상품, 영수증과 공개 가격 관측을 출처별로 구분합니다.</p>
       </div>
       <label className={styles.search}>
         <Icon name="search" size={20} />

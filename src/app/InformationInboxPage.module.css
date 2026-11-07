@@ -1,0 +1,37 @@
+.page { max-width: 1060px; margin: 0 auto; padding: 24px 0 64px; color: var(--ink); }
+.heading { padding-bottom: 24px; border-bottom: 1px solid var(--line); }
+.heading h1 { margin: 0 0 16px; font-size: clamp(26px, 4vw, 34px); letter-spacing: -.03em; }
+.page p { max-width: 72ch; line-height: 1.6; color: var(--muted); }
+.page h2 { margin: 28px 0 16px; font-size: 20px; }
+.page button { min-height: 44px; padding: 9px 14px; border: 1px solid var(--control-line); border-radius: 5px; color: var(--ink); background: var(--surface); cursor: pointer; font: inherit; }
+.page button:hover { background: var(--accent-soft); }
+.page button:disabled { color: var(--subtle); background: var(--surface-raised); cursor: default; }
+.page button[type=submit] { background: var(--brand); color: var(--on-brand); border-color: var(--brand); }
+.page button[type=submit]:disabled { background: var(--surface-raised); color: var(--subtle); border-color: var(--line); }
+.page :is(input, select, textarea) { box-sizing: border-box; min-height: 44px; width: 100%; border: 1px solid var(--control-line); border-radius: 5px; padding: 10px 12px; font: inherit; color: var(--ink); background: var(--surface); }
+.page textarea { resize: vertical; }
+.page :is(input, select, textarea)::placeholder { color: var(--muted); }
+.page :is(button, input, textarea, select, summary):focus-visible { outline: 2px solid var(--brand); outline-offset: 3px; }
+.page label { display: grid; gap: 8px; margin: 14px 0; }
+.page summary { cursor: pointer; min-height: 44px; padding: 10px 0; font-weight: 600; }
+.toolbar, .actions { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; margin: 20px 0; }
+.fileLabel { flex: 1; min-width: 0; max-width: 420px; }
+.editor { padding: 16px 0 24px; border-block: 1px solid var(--line); }
+.twoColumns { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+.field { margin: 20px 0; padding: 16px; border: 1px solid var(--line); border-radius: 6px; }
+.field legend { font-weight: 600; padding: 0 6px; }
+.reference { margin-top: 24px; }
+.page .check { display: flex; align-items: flex-start; gap: 10px; line-height: 1.6; margin-top: 24px; }
+.page .check input { width: 20px; height: 20px; min-height: 20px; flex-shrink: 0; margin-top: 2px; accent-color: var(--brand); }
+.page .error { color: var(--danger); white-space: pre-wrap; overflow-wrap: anywhere; }
+.page .notice { color: var(--brand); }
+.records ul { list-style: none; padding: 0; }
+.records li { border-bottom: 1px solid var(--line); }
+.records li button { border: 0; border-radius: 0; display: grid; width: 100%; padding: 18px 8px; text-align: left; gap: 8px; overflow-wrap: anywhere; }
+.records li button[aria-pressed=true] { background: var(--accent-soft); }
+.records span { font-size: 13px; color: var(--muted); }
+.detail { border-top: 1px solid var(--line); margin-top: 24px; }
+.detail dl { display: grid; grid-template-columns: 100px 1fr; gap: 12px; }
+.detail dd { margin: 0; overflow-wrap: anywhere; }
+.page pre { margin-top: 12px; padding: 16px; background: var(--surface-raised); white-space: pre-wrap; overflow-wrap: anywhere; font-size: 13px; line-height: 1.6; max-height: 620px; overflow-y: auto; }
+@media (max-width: 640px) { .twoColumns { grid-template-columns: 1fr; gap: 0; } .toolbar, .actions { align-items: stretch; } .fileLabel { flex-basis: 100%; max-width: none; } .page { padding-top: 16px; } .field { padding: 12px; } }

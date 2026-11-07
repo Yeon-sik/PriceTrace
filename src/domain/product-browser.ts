@@ -300,7 +300,7 @@ export function groupProductObservations(listings: ProductObservationListing[]):
   for (const listing of listings) {
     const normalizedName = normalizeReceiptProductName(listing.item.productName);
     const productCode = listing.item.sourceProductCode.trim();
-    const id = listing.storeProductId ? `store-product:${listing.storeProductId}`
+    const id = listing.catalogNamespace === "public-price" ? `public-price:${listing.sellerKey}:${listing.catalogProductId}` : listing.storeProductId ? `store-product:${listing.storeProductId}`
       : productCode ? `${listing.storeLabel}:${productCode}:${normalizedName}` : `${listing.storeLabel}:${normalizedName}`;
     grouped.set(id, [...(grouped.get(id) ?? []), listing]);
   }
@@ -327,6 +327,7 @@ export function groupProductObservations(listings: ProductObservationListing[]):
 export function mergeOfficialProductGroups(groups: ProductGroup[]): ProductGroup[] {
   const codesByMartAndName = new Map<string, Set<string>>();
   for (const group of groups) {
+    if (group.latest.catalogNamespace === "public-price") continue;
     const base = `${martTagFor(group).toLocaleLowerCase("ko-KR")}:${normalizeExactReceiptProductName(group.productName)}`;
     const code = group.sourceProductCode.trim();
     if (code) codesByMartAndName.set(base, new Set([...(codesByMartAndName.get(base) ?? []), code]));
@@ -334,6 +335,8 @@ export function mergeOfficialProductGroups(groups: ProductGroup[]): ProductGroup
 
   const merged = new Map<string, ProductGroup>();
   for (const group of groups) {
+    // Public native prices never become receipt evidence through name/code merging.
+    if (group.latest.catalogNamespace === "public-price") { merged.set(group.id, group); continue; }
     const sharedBase = `${martTagFor(group).toLocaleLowerCase("ko-KR")}:${normalizeExactReceiptProductName(group.productName)}`;
     const knownCodes = codesByMartAndName.get(sharedBase) ?? new Set<string>();
     const ownCode = group.sourceProductCode.trim();
