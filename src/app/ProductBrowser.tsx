@@ -33,6 +33,7 @@ import {
   type OfficialLinkedStandardSummary,
 } from "@/features/product-browser/product-browser.selectors";
 import { useProductCatalog } from "@/features/product-browser/use-product-catalog";
+import { useOwnerOcrProductSearch } from "@/features/product-browser/use-owner-ocr-product-search";
 import { PublicOfficialChannelCatalogRepository } from "@/repositories/public-official-channel-catalog.repository";
 import { CoupangComparisonMessage } from "./CoupangComparisonMessage";
 import { ProductImage } from "./ProductImage";
@@ -131,6 +132,9 @@ export function ProductBrowser({ groups, query, setQuery, category, setCategory,
     retryCatalog,
   } = useProductCatalog(authRevision);
   const [catalogView, setCatalogView] = useState<CatalogView>("all");
+  const ownerSearchQuery = catalogView === "all" && !selectedStoreProductId && !selectedCatalogProductId ? query.trim() : "";
+  const { result: ownerSearch, retry: retryOwnerSearch } = useOwnerOcrProductSearch(ownerSearchQuery, authRevision);
+  const hasOwnerProducts = Boolean(ownerSearch?.products.length);
   const [filtersOpen, setFiltersOpen] = useState(false);
   const filterPanelId = useId();
   const [openStandardId, setOpenStandardId] = useState<string | null>(null);
@@ -289,7 +293,21 @@ export function ProductBrowser({ groups, query, setQuery, category, setCategory,
     </div>}
     </div>
     {showOfficialOnly && <p className={styles.officialScopeAlwaysVisible}>PX 공식 판매상품 전체 · 특정 지점의 판매·재고 정보가 아닙니다.</p>}
-    <div className={styles.resultBar}><p>상품 {resultCount.toLocaleString("ko-KR")}개</p>{(query || category !== "전체" || martType !== "all" || selectedStore !== "all" || showStandardOnly || showOfficialOnly) && <button onClick={() => { setQuery(""); setCategory("전체"); setMartType("all"); setSelectedStore("all"); setCatalogView("all"); }}>필터 초기화</button>}</div>
+    {ownerSearch?.status === "loading" && <p className={styles.dataNotice} role="status">내 OCR 상품을 검색하는 중입니다.</p>}
+    {ownerSearch?.status === "error" && <div className={styles.dataNotice} role="status">
+      내 OCR 상품을 불러오지 못했습니다.
+      <button type="button" onClick={retryOwnerSearch}>내 OCR 상품 다시 검색</button>
+    </div>}
+    {ownerSearch && hasOwnerProducts && <section className={styles.ownerOcrProducts} aria-label="내 OCR 상품" aria-live="polite">
+      <h2>내 OCR 상품 <span>내 계정에서만 표시</span></h2>
+      <ul>
+        {ownerSearch.products.map((product) => <li key={product.id}>
+          <strong>{product.product_name}</strong>
+          {(product.brand || product.specification) && <span>{[product.brand, product.specification].filter(Boolean).join(" · ")}</span>}
+        </li>)}
+      </ul>
+    </section>}
+    <div className={styles.resultBar}><p>{hasOwnerProducts ? "가격·공식 상품" : "상품"} {resultCount.toLocaleString("ko-KR")}개</p>{(query || category !== "전체" || martType !== "all" || selectedStore !== "all" || showStandardOnly || showOfficialOnly) && <button onClick={() => { setQuery(""); setCategory("전체"); setMartType("all"); setSelectedStore("all"); setCatalogView("all"); }}>필터 초기화</button>}</div>
 
     <div className={styles.productGrid} aria-live="polite">{gridEntries.map((entry) => entry.kind === "official-standard"
       ? <OfficialLinkedStandardCard
@@ -327,7 +345,7 @@ export function ProductBrowser({ groups, query, setQuery, category, setCategory,
             </div>
           </article>
         : <article className={styles.productCard} key={entry.group.id}><div className={styles.productVisual} data-testid="product-image-slot"><ProductImage item={entry.group.latest.item} category={entry.group.category} imageUrl={entry.group.officialProduct?.imageUrl} /></div><div className={styles.productInfo}><h2>{entry.group.officialProduct?.officialName ?? entry.group.productName}</h2><StoreInfo sellerCount={distinctSellerCount(entry.group.observations)} onOpen={() => setStoreListTarget({ title: `${entry.group.productName} 판매처`, rows: latestSellerRows(entry.group.observations) })} /><RecordedPriceBlock group={entry.group} /><div className={styles.productActions}><button className={styles.trendButton} aria-label={`${entry.group.productName} 가격 이력 보기`} onClick={() => onTrend(entry.group)}>{entry.group.latest.storeProductId ? "가격·영양 보기" : "가격 이력"}</button><button aria-label={`${entry.group.productName} 장바구니에 담기`} onClick={() => onAdd(cartProductFromGroup(entry.group))}>+ 담기</button></div></div></article>)}</div>
-    {gridEntries.length === 0 && !showStandaloneOfficialListings && !(showOfficialOnly && !officialListingsEligible) && <div className={styles.noResult}><strong>조건에 맞는 상품이 없습니다.</strong></div>}
+    {resultCount === 0 && !hasOwnerProducts && !(showOfficialOnly && !officialListingsEligible) && <div className={styles.noResult}><strong>조건에 맞는 상품이 없습니다.</strong></div>}
 
     {showStandaloneOfficialListings && <PxOfficialProductBrowser catalog={publicPxCatalog} listings={standaloneListings} query={query} category={category} onAdd={(listing) => onAdd(cartProductFromOfficialListing(listing))} />}
     {showOfficialOnly && !officialListingsEligible && <div className={styles.noResult}><strong>{selectedStore !== "all" ? "공식 상품은 특정 지점의 판매·재고로 확인할 수 없습니다." : "일반 마트 조건에 해당하는 공식 상품 컬렉션이 없습니다."}</strong><p>판매처 유형을 전체 또는 PX로 선택하고, 판매 마트는 전체 마트로 두세요.</p></div>}

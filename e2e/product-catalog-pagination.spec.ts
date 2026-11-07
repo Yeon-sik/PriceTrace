@@ -19,7 +19,7 @@ function publicRows() {
   }];
 }
 
-async function prepare(page: Page, { failPublicInitially = false } = {}) {
+async function prepare(page: Page, { failPublicInitially = false, adminSession = false } = {}) {
   let account: "A" | "B" | null = null;
   let failPublic = failPublicInitially;
   let failSignedIn = false;
@@ -31,7 +31,8 @@ async function prepare(page: Page, { failPublicInitially = false } = {}) {
 
   function user(value: "A" | "B") {
     return { id: value === "A" ? rowId(99991) : rowId(99992), aud: "authenticated", role: "authenticated",
-      email: `${value.toLowerCase()}@example.invalid`, app_metadata: {}, user_metadata: {}, created_at: "2026-10-05T00:00:00Z" };
+      email: adminSession ? `pricetrace-testing-account-${value.toLowerCase()}@example.invalid` : `${value.toLowerCase()}@example.invalid`,
+      app_metadata: adminSession ? { role: "admin" } : {}, user_metadata: {}, created_at: "2026-10-05T00:00:00Z" };
   }
 
   await page.route("https://pricetrace.example.test/**", async (route) => {
@@ -117,6 +118,53 @@ async function signIn(page: Page, account: "A" | "B") {
   await dialog.getByRole("button", { name: "로그인", exact: true }).click();
   await expect(dialog).not.toBeVisible();
 }
+
+test("상품명 검색에 로그인한 계정의 OCR 후보만 별도로 표시한다", async ({ page }, info) => {
+  await prepare(page, { adminSession: true });
+  const ownerA = rowId(99991);
+  const ownerB = rowId(99992);
+  const candidateName = "예시 마그네슘 120정";
+  const ownerReads: (string | null)[] = [];
+  let failedFirstRead = false;
+  await page.route("https://pricetrace.example.test/rest/v1/product_identity_candidates?**", async (route) => {
+    const params = new URL(route.request().url()).searchParams;
+    const owner = params.get("user_id");
+    ownerReads.push(owner);
+    expect(params.get("product_name")).toBe("ilike.%마그네슘%");
+    expect(params.get("select")).toBe("id,product_name,brand,specification");
+    if (!failedFirstRead && owner === `eq.${ownerA}`) {
+      failedFirstRead = true;
+      await route.fulfill({ status: 503, json: { message: "Temporary failure" } });
+      return;
+    }
+    await route.fulfill({ json: owner === `eq.${ownerA}`
+      ? [{ id: rowId(90001), product_name: candidateName, brand: null, specification: null }]
+      : [] });
+  });
+
+  await page.getByRole("button", { name: "전체 상품", exact: true }).click();
+  await page.getByRole("searchbox", { name: "상품 검색" }).fill("마그네슘");
+  const privateResults = page.getByRole("region", { name: "내 OCR 상품" });
+  await expect(privateResults).toHaveCount(0);
+
+  await signIn(page, "A");
+  await page.getByRole("button", { name: "내 OCR 상품 다시 검색" }).click();
+  await expect(privateResults.getByText(candidateName, { exact: true })).toBeVisible();
+  await expect(privateResults).toContainText("내 계정에서만 표시");
+  await privateResults.screenshot({ path: info.outputPath("owner-ocr-search-desktop.png") });
+  await page.setViewportSize({ width: 390, height: 844 });
+  await expect(privateResults.getByText(candidateName, { exact: true })).toBeVisible();
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  await privateResults.screenshot({ path: info.outputPath("owner-ocr-search-mobile.png") });
+  await page.setViewportSize({ width: 1280, height: 720 });
+
+  await page.getByRole("button", { name: "로그아웃", exact: true }).click();
+  await expect(privateResults).toHaveCount(0);
+  await signIn(page, "B");
+  await expect.poll(() => ownerReads.includes(`eq.${ownerB}`)).toBe(true);
+  await expect(privateResults).toHaveCount(0);
+  expect(ownerReads.every((owner) => owner === `eq.${ownerA}` || owner === `eq.${ownerB}`)).toBe(true);
+});
 
 function waitForCatalogPageFailure(page: Page, resource: string) {
   return page.waitForResponse(response => {
