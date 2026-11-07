@@ -313,3 +313,74 @@
 .catalogLayerTabs { border-radius: 5px; padding: 4px; margin: 22px 0 18px; }
 .catalogLayerTabs button { min-height: 36px; padding: 8px 12px; }
 .catalogLayerTabs .catalogLayerTabActive { color: var(--ink); background: var(--surface-raised); box-shadow: inset 0 -2px var(--accent); }
+.catalogSearchResults {
+  margin: 18px 0;
+  padding: 14px 16px;
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  background: var(--surface);
+  overflow-wrap: anywhere;
+}
+.catalogSearchResults > h2 { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 12px; margin: 0 0 12px; font-size: 15px; }
+.catalogSearchResults > h2 span { color: var(--muted); font-size: 13px; font-weight: 500; }
+.purchaseVariantSelect, .purchaseLinkSearch label { display: grid; gap: 6px; font-size: 13px; }
+.purchaseVariantSelect select, .purchaseLinkSearch input {
+  width: 100%; min-height: 40px; padding: 8px 12px; border: 1px solid var(--control-line);
+  border-radius: 5px; background: var(--surface); color: var(--ink); font: inherit;
+}
+.purchaseLinkHeader, .purchaseLinkRow { display: flex; flex-wrap: wrap; align-items: flex-start; justify-content: space-between; gap: 8px 16px; }
+.purchaseLinkRow { padding: 12px 0; border-top: 1px solid var(--line); }
+.purchaseLinkFacts { display: grid; flex: 1; gap: 5px; min-width: 0; overflow-wrap: anywhere; }
+.purchaseLinkFacts small { color: var(--muted); }
+.purchaseLinkFacts dl { display: flex; flex-wrap: wrap; gap: 8px 16px; margin: 0; }
+.purchaseLinkFacts dl div { display: grid; gap: 2px; }
+.purchaseLinkFacts dt { color: var(--muted); font-size: 13px; }
+.purchaseLinkFacts dd { margin: 0; font-variant-numeric: tabular-nums; font-weight: 600; }
+.purchaseLinkSearch { display: grid; gap: 8px; margin-top: 8px; }
+.productInfo h2 { font-size: 15px; line-height: 1.5; font-weight: 550; letter-spacing: -.01em; }
+.floatingCart { filter: none; right: 24px; }
+.floatingCart:hover { transform: none; filter: none; background: var(--surface); }
+.floatingCartIcon { border-radius: 6px; background: none; width: 52px; height: 52px; flex-basis: 52px; color: var(--muted); }
+.floatingCartIcon svg { width: 23px; height: 23px; }
+.floatingCartTotal { border: 0; border-radius: 5px 0 0 5px; height: 50px; margin: 0; padding: 0 12px; background: none; }
+.navBadge, .mobileNav button b { background: var(--surface-raised) !important; }
+.navBadge { color: var(--muted); }
+.mobileNav button b { color: var(--accent) !important; }
+.mobileNav button b:empty { display: none; }
+.segmented .selectedSegment { background: var(--surface-raised) !important; color: var(--accent) !important; }
+@media (max-width: 760px) {
+  .catalogFilters { display: none; }
+  .catalogFiltersOpen { margin-bottom: 18px; }
+  .catalogFilterToggle { display: flex; justify-content: space-between; align-items: center; width: 100%; gap: 12px; padding: 12px 0; background: none; color: var(--ink); border: 0; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); border-radius: 0; text-align: left; font-size: 12px; }
+  .catalogFilterToggle > span { flex-shrink: 0; }
+  .catalogFilterToggle small { color: var(--muted); font-size: 11px; text-align: right; }
+  .catalogLayerTabs { margin: 16px 0; }
+  .catalogLayerTabs button { padding: 8px 5px; font-size: 11px; }
+  .catalogLayerTabs button span { margin-left: 5px; }
+  .resultBar { margin: 14px 0; }
+  .productInfo h2 { font-size: 13px; }
+  .productInfo h2, .productInfo h3 { min-height: 39px; }
+}
+.marketCard { padding: 24px; }
+.marketCardTop { display: flex; align-items: center; justify-content: space-between; gap: 20px; }
+.marketCardTop strong { font-size: 19px; font-weight: 550; letter-spacing: -.02em; }
+.marketCardTop > svg { color: var(--subtle); }
+.marketCard .marketCardEyebrow { font-size: 11px; font-weight: 400; margin: 5px 0 15px; }
+.restaurantBoundaryNotice { display: flex; align-items: center; gap: 10px; background: none; border: 0; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); padding: 15px 0; color: var(--muted); font-size: 12px; }
+.restaurantBoundaryNotice > svg { color: var(--subtle); }
+.productVisual:has(.productPlaceholder) { height: 100px; min-height: 100px; aspect-ratio: auto; }
+.productVisual:has(.productPlaceholder) .productPlaceholder { gap: 8px; }
+.cartRows .productVisual:has(.productPlaceholder) { height: 65px; min-height: 65px; }
+.cartRows .productPlaceholder > span { display: none; }
+@media (max-width: 760px) {
+  .productVisual:has(.productPlaceholder) { height: 64px; min-height: 64px; }
+  .productVisual:has(.productPlaceholder) .productPlaceholder { gap: 4px; font-size: 10px; }
+  .productPlaceholder svg { width: 25px; height: 25px; }
+  .marketCard { padding: 20px; }
+  .marketCardTop strong { font-size: 17px; }
+  .restaurantBoundaryNotice { align-items: flex-start; }
+  .restaurantBoundaryNotice > svg { margin-top: 2px; }
+}
+
+@media(max-width:760px){.brandHallMobileNav{grid-template-columns:repeat(6,minmax(0,1fr))!important}.brandHallMobileNav button{min-width:0;min-height:48px;font-size:11px;white-space:normal;padding-left:1px;padding-right:1px}}
+@media(max-width:760px){.brandHallAccount{min-width:0;flex-shrink:1}.brandHallAccount .userMenu{min-width:0;gap:8px}.brandHallAccount .userMenu span{min-width:0;max-width:72px;white-space:nowrap}.brandHallAccount .userMenu button,.brandHallAccount .adminShortcut{flex-shrink:0}}

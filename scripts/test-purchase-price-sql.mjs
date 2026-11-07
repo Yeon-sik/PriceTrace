@@ -117,3 +117,62 @@ try {
   assert.deepEqual(await legacyBrandIdentities(), brandIdentitySnapshot);
   console.log("BRAND_LEGACY_V1_V4_DEFINITIONS_UNCHANGED_PASS");
   console.log(`MIGRATION_BOOTSTRAP_WITH_DOCUMENTED_ACCOMMODATIONS_PASS ${migrations.length}`);
+  for (const file of ["brand_read_v1.sql", "public_product_by_barcode_v1.sql", "brand_hierarchy_public_catalog.sql", "purchase_price_observation_v4.sql", "purchase_price_line_authority_response.sql", "purchase_restaurant_identity_recovery.sql", "user_confirmed_purchase_restaurants.sql", "owner_confirmed_cross_purchase.sql", "restaurant_component_parent_reads.sql", "restaurant_component_identity_resolution.sql", "purchase_public_identity_search.sql", "verified_receipt_ingestion_v2.sql", "shared_identity_connections.sql", "product_candidate_brand_resolution.sql", "product_candidate_ingest.sql", "product_candidate_brand_resolution_v2.sql", "verified_receipt_sku_identity.sql", "manufacturer_product_publication.sql", "owner_catalog_purchase_links.sql"]) {
+    try {
+      const result = await db.exec(readSql("tests", file));
+      console.log(`SQL_FIXTURE_PASS ${file}`, result.flatMap(r => r.rows).filter(r => r.result));
+    } catch (error) {
+      throw new Error(`Fixture ${file}: ${error.code} ${error.message} ${error.where ?? ""}`);
+    }
+  }
+  // Optional read-only deployed definition snapshot. Re-run the same fixtures
+  // after forward patches against that exact body, without contacting Supabase.
+  const componentArgument = process.argv.indexOf("--ocr-component");
+  if (componentArgument !== -1) {
+    assert.ok(process.argv[componentArgument + 1], "--ocr-component requires the OCR-generated artifact path");
+    await verifyOcrComponentContract(db, process.argv[componentArgument + 1]);
+  }
+  if (process.argv[3] && !process.argv[3].startsWith("--")) {
+    const snapshot = JSON.parse(readFileSync(process.argv[3], "utf8"));
+    const deployed = snapshot.rows?.[0]?.purchase_function;
+    assert.equal(typeof deployed, "string");
+    assert.ok(deployed.startsWith("CREATE OR REPLACE FUNCTION public.ingest_verified_purchase_price_observation_v1("));
+    await db.exec(deployed.replace(/\r\n/g, "\n"));
+    try {
+      await db.exec(readSql("tests", "purchase_price_observation_v4.sql"));
+      throw new Error("Expected deployed V4 UUID aggregate failure");
+    } catch (error) {
+      if (error.code !== "42883" || !error.message.includes("min(uuid)")) {
+        throw new Error(`Unexpected deployed baseline: ${error.code} ${error.message}`);
+      }
+      await db.exec("rollback");
+      console.log("DEPLOYED_V4_UUID_AGGREGATE_FAILURE_REPRODUCED");
+    }
+    await db.exec(readSql("migrations", "20261009040159_purchase_price_runtime_compatibility.sql"));
+    const metadataMigration = readSql("migrations", "20261009040200_purchase_price_line_authority_response.sql");
+    const patches = metadataMigration.match(/do \$migration\$[\s\S]*?\$migration\$;/g);
+    assert.equal(patches?.length, 1);
+    // Helpers/getter are already installed from their unmodified migration.
+    // Only reapply the checked ingest-definition patch to the deployed body.
+    await db.exec(patches[0]);
+    for (const file of ["purchase_price_observation_v4.sql", "purchase_price_line_authority_response.sql"]) {
+      try {
+        await db.exec(readSql("tests", file));
+        console.log(`DEPLOYED_DEFINITION_FIXTURE_PASS ${file}`);
+      } catch (error) {
+        throw new Error(`Deployed fixture ${file}: ${error.code} ${error.message} ${error.where ?? ""}`);
+      }
+    }
+  }
+  const barcodePublicReadArgument = process.argv.indexOf("--barcode-public-read");
+  if (barcodePublicReadArgument !== -1) {
+    const snapshot = JSON.parse(readFileSync(process.argv[barcodePublicReadArgument + 1], "utf8"));
+    assert.ok(snapshot.public_read_definition?.startsWith("CREATE OR REPLACE FUNCTION public.get_product_read_v1("));
+    await db.exec(snapshot.public_read_definition);
+    const results = await db.exec(readSql("tests", "public_product_by_barcode_v1.sql"));
+    console.log("DEPLOYED_PUBLIC_READ_BARCODE_FIXTURE_PASS", results.flatMap(result => result.rows).filter(row => row.result));
+  }
+  await verifyArDemoBarcodeRegistration(db, readSql);
+} finally {
+  await db.close();
+}
