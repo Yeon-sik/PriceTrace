@@ -3,6 +3,7 @@
 import { ReceiptProductNutritionPanel } from "../features/product-nutrition/ReceiptProductNutritionPanel";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import { Icon } from "@/components/Icon";
 import type { ProductGroup } from "@/domain/product-browser";
 import {
   sellerPricePointsFromGroup,
@@ -112,15 +113,16 @@ export function PriceTrendModal({ group, onClose, onOpenStore, onBack }: { group
       {selectedSummary && <>
         <div className={styles.productDetailMeta}>
           <span>판매처</span>
-          <strong>{selectedSummary.sellerLabel}</strong>
-          <button type="button" className={styles.storeInfoButton} aria-label={`${selectedSummary.sellerLabel} 판매처 정보 보기`} onClick={() => onOpenStore(selectedSummary.sellerLabel)}>›</button>
+          <button type="button" className={styles.storeInfoButton} aria-label={`${selectedSummary.sellerLabel} 판매처 정보 보기`} onClick={() => onOpenStore(selectedSummary.sellerLabel)}>
+            {selectedSummary.sellerLabel} <Icon name="chevron" size={16} />
+          </button>
           {group.latest.catalogNamespace !== "public-price" && <small>코드 {group.sourceProductCode}</small>}
         </div>
-        <div className={styles.trendStats}>
-          <div><span>최근 관측가</span><strong>{formatKrw(selectedSummary.latestPriceKrw)}</strong></div>
-          <div><span>최저 관측가</span><strong>{formatKrw(selectedSummary.minimumPriceKrw)}</strong></div>
-          <div><span>최고 관측가</span><strong>{formatKrw(selectedSummary.maximumPriceKrw)}</strong></div>
-        </div>
+        <dl className={styles.trendStats}>
+          <div><dt>최근 관측가</dt><dd>{formatKrw(selectedSummary.latestPriceKrw)}</dd></div>
+          <div><dt>최저 관측가</dt><dd>{formatKrw(selectedSummary.minimumPriceKrw)}</dd></div>
+          <div><dt>최고 관측가</dt><dd>{formatKrw(selectedSummary.maximumPriceKrw)}</dd></div>
+        </dl>
         <section className={styles.trendVisualSection} aria-labelledby="trend-visual-title">
           <h3 id="trend-visual-title">가격 변동 추이</h3>
           <TrendGraph points={ordered} />
@@ -131,17 +133,24 @@ export function PriceTrendModal({ group, onClose, onOpenStore, onBack }: { group
       {loading && <p className={styles.trendNote}>저장된 관측을 확인하고 있습니다.</p>}
       {message && <p className={styles.trendNote}>{message}</p>}
 
-      {selectedSummary && <section className={styles.changeSection}>
-        <h3>변동 이력</h3>
-        <div className={styles.trendTable}>
-          <div className={styles.trendTableHeader}><span>관측일</span><span>데이터 출처</span><span>관측가</span><span>직전 대비</span></div>
-          {[...changes].reverse().map((point, index) => <div key={`${point.sellerLabel}:${point.observedAt}:${point.source}:${index}`}>
-            <span>{point.observedAt}</span>
-            <span>{formatSource(point.source)}</span>
-            <strong>{formatKrw(point.priceKrw)}</strong>
-            <em className={priceChangeClass(point.differenceKrw)}>{formatPriceChange(point.differenceKrw, point.differencePercent)}</em>
-          </div>)}
-        </div>
+      {selectedSummary && <section className={styles.changeSection} aria-labelledby="trend-changes-title">
+        <h3 id="trend-changes-title">변동 이력</h3>
+        <table className={styles.trendTable} aria-labelledby="trend-changes-title">
+          <thead><tr>
+            <th scope="col">관측일</th>
+            <th scope="col">데이터 출처</th>
+            <th scope="col">관측가</th>
+            <th scope="col">직전 대비</th>
+          </tr></thead>
+          <tbody>
+            {[...changes].reverse().map((point, index) => <tr key={`${point.sellerLabel}:${point.observedAt}:${point.source}:${index}`}>
+              <td><time dateTime={point.observedAt}>{point.observedAt}</time></td>
+              <td>{formatSource(point.source)}</td>
+              <td><strong>{formatKrw(point.priceKrw)}</strong></td>
+              <td className={priceChangeClass(point.differenceKrw)}>{formatPriceChange(point.differenceKrw, point.differencePercent)}</td>
+            </tr>)}
+          </tbody>
+        </table>
       </section>}
     </section>
   </div>;
@@ -185,14 +194,22 @@ function TrendGraph({ points }: { points: TrendPoint[] }) {
   const prices = points.map((point) => point.priceKrw);
   const min = Math.min(...prices);
   const max = Math.max(...prices);
-  const range = Math.max(max - min, 1);
-  const path = points.map((point, index) => `${index === 0 ? "M" : "L"} ${12 + (index / (points.length - 1)) * 276} ${92 - ((point.priceKrw - min) / range) * 68}`).join(" ");
+  const range = max - min;
+  const plotPoints = points.map((point, index) => ({
+    ...point,
+    x: 12 + (index / (points.length - 1)) * 276,
+    y: range === 0 ? 44 : 68 - ((point.priceKrw - min) / range) * 48,
+  }));
+  const path = plotPoints.map(({ x, y }, index) => `${index === 0 ? "M" : "L"} ${x} ${y}`).join(" ");
   return <div className={styles.graphWrap}>
-    <svg viewBox="0 0 300 110" role="img" aria-label={`${points[0].sellerLabel} 가격 관측 변화 그래프`}>
-      <path className={styles.graphBase} d="M 12 92 H 288" />
+    <svg viewBox="0 0 300 88" role="img" aria-label={`${points[0].sellerLabel} 가격 관측 변화 그래프`}>
+      <path className={styles.graphBase} d="M 12 20 H 288 M 12 44 H 288 M 12 68 H 288" />
       <path className={styles.graphLine} d={path} />
-      {points.map((point, index) => <circle key={`${point.observedAt}:${point.priceKrw}:${index}`} cx={12 + (index / (points.length - 1)) * 276} cy={92 - ((point.priceKrw - min) / range) * 68} r="4" />)}
+      {plotPoints.map((point, index) => <circle key={`${point.observedAt}:${point.priceKrw}:${index}`} cx={point.x} cy={point.y} r="2.4" />)}
     </svg>
-    <div><span>{points[0].observedAt}</span><span>{points.at(-1)?.observedAt}</span></div>
+    <div>
+      <time dateTime={points[0].observedAt}>{points[0].observedAt}</time>
+      <time dateTime={points[points.length - 1].observedAt}>{points[points.length - 1].observedAt}</time>
+    </div>
   </div>;
 }

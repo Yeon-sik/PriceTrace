@@ -97,7 +97,7 @@ export function MarketBrowser({ receipts, observations, selectedStore, selectedS
           const verifiedPublic = entry.receipts.some((receipt) => receipt.source === "public");
           const latestObservedAt = entry.observations.reduce((latest, observation) => observation.observedAt > latest ? observation.observedAt : latest, "");
           return <button key={entry.name} className={styles.marketCard} onClick={() => onSelectStore(entry.name)}>
-            <span className={styles.marketCardTop}><strong>{entry.name}</strong><Icon name="external" size={21} /></span>
+            <span className={styles.marketCardTop}><strong>{entry.name}</strong><Icon name="chevron" size={18} /></span>
             <span className={styles.marketCardEyebrow}>{verifiedPublic ? "검증 공개 영수증" : "로컬 영수증"}</span>
             <small>영수증 {entry.receipts.length}건 · 상품 {groups.length}개 · 변동 추적 {trackedCount}개</small>
             <span>{entry.address ?? "주소 정보 없음"}</span>
@@ -137,24 +137,31 @@ export function MarketBrowser({ receipts, observations, selectedStore, selectedS
         <h1>{market.name}</h1>
         <p>{verifiedPublic ? "검증된 공개 영수증과 연결된 판매처 정보 및 상품 가격 기록입니다." : "같은 판매처의 영수증 기록을 날짜별로 유지하고 상품 가격 변화를 계산합니다."}</p>
       </div>
-      <button className={styles.outlineButton} onClick={() => onSelectStore(null)}>판매처 목록</button>
+      <button type="button" className={`${styles.backLinkButton} ${styles.marketBackButton}`} onClick={() => onSelectStore(null)}>
+        <Icon name="chevron" size={16} />
+        판매처 목록
+      </button>
     </div>
 
-    <section className={styles.marketInsightStats} aria-label="판매처 가격 기록 요약">
-      <div><span>기록 상품</span><strong>{productInsights.length}개</strong></div>
-      <div><span>2회 이상 추적</span><strong>{trackedCount}개</strong></div>
-      <div><span>직전 대비 변동</span><strong>{changedCount}개</strong></div>
-      <div><span>최근 관측</span><strong>{latestObservedAt ?? "-"}</strong></div>
+    <section aria-label="판매처 가격 기록 요약">
+      <dl className={styles.marketInsightStats}>
+        <div><dt>기록 상품</dt><dd>{productInsights.length}개</dd></div>
+        <div><dt>2회 이상 추적</dt><dd>{trackedCount}개</dd></div>
+        <div><dt>직전 대비 변동</dt><dd>{changedCount}개</dd></div>
+        <div><dt>최근 관측</dt><dd>{latestObservedAt ?? "-"}</dd></div>
+      </dl>
     </section>
 
     <section className={styles.marketInfo}>
       <strong>{verifiedPublic ? "검증 공개 판매처" : "판매처"}: {market.name}</strong>
-      <span>마트 주소: {market.address ?? "정보 없음"}</span>
-      <span>마트 연락처: {market.phone ?? "정보 없음"}</span>
-      <span>사업자등록번호: {market.businessRegistrationNumber ?? "정보 없음"}</span>
-      <span>업종: {formatBusinessKind(market.businessKind)}</span>
-      <span>공개 판매처 ID: {market.id ?? "정보 없음"}</span>
-      {market.merchantId && <span>판매처 표기 ID: {market.merchantId}</span>}
+      <dl>
+        <div><dt>마트 주소:</dt><dd>{market.address ?? "정보 없음"}</dd></div>
+        <div><dt>마트 연락처:</dt><dd>{market.phone ?? "정보 없음"}</dd></div>
+        <div><dt>사업자등록번호:</dt><dd>{market.businessRegistrationNumber ?? "정보 없음"}</dd></div>
+        <div><dt>업종:</dt><dd>{formatBusinessKind(market.businessKind)}</dd></div>
+        <div><dt>공개 판매처 ID:</dt><dd>{market.id ?? "정보 없음"}</dd></div>
+        {market.merchantId && <div><dt>판매처 표기 ID:</dt><dd>{market.merchantId}</dd></div>}
+      </dl>
       <small>표시 가격은 영수증·공개 기록의 관측가이며 실시간 판매가는 아닙니다.</small>
     </section>
 
@@ -185,7 +192,7 @@ export function MarketBrowser({ receipts, observations, selectedStore, selectedS
         <small>같은 판매처·상품 코드·상품명 기준</small>
       </div>
       <div className={styles.marketHistoryControls}>
-        <label className={styles.search}><Icon name="search" size={20} /><span className={styles.srOnly}>판매처 상품 검색</span><input type="search" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="상품명 또는 상품 코드 검색" /></label>
+        <label className={styles.search}><Icon name="search" size={18} /><span className={styles.srOnly}>판매처 상품 검색</span><input type="search" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="상품명 또는 상품 코드" /></label>
         <button type="button" className={changedOnly ? styles.filterToggleActive : ""} aria-pressed={changedOnly} onClick={() => setChangedOnly((current) => !current)}>2회 이상 추적만</button>
       </div>
       <p className={styles.marketHistoryResult}>상품 {visibleInsights.length}개 · 직전 대비 가격은 동일 판매처의 이전 기록과 비교합니다.</p>
@@ -198,7 +205,7 @@ export function MarketBrowser({ receipts, observations, selectedStore, selectedS
           </div>
           <div className={styles.marketPriceChange}>
             <b>{formatKrw(summary.latestPriceKrw)}</b>
-            <em className={summary.changeKrw === null || summary.changeKrw === 0 ? styles.noChange : summary.changeKrw > 0 ? styles.priceUp : styles.priceDown}>{formatMarketChange(summary)}</em>
+            <span className={summary.changeKrw === null || summary.changeKrw === 0 ? styles.noChange : summary.changeKrw > 0 ? styles.priceUp : styles.priceDown}>{formatMarketChange(summary)}</span>
           </div>
           <button type="button" className={styles.marketTrendButton} onClick={() => onOpenTrend(group)} aria-label={`${group.productName} 가격 변동 이력 보기`}>이력 보기</button>
         </article>)}
