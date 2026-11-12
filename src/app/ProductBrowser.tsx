@@ -50,11 +50,23 @@ const publicPxCatalog = new PublicOfficialChannelCatalogRepository().loadPxCatal
 export type { StandardProductGroup, StandardProductItem } from "@/features/product-browser/product-browser.selectors";
 
 function StoreInfo({ sellerCount, martTypeLabel, onOpen }: { sellerCount: number; martTypeLabel?: string; onOpen: () => void }) {
-  return <p className={styles.storeInfo}>판매처 {sellerCount}곳{martTypeLabel && <em>{martTypeLabel}</em>}<button type="button" className={styles.storeInfoButton} aria-label="판매처 정보 보기" onClick={onOpen}>›</button></p>;
+  return <p className={styles.storeInfo}>
+    <button type="button" className={styles.storeInfoButton} aria-label={`판매처 ${sellerCount}곳 정보 보기`} onClick={onOpen}>
+      판매처 {sellerCount}곳 <Icon name="chevron" size={16} />
+    </button>
+    {martTypeLabel && <em>{martTypeLabel}</em>}
+  </p>;
 }
 
 function RecordedPriceBlock({ group }: { group: ProductGroup }) {
-  return <div className={styles.listedPrice}><strong>{formatKrw(group.latestPriceKrw)}</strong>{group.latest.catalogNamespace === "public-price" && <small>공개 가격 관측 · {group.observations.length}건</small>}</div>;
+  return <div className={styles.listedPrice}>
+    <strong>{formatKrw(group.latestPriceKrw)}</strong>
+    <small className={styles.observationDate}>
+      <span>최근 관측가</span>
+      <time dateTime={group.latest.observedAt}>{group.latest.observedAt.slice(0, 10)}</time>
+    </small>
+    {group.latest.catalogNamespace === "public-price" && <small>공개 가격 관측 · {group.observations.length}건</small>}
+  </div>;
 }
 
 function StandardProductName({ brand, name }: { brand: string | null; name: string }) {
@@ -127,8 +139,8 @@ function OfficialLinkedStandardCard({
    </article>;
 }
 
-export function ProductBrowser({ groups, query, setQuery, category, setCategory, martType, setMartType, selectedStore, setSelectedStore, sort, setSort, authRevision, selectedStoreProductId, selectedCatalogProductId, onClearIdentity, onAdd, onTrend, onOpenStore, onOpenOrderCapture }: {
-  groups: ProductGroup[]; query: string; setQuery: (value: string) => void; category: ProductCategory; setCategory: (value: ProductCategory) => void; martType: MartType; setMartType: (value: MartType) => void; selectedStore: string; setSelectedStore: (value: string) => void; sort: ProductSort; setSort: (value: ProductSort) => void; authRevision: number; selectedStoreProductId: string | null; selectedCatalogProductId: string | null; onClearIdentity: () => void; onAdd: (product: CartProduct) => void; onTrend: (group: ProductGroup) => void; onOpenStore: (store: string) => void; onOpenOrderCapture: () => void;
+export function ProductBrowser({ groups, query, setQuery, category, setCategory, martType, setMartType, selectedStore, setSelectedStore, sort, setSort, authRevision, selectedStoreProductId, selectedCatalogProductId, onClearIdentity, onAdd, onTrend, onOpenStore, onOpenOrderCapture, onOpenInformationInbox }: {
+  groups: ProductGroup[]; query: string; setQuery: (value: string) => void; category: ProductCategory; setCategory: (value: ProductCategory) => void; martType: MartType; setMartType: (value: MartType) => void; selectedStore: string; setSelectedStore: (value: string) => void; sort: ProductSort; setSort: (value: ProductSort) => void; authRevision: number; selectedStoreProductId: string | null; selectedCatalogProductId: string | null; onClearIdentity: () => void; onAdd: (product: CartProduct) => void; onTrend: (group: ProductGroup) => void; onOpenStore: (store: string) => void; onOpenOrderCapture: () => void; onOpenInformationInbox: () => void;
 }) {
   const { linkedByStandardProduct, standaloneListings } = useMemo(
     () => partitionOfficialChannelListingsByStandardProduct(publicPxCatalog.listings),
@@ -268,37 +280,47 @@ export function ProductBrowser({ groups, query, setQuery, category, setCategory,
     }
   };
 
+  const inboxButton = <button type="button" onClick={onOpenInformationInbox}>상품·서비스 정보 보관함</button>;
   if (selectedStoreProductId || selectedCatalogProductId) {
-    return <PrivateIdentityDetail
-      selector={selectedStoreProductId
-        ? { type: "store_product", id: selectedStoreProductId }
-        : { type: "catalog_product", id: selectedCatalogProductId as string }}
-      onBack={onClearIdentity}
-    />;
+    return <>
+      <div className={styles.catalogUtilityActions}>{inboxButton}</div>
+      <PrivateIdentityDetail
+        selector={selectedStoreProductId
+          ? { type: "store_product", id: selectedStoreProductId }
+          : { type: "catalog_product", id: selectedCatalogProductId as string }}
+        onBack={onClearIdentity}
+      />
+    </>;
   }
 
   return <section className={styles.browser}>
-    <div className={styles.browserHead}>
+    <div className={`${styles.browserHead} ${styles.catalogHeader}`}>
       <div>
         <p className={styles.kicker}>PRODUCT CATALOG</p>
         <h1>상품 목록</h1>
         <p>표준 상품, 유통채널 공식 판매상품, 영수증과 공개 가격 관측을 출처별로 구분합니다.</p>
       </div>
       <label className={styles.search}>
-        <Icon name="search" size={20} />
+        <Icon name="search" size={18} />
         <span className={styles.srOnly}>상품 검색</span>
         <input
           type="search"
           value={query}
           onChange={(event) => setQuery(event.target.value)}
-          placeholder={showOfficialOnly ? "상품명, 업체명, 규격, 상품 코드 검색" : "상품명, 판매처 코드, 판매 마트 검색"}
+          placeholder={showOfficialOnly ? "상품명 · 업체명 · 규격 · 상품 코드" : "상품명 · 판매처 코드 · 판매 마트"}
         />
       </label>
     </div>
 
     <div className={styles.productImportEntry}>
-      <div><strong>인터넷 주문 상품도 등록할 수 있습니다.</strong><span>쿠팡·iHerb 주문 상세 캡처를 로컬에서 읽고, 표준 상품 후보를 확인하세요.</span></div>
-      <button type="button" onClick={onOpenOrderCapture}>주문 캡처 등록</button>
+      <div className={styles.productImportCopy}>
+        <strong>인터넷 주문 상품 등록</strong>
+        <span>쿠팡·iHerb 주문 상세 캡처를 로컬에서 읽고 표준 상품 후보를 확인할 수 있습니다.</span>
+      </div>
+      <div className={styles.catalogUtilityActions}>
+        <button type="button" onClick={onOpenOrderCapture}>주문 캡처 등록</button>
+        {inboxButton}
+      </div>
     </div>
 
     <div className={styles.catalogLayerTabs} role="group" aria-label="상품 데이터 계층">
@@ -311,23 +333,45 @@ export function ProductBrowser({ groups, query, setQuery, category, setCategory,
       {catalogLoading ? "상품 카탈로그를 불러오는 중입니다." : catalogNotice}
       {catalogNotice && !catalogLoading && <button type="button" onClick={retryCatalog}>카탈로그 다시 불러오기</button>}
     </div>}
-    <button type="button" className={styles.catalogFilterToggle} aria-expanded={filtersOpen} aria-controls={filterPanelId} onClick={() => setFiltersOpen((open) => !open)}><span>필터·정렬 {filtersOpen ? "−" : "+"}</span><small>{category} · {showOfficialOnly || sort === "cheap" ? "저렴한 순" : sort === "expensive" ? "비싼 순" : "판매처 많은 순"}{martType !== "all" ? ` · ${martType === "px" ? "PX" : "일반 마트"}` : ""}{selectedStore !== "all" ? ` · ${selectedStore}` : ""}</small></button>
+    <button type="button" className={styles.catalogFilterToggle} aria-expanded={filtersOpen} aria-controls={filterPanelId} onClick={() => setFiltersOpen((open) => !open)}>
+      <span>필터·정렬</span>
+      <small>{category} · {showOfficialOnly || sort === "cheap" ? "저렴한 순" : sort === "expensive" ? "비싼 순" : "판매처 많은 순"}{martType !== "all" ? ` · ${martType === "px" ? "PX" : "일반 마트"}` : ""}{selectedStore !== "all" ? ` · ${selectedStore}` : ""}</small>
+      <Icon name="chevron" size={16} />
+    </button>
     <div id={filterPanelId} role="group" aria-label="상품 필터·정렬" className={filtersOpen ? styles.catalogFiltersOpen : styles.catalogFilters}>
-    {showOfficialOnly
-      ? null
-      : <div className={styles.marketControls}>
-          <div className={styles.segmented} role="group" aria-label="판매처 유형">{([ ["all", "전체"], ["regular", "일반 마트"], ["px", "PX (군마트)"] ] as const).map(([value, label]) => <button key={value} aria-pressed={martType === value} className={martType === value ? styles.selectedSegment : ""} onClick={() => { setMartType(value); setSelectedStore("all"); }}>{label}</button>)}</div>
-          <label className={styles.storeSelect}>판매 마트<select value={selectedStore} onChange={(event) => setSelectedStore(event.target.value)}><option value="all">전체 마트</option>{stores.map((store) => <option key={store} value={store}>{store}</option>)}</select></label>
-          <label className={styles.sortSelect}>정렬<select value={sort} onChange={(event) => setSort(event.target.value as ProductSort)}><option value="expensive">비싼 물품 순</option><option value="cheap">저렴한 물품 순</option><option value="sellers">판매처 많은 물품 순</option></select></label>
-        </div>}
-    <div className={styles.filters} aria-label="상품 대분류">{PRODUCT_CATEGORY_ROOTS.map((item) => {
-      const active = item === "전체" ? category === "전체" : selectedCategoryRoot === item;
-      return <button aria-pressed={active} className={active ? styles.filterActive : ""} key={item} onClick={() => setCategory(item)}>{item}</button>;
-    })}</div>
-    {selectedCategoryRoot && selectedCategoryChildren.length > 0 && <div className={`${styles.filters} ${styles.subcategoryFilters}`} aria-label={`${selectedCategoryRoot} 세부 카테고리`}>
-      <button aria-pressed={category === selectedCategoryRoot} className={category === selectedCategoryRoot ? styles.filterActive : ""} onClick={() => setCategory(selectedCategoryRoot)}>{selectedCategoryRoot} 전체</button>
-      {selectedCategoryChildren.map((item) => <button aria-pressed={category === item} className={category === item ? styles.filterActive : ""} key={item} onClick={() => setCategory(item)}>{item}</button>)}
-    </div>}
+      {!showOfficialOnly && <div className={styles.marketControls}>
+        <div className={styles.sellerFilter}>
+          <span aria-hidden="true">판매처 유형</span>
+          <div className={styles.segmented} role="group" aria-label="판매처 유형">
+            {([["all", "전체"], ["regular", "일반 마트"], ["px", "PX (군마트)"]] as const).map(([value, label]) => (
+              <button type="button" key={value} aria-pressed={martType === value} className={martType === value ? styles.selectedSegment : ""} onClick={() => { setMartType(value); setSelectedStore("all"); }}>{label}</button>
+            ))}
+          </div>
+        </div>
+        <label className={styles.storeSelect}>판매 마트
+          <select value={selectedStore} onChange={(event) => setSelectedStore(event.target.value)}>
+            <option value="all">전체 마트</option>
+            {stores.map((store) => <option key={store} value={store}>{store}</option>)}
+          </select>
+        </label>
+        <label className={styles.sortSelect}>정렬
+          <select value={sort} onChange={(event) => setSort(event.target.value as ProductSort)}>
+            <option value="expensive">비싼 물품 순</option>
+            <option value="cheap">저렴한 물품 순</option>
+            <option value="sellers">판매처 많은 물품 순</option>
+          </select>
+        </label>
+      </div>}
+      <div className={styles.filters} role="group" aria-label="상품 대분류">
+        {PRODUCT_CATEGORY_ROOTS.map((item) => {
+          const active = item === "전체" ? category === "전체" : selectedCategoryRoot === item;
+          return <button type="button" aria-pressed={active} className={active ? styles.filterActive : ""} key={item} onClick={() => setCategory(item)}>{item}</button>;
+        })}
+      </div>
+      {selectedCategoryRoot && selectedCategoryChildren.length > 0 && <div className={`${styles.filters} ${styles.subcategoryFilters}`} role="group" aria-label={`${selectedCategoryRoot} 세부 카테고리`}>
+        <button type="button" aria-pressed={category === selectedCategoryRoot} className={category === selectedCategoryRoot ? styles.filterActive : ""} onClick={() => setCategory(selectedCategoryRoot)}>{selectedCategoryRoot} 전체</button>
+        {selectedCategoryChildren.map((item) => <button type="button" aria-pressed={category === item} className={category === item ? styles.filterActive : ""} key={item} onClick={() => setCategory(item)}>{item}</button>)}
+      </div>}
     </div>
     {showOfficialOnly && <p className={styles.officialScopeAlwaysVisible}>PX 공식 판매상품 전체 · 특정 지점의 판매·재고 정보가 아닙니다.</p>}
     {ownerSearch?.status === "loading" && <p className={styles.dataNotice} role="status">내 OCR 상품을 검색하는 중입니다.</p>}
@@ -346,7 +390,7 @@ export function ProductBrowser({ groups, query, setQuery, category, setCategory,
         </StandardProductCard>)}
       </div>
     </section>}
-    <div className={styles.resultBar}><p>{hasOwnerProducts ? "카탈로그·가격 상품" : "상품"} {resultCount.toLocaleString("ko-KR")}개</p>{(query || category !== "전체" || martType !== "all" || selectedStore !== "all" || showStandardOnly || showOfficialOnly) && <button onClick={() => { setQuery(""); setCategory("전체"); setMartType("all"); setSelectedStore("all"); setCatalogView("all"); }}>필터 초기화</button>}</div>
+    <div className={styles.resultBar}><p aria-live="polite">{hasOwnerProducts ? "카탈로그·가격 상품" : "상품"} {resultCount.toLocaleString("ko-KR")}개</p>{(query || category !== "전체" || martType !== "all" || selectedStore !== "all" || showStandardOnly || showOfficialOnly) && <button type="button" onClick={() => { setQuery(""); setCategory("전체"); setMartType("all"); setSelectedStore("all"); setCatalogView("all"); }}>필터 초기화</button>}</div>
     {manufacturerSearchQuery && manufacturerSearch?.status === "error" && <div className={styles.dataNotice} role="status">
       제조사 상품을 불러오지 못했습니다.
       <button type="button" onClick={retryManufacturerSearch}>제조사 상품 다시 검색</button>
