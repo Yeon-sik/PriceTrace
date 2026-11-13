@@ -27,6 +27,7 @@ import { ProductBrowser } from "./ProductBrowser";
 import { MarketBrowser } from "./MarketBrowser";
 import { OrderCapturePage } from "./OrderCapturePage";
 import { InformationInboxPage } from "./InformationInboxPage";
+import { CarePlaces } from "@/features/care-places/CarePlaces";
 import { RestaurantBrowser } from "./RestaurantBrowser";
 import { BrandHall } from "./BrandHall";
 import styles from "./page.module.css";
@@ -311,7 +312,8 @@ export default function Home() {
     <main className={styles.main} id="main-content" tabIndex={-1}>
       {page === "products" && purchasedProductError && <p className={styles.error} role="alert">내 구매 상품을 불러오지 못했습니다. 앱을 다시 활성화하면 재시도합니다.</p>}
       {page === "products" && publicPriceError && <p className={styles.error} role="alert">{publicPriceError} 앱을 다시 활성화하면 재시도합니다.</p>}
-      {page === "home" && <ObservationHome groups={publicProductGroups} receiptCount={receipts.length} cart={{ count: cartGroups.length, quantity: cartQuantityTotal, total: cartTotal }} onProducts={() => openProducts()} onRestaurants={() => navigate("restaurants")} onMarkets={() => navigate("markets")} onCart={() => navigate("cart")} onTrend={setTrendGroup} />}
+      {page === "home" && <><CarePlaces compact onOpen={() => navigate("care-places")} onRequireAuth={() => setAuthOpen(true)} authRevision={authRevision} /><ObservationHome groups={publicProductGroups} receiptCount={receipts.length} cart={{ count: cartGroups.length, quantity: cartQuantityTotal, total: cartTotal }} onProducts={() => openProducts()} onRestaurants={() => navigate("restaurants")} onMarkets={() => navigate("markets")} onCart={() => navigate("cart")} onTrend={setTrendGroup} /></>}
+      {page === "care-places" && <CarePlaces onRequireAuth={() => setAuthOpen(true)} authRevision={authRevision} />}
       {page === "restaurants" && <RestaurantBrowser selectedRestaurant={selectedRestaurant} selectedRestaurantMenuId={selectedRestaurantMenuId} onSelectRestaurant={(restaurantId) => navigate("restaurants", { selectedRestaurant: restaurantId, replace: restaurantId === null })} onClearMenuIdentity={() => navigate("restaurants", { replace: true })} />}
       {page === "products" && <ProductBrowser groups={productGroups} query={query} setQuery={setQuery} category={category} setCategory={setCategory} martType={martType} setMartType={setMartType} selectedStore={selectedStore} setSelectedStore={setSelectedStore} sort={sort} setSort={setSort} authRevision={authRevision} selectedStoreProductId={selectedStoreProductId} selectedCatalogProductId={selectedCatalogProductId} onClearIdentity={() => navigate("products", { replace: true })} onAdd={openCartModal} onTrend={setTrendGroup} onOpenStore={(store) => navigate("markets", { selectedMarket: store })} onOpenOrderCapture={() => navigate("order-capture")} onOpenInformationInbox={() => navigate("information-inbox")} />}
       {page === "order-capture" && <OrderCapturePage authRevision={authRevision} onBack={() => navigate("products")} onRequireAuth={() => setAuthOpen(true)} />}

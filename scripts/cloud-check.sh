@@ -6,3 +6,4 @@ npm run typecheck
 npm run test
 npm run build
 npm run test:purchase-sql
+npm run test:care-places
