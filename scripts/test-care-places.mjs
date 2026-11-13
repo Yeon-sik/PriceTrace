@@ -1,0 +1,38 @@
+import { PGlite } from "@electric-sql/pglite";
+import { readFile } from "node:fs/promises";
+import assert from "node:assert/strict";
+const db = new PGlite();
+const a = "11111111-1111-4111-8111-111111111111", b = "22222222-2222-4222-8222-222222222222";
+try {
+  await db.exec(`create role anon; create role authenticated; create schema auth;
+    create table auth.users(id uuid primary key);
+    insert into auth.users values ('${a}'),('${b}');
+    create function auth.uid() returns uuid language sql stable as $$select nullif(current_setting('request.jwt.claim.sub',true),'')::uuid$$;
+    grant usage on schema public,auth to anon,authenticated;`);
+  await db.exec(await readFile(new URL("../supabase/migrations/20261113135733_care_places.sql", import.meta.url), "utf8"));
+  const owner = async id => { await db.exec("set role authenticated"); await db.query("select set_config('request.jwt.claim.sub',$1,false)", [id]); };
+  const rpc = async (sql, params=[]) => (await db.query(sql, params)).rows[0].value;
+  const register = (request, place, confirmed = true) => rpc("select public.register_care_place_v1($1,$2::jsonb,$3) value", [request, JSON.stringify(place), confirmed]);
+  const input = { category: "hospital", name: "연동 검증 의원", address: "검증시 검증로 1", phone: "" };
+  await owner(a);
+  const first = await register(a, input);
+  assert.equal(first.duplicate, false);
+  assert.equal((await register(a, input)).duplicate, true);
+  await assert.rejects(register(a, { ...input, address: "다른 주소" }), /request|changed|different|reuse/i);
+  await assert.rejects(register(b, input, false));
+  await assert.rejects(register(b, { ...input, patient: "not allowed" }));
+  await assert.rejects(register(b, { ...input, category: null }));
+  await owner(b);
+  const same = await register(b, { ...input, name: "연동   검증 의원", address: "검증시  검증로 1" });
+  assert.equal(same.place.place_id, first.place.place_id);
+  assert.equal(same.duplicate, true);
+  assert.equal((await db.query("select * from public.pricetrace_care_place_registrations")).rows.length, 1);
+  await assert.rejects(db.query("insert into public.pricetrace_care_places(category,name,address,identity_key) values('hospital','x','y','z')"));
+  await db.exec("set role anon; select set_config('request.jwt.claim.sub','',false)");
+  const places = await rpc("select public.search_care_places_v1('검증','hospital',1000) value");
+  assert.equal(places.length, 1);
+  assert.deepEqual(Object.keys(places[0]).sort(), ["schema_version", "place_id", "category", "name", "address", "phone"].sort());
+  await assert.rejects(db.query("select * from public.pricetrace_care_place_registrations"));
+  await assert.rejects(register(a, input));
+  console.log("PASS care places: idempotency, exact identity deduplication, private provenance RLS, public allowlist, consent and invalid input.");
+} finally { await db.close(); }
